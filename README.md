@@ -2,11 +2,9 @@ git pre-commit hook for Golang projects
 =======================================
 
 `pre-commit-go` runs multiple tests on a Go project to ensure code health
-*before committing*. It also helps to run automated testing on https://travis-ci.org and
-publish code coverage on https://coveralls.io.
-
-It is designed to be called on pre-commit so that the committed code is clean.
-It runs:
+*before committing* via `pre-commit` git hook. It also works with on
+https://travis-ci.org and publishes merged code coverage on
+https://coveralls.io. It runs:
 
   * [Build](https://golang.org/pkg/go/build/) all directories with .go files found
   * [All tests](https://golang.org/pkg/testing/) with [coverage](https://blog.golang.org/cover)
@@ -16,27 +14,38 @@ It runs:
   * [govet](https://godoc.org/code.google.com/p/go.tools/cmd/vet)
   * [golint](https://github.com/golang/lint)
 
-To get it; use:
+Getting it:
 
     go get github.com/maruel/pre-commit-go
 
 
-To both install the `pre-commit` hook and run checks, use:
+Installing the `pre-commit` hook and running checks:
 
     pre-commit-go
 
 from within a git checkout inside `$GOPATH`.
 
+Help page:
+
+    pre-commit-go --help
+
+If you want to bypass the pre-commit hook due to known breakage, use:
+
+   git commit --no-verify
+
 
 Travis & Coveralls post push hook
 ---------------------------------
 
-Post push CI works with travis-ci.org and coveralls.io. Do:
+Post push CI (continuous integration) works with travis-ci.org and coveralls.io.
+
+First, visit https://travis-ci.org and connect your github account (or whatever
+git host provider) to travis.
+
+Second, do the same via https://coveralls.io.
+
+Third, add a file to your repository:
 
     # TODO(maruel): Document how to create proper .travis.yml.
     git add .travis.yml
     git commit -m "Added .travis.yml"
-
-
-Visit https://travis-ci.org and connect your github account (or whatever git
-host provider) to travis. Then do the same via https://coveralls.io.
