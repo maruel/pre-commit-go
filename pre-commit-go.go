@@ -633,7 +633,10 @@ func install() error {
 	if err != nil {
 		return fmt.Errorf("failed to find .git dir: %s", err)
 	}
-	err = ioutil.WriteFile(filepath.Join(gitDir, "hooks", "pre-commit"), preCommitHook, 0766)
+	// Always remove "pre-commit" first if it exists, in case it's a symlink.
+	p := filepath.Join(gitDir, "hooks", "pre-commit")
+	_ = os.Remove(p)
+	err = ioutil.WriteFile(p, preCommitHook, 0766)
 	log.Printf("installation done")
 	return err
 }
