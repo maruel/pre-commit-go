@@ -113,7 +113,10 @@ Supported commands are:
 When executed without command, it does the equivalent of prereq, install then
 run.
 
-By default, all subdirectories are checked. Tests are:
+Supported flags are:
+  -verbose
+
+Supported checks:
 - go build
 - go test -race
 - go test -cover
@@ -123,9 +126,7 @@ By default, all subdirectories are checked. Tests are:
 - go tool vet
 - golint
 
-No test ever modify any file.
-
-TODO(maruel): Make which test are run configurable in the repository.
+No check ever modify any file.
 `
 
 // Code
@@ -720,7 +721,7 @@ func mainImpl() error {
 		return fmt.Errorf("failed to chdir to git checkout root: %s", err)
 	}
 
-	if cmd == "help" || cmd == "--help" || cmd == "-h" {
+	if cmd == "help" || cmd == "-help" || cmd == "-h" {
 		fmt.Printf(helpText)
 		return nil
 	}

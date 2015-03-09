@@ -1,7 +1,7 @@
 git pre-commit hook for Golang projects
 =======================================
 
-`pre-commit-go` runs multiple tests on a Go project to ensure code health
+`pre-commit-go` runs multiple checks on a Go project to ensure code health
 *before committing* via `pre-commit` git hook. It also works with on
 https://travis-ci.org and publishes merged code coverage on
 https://coveralls.io. It runs:
@@ -31,7 +31,7 @@ Help page:
 
 If you want to bypass the pre-commit hook due to known breakage, use:
 
-   git commit --no-verify
+    git commit --no-verify
 
 
 Travis & Coveralls post push hook
