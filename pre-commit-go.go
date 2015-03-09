@@ -437,7 +437,7 @@ func runCoverage() error {
 	out := ""
 	if len(os.Getenv("TRAVIS_JOB_ID")) != 0 {
 		// Make sure to have registered to https://coveralls.io first!
-		out, _, err = capture("goveralls", "-coverprofile="+profilePath)
+		out, _, err = capture("goveralls", "-coverprofile", profilePath)
 		fmt.Printf("%s", out)
 	} else {
 		out, _, err = capture("go", "tool", "cover", "-func", profilePath)
@@ -587,11 +587,12 @@ func govet() error {
 // Commands.
 
 func installPrereq() error {
-	toInstall := []struct {
+	type S struct {
 		cmd      []string // Command to print the help page
 		exitCode int      // Exit code when running help
 		url      string   // URL to fetch the package
-	}{
+	}
+	toInstall := []S{
 		{[]string{"errcheck", "-h"}, 2, "github.com/kisielk/errcheck"},
 		{[]string{"go", "tool", "cover", "-h"}, 1, "golang.org/x/tools/cmd/cover"},
 		{[]string{"go", "tool", "vet", "-h"}, 1, "golang.org/x/tools/cmd/vet"},
@@ -600,13 +601,28 @@ func installPrereq() error {
 		{[]string{"golint", "-h"}, 2, "github.com/golang/lint/golint"},
 		{[]string{"goveralls", "-h"}, 2, "github.com/mattn/goveralls"},
 	}
+	var wg sync.WaitGroup
+	c := make(chan string, len(toInstall))
+	for _, i := range toInstall {
+		wg.Add(1)
+		go func(item S) {
+			defer wg.Done()
+			_, exitCode, _ := capture(item.cmd...)
+			if exitCode != item.exitCode {
+				c <- item.url
+			}
+		}(i)
+	}
+	wg.Wait()
 	urls := []string{}
-	for _, item := range toInstall {
-		_, exitCode, _ := capture(item.cmd...)
-		if exitCode == item.exitCode {
-			continue
+	loop := true
+	for loop {
+		select {
+		case url := <-c:
+			urls = append(urls, url)
+		default:
+			loop = false
 		}
-		urls = append(urls, item.url)
 	}
 	sort.Strings(urls)
 	if len(urls) != 0 {
