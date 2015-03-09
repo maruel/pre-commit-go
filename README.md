@@ -21,15 +21,15 @@ To get it; use:
     go get github.com/maruel/pre-commit-go
 
 
-Commit hook Installation
-------------------------
+To both install the `pre-commit` hook and run checks, use:
 
-To install the git pre-commit hook which runs `pre-commit-go` automatically on
-commit, run `pre-commit-go` from within a git repository.
+    pre-commit-go
+
+from within a git checkout inside `$GOPATH`.
 
 
-Post push hook setup
-----------------------
+Travis & Coveralls post push hook
+---------------------------------
 
 Post push CI works with travis-ci.org and coveralls.io. Do:
 
