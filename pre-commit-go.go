@@ -367,7 +367,7 @@ func runCoverage() error {
 		go func(index int, testDir string) {
 			defer wg.Done()
 			args := []string{
-				"go", "test", "-covermode=count", "-coverpkg", pkg + "/...",
+				"go", "test", "-v", "-covermode=count", "-coverpkg", pkg + "/...",
 				"-coverprofile=" + filepath.Join(tmpDir, fmt.Sprintf("test%d.cov", index)),
 			}
 			out, exitCode, _ := captureWd(testDir, args...)
