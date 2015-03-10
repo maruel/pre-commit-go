@@ -323,7 +323,7 @@ func runTests(tags string) error {
 				errs <- err
 				return
 			}
-			args := []string{"go", "test", "-race", "-verbose", rel}
+			args := []string{"go", "test", "-race", "-v", rel}
 			out, exitCode, _ := capture(args...)
 			if exitCode != 0 {
 				errs <- fmt.Errorf("%s failed:\n%s", strings.Join(args, " "), out)
