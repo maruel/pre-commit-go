@@ -74,7 +74,9 @@ https://coveralls.io.
    1. Visit https://travis-ci.org and connect your github account (or whatever
       git host provider) to travis.
    2. Do the same via https://coveralls.io.
-   3. add a `.travis.yml` file to your repository and push it:
+   3. add a `.travis.yml` file to your repository and push it.
+
+Sample `.travis.yml`:
 
     sudo: false
     language: go
