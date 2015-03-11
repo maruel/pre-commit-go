@@ -43,18 +43,20 @@ git pre-commit hook for Golang projects
   * [govet](https://golang.org/x/tools/cmd/vet)
   * [go test -cover](https://golang.org/pkg/testing/) with [coverage](https://blog.golang.org/cover)
 
-### Getting it:
+
+### Getting it
 
     go get github.com/maruel/pre-commit-go
 
 
-### Installing the `pre-commit` hook and running checks:
+### Installing the hook and running checks
 
     pre-commit-go
 
 from within a git checkout inside `$GOPATH`.
 
-### Help page:
+
+### Help page
 
     pre-commit-go --help
 
@@ -76,12 +78,9 @@ https://coveralls.io.
 
     sudo: false
     language: go
-
     go:
     - 1.4
-
     before_install:
       - go get github.com/maruel/pre-commit-go
-
     script:
       - pre-commit-go
