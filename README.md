@@ -19,7 +19,7 @@ git pre-commit hook for Golang projects
 
     Supported checks:
       Native ones that only depends on the stdlib:
-        - [go build](https://golang.org/pkg/go/build/)
+        - go build
         - go test
         - gofmt -s
       Checks that have prerequisites (which will be automatically installed):
@@ -31,10 +31,8 @@ git pre-commit hook for Golang projects
 
     No check ever modify any file.
 
-`pre-commit-go` runs multiple checks on a Go project to ensure code health
-*before committing* via `pre-commit` git hook. It also works with on
-https://travis-ci.org and publishes merged code coverage on
-https://coveralls.io. It runs:
+`pre-commit-go` runs multiple checks on a Go project *before committing* via
+`pre-commit` git hook. Native checks:
 
   * [go build](https://golang.org/pkg/go/build/) all directories with .go files found
   * [go test](https://golang.org/pkg/testing/) by default with [race detector](https://blog.golang.org/race-detector)
@@ -45,18 +43,18 @@ https://coveralls.io. It runs:
   * [govet](https://golang.org/x/tools/cmd/vet)
   * [go test -cover](https://golang.org/pkg/testing/) with [coverage](https://blog.golang.org/cover)
 
-Getting it:
+### Getting it:
 
     go get github.com/maruel/pre-commit-go
 
 
-Installing the `pre-commit` hook and running checks:
+### Installing the `pre-commit` hook and running checks:
 
     pre-commit-go
 
 from within a git checkout inside `$GOPATH`.
 
-Help page:
+### Help page:
 
     pre-commit-go --help
 
@@ -65,18 +63,25 @@ If you want to bypass the pre-commit hook due to known breakage, use:
     git commit --no-verify
 
 
-Travis & Coveralls post push hook
+Travis & Coveralls integration
 ---------------------------------
 
-Post push CI (continuous integration) works with travis-ci.org and coveralls.io.
+Post push CI (continuous integration) works with https://travis-ci.org and
+https://coveralls.io.
 
-First, visit https://travis-ci.org and connect your github account (or whatever
-git host provider) to travis.
+   1. Visit https://travis-ci.org and connect your github account (or whatever
+      git host provider) to travis.
+   2. Do the same via https://coveralls.io.
+   3. add a `.travis.yml` file to your repository and push it:
 
-Second, do the same via https://coveralls.io.
+    sudo: false
+    language: go
 
-Third, add a file to your repository:
+    go:
+    - 1.4
 
-    # TODO(maruel): Document how to create proper .travis.yml.
-    git add .travis.yml
-    git commit -m "Added .travis.yml"
+    before_install:
+      - go get github.com/maruel/pre-commit-go
+
+    script:
+      - pre-commit-go
