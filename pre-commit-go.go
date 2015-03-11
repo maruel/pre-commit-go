@@ -109,25 +109,28 @@ var helpText = `pre-commit-go: runs pre-commit checks on Go projects.
 Supported commands are:
   help        - this page
   install     - install the git commit hook as .git/hooks/pre-commit
-  prereq      - install prerequisites: errcheck, golint, goimports, govet
-  run         - run all checks
-	writeconfig - write (or rewrite) a pre-commit-go.json
+  prereq      - install prerequisites, e.g.: errcheck, golint, goimports, govet,
+                etc as applicable for the enabled checks.
+  run         - run all enabled checks
+  writeconfig - write (or rewrite) a pre-commit-go.json
 
-When executed without command, it does the equivalent of prereq, install then
-run.
+When executed without command, it does the equivalent of 'prereq', 'install'
+then 'run'.
 
 Supported flags are:
   -verbose
 
 Supported checks:
-- go build
-- go test -race
-- go test -cover
-- gofmt -s
-- goimports
-- errcheck
-- go tool vet
-- golint
+  Native ones that only depends on the stdlib:
+    - go build
+    - go test
+    - gofmt -s
+  Checks that have prerequisites (which will be automatically installed):
+    - errcheck
+    - goimports
+    - golint
+    - go tool vet
+    - go test -cover
 
 No check ever modify any file.
 `
