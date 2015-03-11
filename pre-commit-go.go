@@ -6,6 +6,8 @@ package main
 
 import (
 	"bufio"
+	"bytes"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -289,58 +291,79 @@ func relToGOPATH(p string) (string, error) {
 
 // Checks.
 
-// build builds everything inside the current directory via 'go build ./...'.
-func build(tags string) error {
-	args := []string{"go", "build"}
-	if len(tags) != 0 {
-		args = append(args, "-tags", tags)
+type Check interface {
+	enabled() bool
+	maxDuration() float64
+	run() error
+}
+
+// CheckCommon defines the common properties of a check.
+type CheckCommon struct {
+	Enabled     bool    `json:"enabled"`
+	MaxDuration float64 `json:"maxduration"` // In seconds. Default to MaxDuration at global scope.
+}
+
+func (c *CheckCommon) enabled() bool {
+	return c.Enabled
+}
+
+func (c *CheckCommon) maxDuration() float64 {
+	return c.MaxDuration
+}
+
+// Build builds everything inside the current directory via 'go build ./...'.
+type Build struct {
+	CheckCommon
+	Tags []string `json:"tags"`
+}
+
+func (b *Build) run() error {
+	tags := b.Tags
+	if len(tags) == 0 {
+		tags = []string{""}
 	}
-	args = append(args, "./...")
-	out, _, err := capture(args...)
-	if len(out) != 0 {
-		return fmt.Errorf("%s failed: %s", strings.Join(args, " "), out)
-	}
-	if err != nil {
-		return fmt.Errorf("%s failed: %s", strings.Join(args, " "), err.Error())
+	for _, tag := range tags {
+		args := []string{"go", "build"}
+		if len(tag) != 0 {
+			args = append(args, "-tags", tag)
+		}
+		args = append(args, "./...")
+		out, _, err := capture(args...)
+		if len(out) != 0 {
+			return fmt.Errorf("%s failed: %s", strings.Join(args, " "), out)
+		}
+		if err != nil {
+			return fmt.Errorf("%s failed: %s", strings.Join(args, " "), err.Error())
+		}
 	}
 	return nil
 }
 
-// runTests runs all tests with race detector.
-func runTests(tags string) error {
-	// Add tests manually instead of using './...'. The reason is that it permits
-	// running all the tests concurrently, which saves a lot of time when there's
-	// many packages.
-	var wg sync.WaitGroup
-	testDirs := goDirs(true)
-	errs := make(chan error, len(testDirs))
-	for _, t := range testDirs {
-		wg.Add(1)
-		go func(testDir string) {
-			defer wg.Done()
-			rel, err := relToGOPATH(testDir)
-			if err != nil {
-				errs <- err
-				return
-			}
-			args := []string{"go", "test", "-race", "-v", rel}
-			out, exitCode, _ := capture(args...)
-			if exitCode != 0 {
-				errs <- fmt.Errorf("%s failed:\n%s", strings.Join(args, " "), out)
-			}
-		}(t)
-	}
-	wg.Wait()
-	select {
-	case err := <-errs:
-		return err
-	default:
-		return nil
-	}
+// Gofmt runs gofmt in check mode with code simplification enabled.
+// TODO(maruel): It is redundant with goimports except for '-s'.
+type Gofmt struct {
+	CheckCommon
 }
 
-// runCoverage runs all tests with coverage.
-func runCoverage() error {
+func (g *Gofmt) run() error {
+	// gofmt doesn't return non-zero even if some files need to be updated.
+	out, _, err := capture("gofmt", "-l", "-s", ".")
+	if len(out) != 0 {
+		return fmt.Errorf("these files are improperly formmatted, please run: gofmt -w -s .\n%s", out)
+	}
+	if err != nil {
+		return fmt.Errorf("gofmt -l -s . failed: %s", err)
+	}
+	return nil
+}
+
+// TestCoverage runs all tests with coverage.
+type TestCoverage struct {
+	CheckCommon
+	Minimum float64 `json:"minimum"`
+}
+
+func (t *TestCoverage) run() error {
 	pkgRoot, _ := os.Getwd()
 	pkg, err := relToGOPATH(pkgRoot)
 	if err != nil {
@@ -362,7 +385,7 @@ func runCoverage() error {
 
 	var wg sync.WaitGroup
 	errs := make(chan error, len(testDirs))
-	for i, t := range testDirs {
+	for i, td := range testDirs {
 		wg.Add(1)
 		go func(index int, testDir string) {
 			defer wg.Done()
@@ -374,7 +397,7 @@ func runCoverage() error {
 			if exitCode != 0 {
 				errs <- fmt.Errorf("%s %s failed:\n%s", strings.Join(args, " "), testDir, out)
 			}
-		}(i, t)
+		}(i, td)
 	}
 	wg.Wait()
 
@@ -470,12 +493,10 @@ func runCoverage() error {
 				coverage[fn{loc, name}] = percent
 			}
 		}
-		// TODO(maruel): User configurable.
-		if total < 20. {
+		if total < t.Minimum {
 			partial := 0
 			for _, percent := range coverage {
-				// TODO(maruel): User configurable.
-				if percent < 95. {
+				if percent < 100. {
 					partial++
 				}
 			}
@@ -492,13 +513,63 @@ func runCoverage() error {
 	return err
 }
 
-// errcheck runs errcheck on all directories containing .go files.
-func errcheck() error {
-	// TODO(maruel): I don't know what happened around Oct 2014 but errcheck
-	// became super slow.
+// TestRace runs all tests with race detector.
+type TestRace struct {
+	CheckCommon
+	Tags []string `json:"tags"`
+}
+
+func (t *TestRace) run() error {
+	// Add tests manually instead of using './...'. The reason is that it permits
+	// running all the tests concurrently, which saves a lot of time when there's
+	// many packages.
+	var wg sync.WaitGroup
+	testDirs := goDirs(true)
+	tags := t.Tags
+	if len(tags) == 0 {
+		tags = []string{""}
+	}
+	for _, tag := range tags {
+		errs := make(chan error, len(testDirs))
+		for _, t := range testDirs {
+			wg.Add(1)
+			go func(testDir string) {
+				defer wg.Done()
+				rel, err := relToGOPATH(testDir)
+				if err != nil {
+					errs <- err
+					return
+				}
+				args := []string{"go", "test", "-race", "-v", rel}
+				if len(tag) != 0 {
+					args = append(args, "-tags", tag)
+				}
+				out, exitCode, _ := capture(args...)
+				if exitCode != 0 {
+					errs <- fmt.Errorf("%s failed:\n%s", strings.Join(args, " "), out)
+				}
+			}(t)
+		}
+		wg.Wait()
+		select {
+		case err := <-errs:
+			return err
+		default:
+		}
+	}
+	return nil
+}
+
+// Errcheck runs errcheck on all directories containing .go files.
+type Errcheck struct {
+	CheckCommon
+	Ignores string `json:"ignores"`
+}
+
+func (e *Errcheck) run() error {
 	dirs := goDirs(false)
 	args := make([]string, 0, len(dirs)+2)
-	args = append(args, "errcheck", "-ignore", "Close")
+	args = append(args, "errcheck", "-ignore", e.Ignores)
 	for _, d := range dirs {
 		rel, err := relToGOPATH(d)
 		if err != nil {
@@ -506,8 +577,6 @@ func errcheck() error {
 		}
 		args = append(args, rel)
 	}
-	// TODO(maruel): Add configurable -ignore like
-	// "Close|Write.*|Flush|Seek|Read.*"
 	out, _, err := capture(args...)
 	if len(out) != 0 {
 		return fmt.Errorf("%s failed:\n%s", strings.Join(args, " "), out)
@@ -518,22 +587,12 @@ func errcheck() error {
 	return nil
 }
 
-// gofmt runs gofmt in check mode with code simplification enabled.
-func gofmt() error {
-	// TODO(maruel): Likely always redundant with goimports except for '-s'.
-	// gofmt doesn't return non-zero even if some files need to be updated.
-	out, _, err := capture("gofmt", "-l", "-s", ".")
-	if len(out) != 0 {
-		return fmt.Errorf("these files are improperly formmatted, please run: gofmt -w -s .\n%s", out)
-	}
-	if err != nil {
-		return fmt.Errorf("gofmt -l -s . failed: %s", err)
-	}
-	return nil
+// Goimports runs goimports in check mode.
+type Goimports struct {
+	CheckCommon
 }
 
-// runs goimports in check mode.
-func goimports() error {
+func (g *Goimports) run() error {
 	// goimports doesn't return non-zero even if some files need to be updated.
 	out, _, err := capture("goimports", "-l", ".")
 	if len(out) != 0 {
@@ -545,18 +604,24 @@ func goimports() error {
 	return nil
 }
 
-// golint runs golint.
+// Golint runs golint.
 // There starts the cheezy part that may return false positives. I'm sorry
 // David.
-func golint() error {
+type Golint struct {
+	CheckCommon
+	Blacklist []string `json:"blacklist"`
+}
+
+func (g *Golint) run() error {
 	// golint doesn't return non-zero ever.
 	out, _, _ := capture("golint", "./...")
-	// TODO(maruel): Make blacklist/whitelist user configurable.
 	result := []string{}
 	for _, line := range strings.Split(string(out), "\n") {
-		//if strings.Contains(line, ": don't use underscores in Go names; ") {
-		//	continue
-		//}
+		for _, b := range g.Blacklist {
+			if strings.Contains(line, b) {
+				continue
+			}
+		}
 		result = append(result, line)
 	}
 	if len(result) == 0 {
@@ -565,16 +630,21 @@ func golint() error {
 	return nil
 }
 
-// govet runs "go tool vet".
-func govet() error {
-	// govet is very noisy about "composite literal uses unkeyed fields" which
-	// cannot be turned off so strip these and ignore the return code.
+// Govet runs "go tool vet".
+type Govet struct {
+	CheckCommon
+	Blacklist []string `json:"blacklist"`
+}
+
+func (g *Govet) run() error {
+	// Ignore the return code since we ignore many errors.
 	out, _, _ := capture("go", "tool", "vet", "-all", ".")
-	// TODO(maruel): Make blacklist/whitelist user configurable.
 	result := []string{}
 	for _, line := range strings.Split(string(out), "\n") {
-		if strings.HasSuffix(line, " composite literal uses unkeyed fields") {
-			continue
+		for _, b := range g.Blacklist {
+			if strings.Contains(line, b) {
+				continue
+			}
 		}
 		result = append(result, line)
 	}
@@ -582,6 +652,59 @@ func govet() error {
 		return errors.New(strings.Join(result, "\n"))
 	}
 	return nil
+}
+
+// Configuration.
+
+type Config struct {
+	MaxDuration float64 `json:"maxduration"` // In seconds.
+
+	// Native checks.
+	Build        Build        `json:"build"`
+	Gofmt        Gofmt        `json:"gofmt"`
+	TestCoverage TestCoverage `json:"testcoverage"`
+	TestRace     TestRace     `json:"testrace"`
+
+	// Checks that require prerequisites.
+	Errcheck  Errcheck  `json:"errcheck"`
+	Goimports Goimports `json:"goimports"`
+	Golint    Golint    `json:"golint"`
+	Govet     Govet     `json:"govet"`
+}
+
+// getConfig() returns a Config with defaults set then loads the config from
+// pre-commit-go.json.
+// TODO(maruel): filename is subject to change.
+func getConfig() *Config {
+	config := &Config{MaxDuration: 120}
+
+	// Set defaults for native tools.
+	config.Build.Enabled = true        //
+	config.Gofmt.Enabled = true        //
+	config.TestCoverage.Enabled = true //
+	config.TestCoverage.Minimum = 20.  //
+	config.TestRace.Enabled = true     // TODO(maruel): A future version will disable this by default.
+
+	// Set defaults for add-on tools.
+	config.Errcheck.Enabled = true    // TODO(maruel): A future version will disable this by default.
+	config.Errcheck.Ignores = "Close" // "Close|Write.*|Flush|Seek|Read.*"
+	config.Goimports.Enabled = true   //
+	config.Golint.Enabled = true      // TODO(maruel): A future version will disable this by default.
+	config.Govet.Enabled = true       // TODO(maruel): A future version will disable this by default.
+	config.Govet.Blacklist = []string{" composite literal uses unkeyed fields"}
+
+	// TODO(maruel): I'd prefer to use yaml (github.com/go-yaml/yaml) but that
+	// would mean slowing down go get .../pre-commit-go. Other option is to godep
+	// it but go-yaml is under active development.
+	content, err := ioutil.ReadFile("pre-commit-go.json")
+	if err == nil {
+		_ = json.Unmarshal(content, config)
+	}
+	out, _ := json.MarshalIndent(config, "", "  ")
+	if !bytes.Equal(out, content) {
+		// TODO(maruel): Return an error.
+	}
+	return config
 }
 
 // Commands.
@@ -596,10 +719,11 @@ func installPrereq() error {
 		{[]string{"errcheck", "-h"}, 2, "github.com/kisielk/errcheck"},
 		{[]string{"go", "tool", "cover", "-h"}, 1, "golang.org/x/tools/cmd/cover"},
 		{[]string{"go", "tool", "vet", "-h"}, 1, "golang.org/x/tools/cmd/vet"},
-		{[]string{"gocov", "-h"}, 2, "github.com/axw/gocov/gocov"},
 		{[]string{"goimports", "-h"}, 2, "golang.org/x/tools/cmd/goimports"},
 		{[]string{"golint", "-h"}, 2, "github.com/golang/lint/golint"},
-		{[]string{"goveralls", "-h"}, 2, "github.com/mattn/goveralls"},
+	}
+	if len(os.Getenv("TRAVIS_JOB_ID")) != 0 {
+		toInstall = append(toInstall, S{[]string{"goveralls", "-h"}, 2, "github.com/mattn/goveralls"})
 	}
 	var wg sync.WaitGroup
 	c := make(chan string, len(toInstall))
@@ -659,41 +783,50 @@ func install() error {
 
 func run() error {
 	start := time.Now()
-	type Check struct {
-		name string
-		fn   func() error
+
+	// TODO(maruel): I'm not happy about this design and will likely refactor
+	// this in the short term.
+	type CheckDef struct {
+		name  string
+		check Check
 	}
-	// TODO(maruel): User configurable.
-	tags := ""
-	// TODO(maruel): User configurable.
-	checks := []Check{
-		{"build", func() error { return build(tags) }},
-		{"test", func() error { return runTests(tags) }},
-		{"gofmt", gofmt},
-		{"goimports", goimports},
-		{"errcheck", errcheck},
-		{"govet", govet},
-		{"golint", golint},
-		{"coverage", runCoverage},
+	config := getConfig()
+
+	checks := []CheckDef{
+		{"build", &config.Build},
+		{"gofmt", &config.Gofmt},
+		{"testcoverage", &config.TestCoverage},
+		{"testrace", &config.TestRace},
+
+		{"errcheck", &config.Errcheck},
+		{"goimports", &config.Goimports},
+		{"golint", &config.Govet},
+		{"govet", &config.Govet},
 	}
 
 	var wg sync.WaitGroup
 	errs := make(chan error, len(checks))
 	for _, c := range checks {
+		if !c.check.enabled() {
+			continue
+		}
 		wg.Add(1)
-		go func(check Check) {
+		go func(check CheckDef) {
 			defer wg.Done()
 			log.Printf("%s...", check.name)
 			start := time.Now()
-			err := check.fn()
+			err := check.check.run()
 			duration := time.Now().Sub(start)
 			log.Printf("... %s in %1.2fs", check.name, duration.Seconds())
 			if err != nil {
 				errs <- err
 			}
-			// A check that took 2 minutes is a check that failed.
-			// TODO(maruel): User configurable.
-			if duration > 120*time.Second {
+			// A check that took too long is a check that failed.
+			max := check.check.maxDuration()
+			if max == 0 {
+				max = config.MaxDuration
+			}
+			if duration > time.Duration(max)*time.Second {
 				errs <- fmt.Errorf("check %s took %1.2fs", check.name, duration.Seconds())
 			}
 		}(c)
@@ -713,6 +846,16 @@ func run() error {
 			return err
 		}
 	}
+}
+
+func writeConfig() error {
+	config := getConfig()
+	out, err := json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		return err
+	}
+	_ = os.Remove("pre-commit-go.json")
+	return ioutil.WriteFile("pre-commit-go.json", out, 0666)
 }
 
 func mainImpl() error {
@@ -758,6 +901,9 @@ func mainImpl() error {
 	}
 	if cmd == "run" || cmd == "r" {
 		return run()
+	}
+	if cmd == "writeconfig" || cmd == "w" {
+		return writeConfig()
 	}
 	return errors.New("unknown command")
 }
