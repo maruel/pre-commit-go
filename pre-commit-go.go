@@ -107,10 +107,11 @@ exit $result
 var helpText = `pre-commit-go: runs pre-commit checks on Go projects.
 
 Supported commands are:
-  help    - this page
-  install - install the git commit hook as .git/hooks/pre-commit
-  prereq  - install prerequisites: errcheck, golint, goimports, govet
-  run     - run all checks
+  help        - this page
+  install     - install the git commit hook as .git/hooks/pre-commit
+  prereq      - install prerequisites: errcheck, golint, goimports, govet
+  run         - run all checks
+	writeconfig - write (or rewrite) a pre-commit-go.json
 
 When executed without command, it does the equivalent of prereq, install then
 run.
