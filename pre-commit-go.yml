@@ -6,45 +6,37 @@
 
 maxduration: 120
 buildonly:
-  checkcommon:
-    runlevel: 1
-    maxduration: 0
+  runlevel: 1
+  maxduration: 0
   extraargs:
   - []
 gofmt:
-  checkcommon:
-    runlevel: 1
-    maxduration: 0
+  runlevel: 1
+  maxduration: 0
 test:
-  checkcommon:
-    runlevel: 1
-    maxduration: 0
+  runlevel: 1
+  maxduration: 0
   extraargs:
   - - -v
     - -race
 errcheck:
-  checkcommon:
-    runlevel: 2
-    maxduration: 0
+  runlevel: 2
+  maxduration: 0
   ignores: Close
 goimports:
-  checkcommon:
-    runlevel: 2
-    maxduration: 0
+  runlevel: 2
+  maxduration: 0
 golint:
-  checkcommon:
-    runlevel: 3
-    maxduration: 0
+  runlevel: 3
+  maxduration: 0
   blacklist: []
 govet:
-  checkcommon:
-    runlevel: 3
-    maxduration: 0
+  runlevel: 3
+  maxduration: 0
   blacklist:
   - ' composite literal uses unkeyed fields'
 testcoverage:
-  checkcommon:
-    runlevel: 2
-    maxduration: 0
+  runlevel: 2
+  maxduration: 0
   minimumcoverage: 20
 customchecks: []
