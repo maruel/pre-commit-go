@@ -356,14 +356,18 @@ func mainImpl() error {
 		copy(os.Args[1:], os.Args[2:])
 		os.Args = os.Args[:len(os.Args)-1]
 	}
-	verbose := flag.Bool("verbose", false, "verbose")
-	name := flag.String("name", "pre-commit-go.json", "file name of the config")
-	runLevel := flag.Int("level", 1, "runlevel, between 0 and 3")
+	verbose := flag.Bool("verbose", false, "enables verbose logging output")
+	configPath := flag.String("config", "pre-commit-go.json", "file name of the config to load")
+	runLevel := flag.Int("level", 1, "runlevel, between 0 and 3; the higher, the more tests are run")
 	flag.Parse()
 
 	log.SetFlags(log.Lmicroseconds)
 	if !*verbose {
 		log.SetOutput(ioutil.Discard)
+	}
+
+	if *runLevel < 0 || *runLevel > 3 {
+		return fmt.Errorf("-level %d is invalid, must be between 0 and 3", *runLevel)
 	}
 
 	gitRoot, err := captureAbs("git", "rev-parse", "--show-cdup")
@@ -378,25 +382,25 @@ func mainImpl() error {
 		b := &bytes.Buffer{}
 		flag.CommandLine.SetOutput(b)
 		flag.CommandLine.PrintDefaults()
-		return help(*name, b.String())
+		return help(*configPath, b.String())
 	}
 	if cmd == "install" || cmd == "i" {
-		return install(*name, *runLevel)
+		return install(*configPath, *runLevel)
 	}
 	if cmd == "installRun" {
-		if err := install(*name, *runLevel); err != nil {
+		if err := install(*configPath, *runLevel); err != nil {
 			return err
 		}
-		return run(*name, *runLevel)
+		return run(*configPath, *runLevel)
 	}
 	if cmd == "prereq" || cmd == "p" {
-		return installPrereq(*name, *runLevel)
+		return installPrereq(*configPath, *runLevel)
 	}
 	if cmd == "run" || cmd == "r" {
-		return run(*name, *runLevel)
+		return run(*configPath, *runLevel)
 	}
 	if cmd == "writeconfig" || cmd == "w" {
-		return writeConfig(*name)
+		return writeConfig(*configPath)
 	}
 	return errors.New("unknown command, try 'help'")
 }

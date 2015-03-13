@@ -16,9 +16,9 @@ git pre-commit hook for Golang projects
     then 'run'.
 
     Supported flags are:
-      -level=1: runlevel, between 0 and 3
-      -name="pre-commit-go.json": file name of the config
-      -verbose=false: verbose
+      -config="pre-commit-go.json": file name of the config to load
+      -level=1: runlevel, between 0 and 3; the higher, the more tests are run
+      -verbose=false: enables verbose logging output
 
     Supported checks and their runlevel:
       Native checks that only depends on the stdlib:
@@ -55,14 +55,14 @@ git pre-commit hook for Golang projects
 
 ### Installing the hook and running checks
 
-    pre-commit-go
+From within a git checkout inside `$GOPATH`:
 
-from within a git checkout inside `$GOPATH`.
+    pre-commit-go
 
 
 ### Bypassing hook
 
-If you want to bypass the pre-commit hook due to known breakage, use:
+To bypass the pre-commit hook due to known breakage, use:
 
     git commit --no-verify
 
@@ -70,11 +70,12 @@ If you want to bypass the pre-commit hook due to known breakage, use:
 Travis & Coveralls integration
 ---------------------------------
 
-Post push CI (continuous integration) works with https://travis-ci.org and
-https://coveralls.io.
+Post push CI (continuous integration) works with Travis and Coveralls. This
+runs the checks on pull requests automatically! This also works with
+github organizations.
 
    1. Visit https://travis-ci.org and connect your github account (or whatever
-      git host provider) to travis.
+      git host provider) to Travis. Enable your repository.
    2. Do the same via https://coveralls.io.
    3. Add a `.travis.yml` file to your repository and push it.
 
