@@ -1,6 +1,7 @@
 git pre-commit hook for Golang projects
 =======================================
 
+    $ ./pre-commit-go help
     pre-commit-go: runs pre-commit checks on Go projects.
 
     Supported commands are:
@@ -59,9 +60,7 @@ git pre-commit hook for Golang projects
 from within a git checkout inside `$GOPATH`.
 
 
-### Help page
-
-    pre-commit-go --help
+### Bypassing hook
 
 If you want to bypass the pre-commit hook due to known breakage, use:
 
