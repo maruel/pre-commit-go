@@ -124,7 +124,7 @@ No check ever modify any file.
 // Configuration.
 
 type Config struct {
-	MaxDuration float64 // In seconds.
+	MaxDuration int // In seconds.
 
 	// Native checks.
 	BuildOnly checks.BuildOnly

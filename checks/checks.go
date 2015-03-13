@@ -38,7 +38,7 @@ type Check interface {
 	// GetRunLevel is the level at which this check should be run.
 	GetRunLevel() int
 	// GetMaxDuration is the maximum of seconds allowed to run this check.
-	GetMaxDuration() float64
+	GetMaxDuration() int
 	// GetDescription returns the check description.
 	GetDescription() string
 	// GetName returns the check name.
@@ -60,22 +60,23 @@ type CheckCommon struct {
 	//   - most checks that require third parties have default RunLevel of 2
 	//   - checks that may trigger false positives have default RunLevel of 3
 	RunLevel int
-	// In seconds. Default to MaxDuration at global scope.
-	MaxDuration float64
+	// In seconds. Default to MaxDuration at global scope. The value is omitted
+	// by default since it's likely to be 0 everywhere most of the time.
+	MaxDuration int `yaml:",omitempty";`
 }
 
 func (c *CheckCommon) getRunLevel() int {
 	return c.RunLevel
 }
 
-func (c *CheckCommon) getMaxDuration() float64 {
+func (c *CheckCommon) getMaxDuration() int {
 	return c.MaxDuration
 }
 
 // check exists to reduce the noise in the doc.
 type check interface {
 	getRunLevel() int
-	getMaxDuration() float64
+	getMaxDuration() int
 	getDescription() string
 	getName() string
 	getPrerequisites() []CheckPrerequisite
@@ -90,7 +91,7 @@ type checkAdaptor struct {
 func (c checkAdaptor) GetRunLevel() int {
 	return c.getRunLevel()
 }
-func (c checkAdaptor) GetMaxDuration() float64 {
+func (c checkAdaptor) GetMaxDuration() int {
 	return c.getMaxDuration()
 }
 func (c checkAdaptor) GetDescription() string {
