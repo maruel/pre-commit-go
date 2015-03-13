@@ -101,14 +101,14 @@ var helpText = template.Must(template.New("help").Parse(`pre-commit-go: runs pre
 Supported commands are:
   help        - this page
   install     - install the git commit hook as .git/hooks/pre-commit
+                (runs prereq before)
   prereq      - install prerequisites, e.g.: errcheck, golint, goimports, govet,
                 etc as applicable for the enabled checks.
+  installrun  - runs prequest, install then run run all enabled checks
   run         - run all enabled checks
   writeconfig - write (or rewrite) a pre-commit-go.yml
 
-When executed without command, it does the equivalent of 'prereq', 'install'
-then 'run'.
-
+When executed without command, it does the equivalent of 'installrun'.
 Supported flags are:
 {{.Usage}}
 Supported checks and their runlevel:
@@ -362,7 +362,7 @@ func writeConfig(name string) error {
 func mainImpl() error {
 	cmd := ""
 	if len(os.Args) == 1 {
-		cmd = "installRun"
+		cmd = "installrun"
 	} else {
 		cmd = os.Args[1]
 		copy(os.Args[1:], os.Args[2:])
@@ -399,7 +399,7 @@ func mainImpl() error {
 	if cmd == "install" || cmd == "i" {
 		return install(*configPath, *runLevel)
 	}
-	if cmd == "installRun" {
+	if cmd == "installrun" {
 		if err := install(*configPath, *runLevel); err != nil {
 			return err
 		}

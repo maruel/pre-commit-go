@@ -91,4 +91,4 @@ Sample `.travis.yml`:
     before_install:
       - go get github.com/maruel/pre-commit-go
     script:
-      - pre-commit-go run -level 2
+      - pre-commit-go installrun -level 2
