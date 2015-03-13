@@ -2,7 +2,8 @@
 // Use of this source code is governed under the Apache License, Version 2.0
 // that can be found in the LICENSE file.
 
-package main
+// Package checks defines pre-made checks and custom checks for pre-commit-go.
+package checks
 
 import (
 	"bufio"
@@ -39,8 +40,8 @@ type Check interface {
 	Run() error                            // Run executes the check.
 }
 
-// CheckCommon defines the common properties of a check to be serialized in the
-// configuration file.
+// CheckCommon defines the common properties of each check to be serialized in
+// the configuration file.
 type CheckCommon struct {
 	RunLevel    int     // [0, 3]. 0 is never, 3 is always.
 	MaxDuration float64 // In seconds. Default to MaxDuration at global scope.

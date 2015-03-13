@@ -2,11 +2,11 @@
 // Use of this source code is governed under the Apache License, Version 2.0
 // that can be found in the LICENSE file.
 
+// pre-commit-go: runs pre-commit checks on Go projects.
 package main
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -18,6 +18,9 @@ import (
 	"sync"
 	"text/template"
 	"time"
+
+	"github.com/maruel/pre-commit-go/checks"
+	"gopkg.in/yaml.v2"
 )
 
 // Globals
@@ -101,7 +104,7 @@ Supported commands are:
   prereq      - install prerequisites, e.g.: errcheck, golint, goimports, govet,
                 etc as applicable for the enabled checks.
   run         - run all enabled checks
-  writeconfig - write (or rewrite) a pre-commit-go.json
+  writeconfig - write (or rewrite) a pre-commit-go.yml
 
 When executed without command, it does the equivalent of 'prereq', 'install'
 then 'run'.
@@ -124,53 +127,51 @@ type Config struct {
 	MaxDuration float64 // In seconds.
 
 	// Native checks.
-	BuildOnly BuildOnly
-	Gofmt     Gofmt
-	Test      Test
+	BuildOnly checks.BuildOnly
+	Gofmt     checks.Gofmt
+	Test      checks.Test
 
 	// Checks that require prerequisites.
-	Errcheck     Errcheck
-	Goimports    Goimports
-	Golint       Golint
-	Govet        Govet
-	TestCoverage TestCoverage
+	Errcheck     checks.Errcheck
+	Goimports    checks.Goimports
+	Golint       checks.Golint
+	Govet        checks.Govet
+	TestCoverage checks.TestCoverage
 
 	// User configurable presubmit checks.
-	CustomChecks []*CustomCheck
+	CustomChecks []*checks.CustomCheck
 }
 
 // getConfig() returns a Config with defaults set then loads the config from
 // file "name".
 func getConfig(name string) *Config {
-	config := &Config{MaxDuration: 120, CustomChecks: []*CustomCheck{}}
+	config := &Config{MaxDuration: 120, CustomChecks: []*checks.CustomCheck{}}
 	for _, c := range config.AllChecks() {
 		c.ResetDefault()
 	}
 
-	// TODO(maruel): Use a better config format. Options:
+	// TODO(maruel): Settle on config format. Options:
+	// - json (encoding/json); does not require anything except stdlib but
+	//   doesn't allow comments.
 	// - yaml (github.com/go-yaml/yaml)
 	// - JSON5 (github.com/yosuke-furukawa/json5)
-	// - INI (code.google.com/p/gcfg and others)
-	//
-	// In particular, the header should include a reference to
-	// github.com/maruel/pre-commit-go!
+	// - INI (code.google.com/p/gcfg and others) Main issue is lack of embedded
+	//   lists.
 	//
 	// Side effect: either it would slow down go get .../pre-commit-go or we'd
 	// have to use godep and periodically sync.
 	content, err := ioutil.ReadFile(name)
 	if err == nil {
-		_ = json.Unmarshal(content, config)
-	}
-	out, _ := json.MarshalIndent(config, "", "  ")
-	if !bytes.Equal(out, content) {
-		log.Printf("%s is not in canonical format, please use \"pre-commit-go writeconfig\"", name)
+		if err2 := yaml.Unmarshal(content, config); err2 != nil {
+			log.Printf("failed to parse %s: %s", name, err2)
+		}
 	}
 	return config
 }
 
 // AllChecks returns all the checks.
-func (c *Config) AllChecks() []Check {
-	out := []Check{&c.BuildOnly, &c.Gofmt, &c.Test, &c.Errcheck, &c.Goimports, &c.Golint, &c.Govet, &c.TestCoverage}
+func (c *Config) AllChecks() []checks.Check {
+	out := []checks.Check{&c.BuildOnly, &c.Gofmt, &c.Test, &c.Errcheck, &c.Goimports, &c.Golint, &c.Govet, &c.TestCoverage}
 	for _, c := range c.CustomChecks {
 		out = append(out, c)
 	}
@@ -178,8 +179,8 @@ func (c *Config) AllChecks() []Check {
 }
 
 // EnabledChecks returns all the checks enabled at this run level.
-func (c *Config) EnabledChecks(runLevel int) []Check {
-	out := []Check{}
+func (c *Config) EnabledChecks(runLevel int) []checks.Check {
+	out := []checks.Check{}
 	for _, c := range c.AllChecks() {
 		if c.GetRunLevel() <= runLevel {
 			out = append(out, c)
@@ -194,13 +195,13 @@ func help(name, usage string) error {
 	s := &struct {
 		Usage        string
 		Max          int
-		NativeChecks []Check
-		OtherChecks  []Check
+		NativeChecks []checks.Check
+		OtherChecks  []checks.Check
 	}{
 		usage,
 		0,
-		[]Check{},
-		[]Check{},
+		[]checks.Check{},
+		[]checks.Check{},
 	}
 	for _, c := range getConfig(name).AllChecks() {
 		if v := len(c.GetName()); v > s.Max {
@@ -219,12 +220,12 @@ func help(name, usage string) error {
 func installPrereq(name string, runLevel int) error {
 	config := getConfig(name)
 	var wg sync.WaitGroup
-	checks := config.EnabledChecks(runLevel)
-	c := make(chan string, len(checks))
-	for _, check := range checks {
+	enabledChecks := config.EnabledChecks(runLevel)
+	c := make(chan string, len(enabledChecks))
+	for _, check := range enabledChecks {
 		for _, p := range check.GetPrerequisites() {
 			wg.Add(1)
-			go func(prereq CheckPrerequisite) {
+			go func(prereq checks.CheckPrerequisite) {
 				defer wg.Done()
 				_, exitCode, _ := capture(prereq.HelpCommand...)
 				if exitCode != prereq.ExpectedExitCode {
@@ -295,12 +296,12 @@ func install(name string, runLevel int) error {
 func run(name string, runLevel int) error {
 	start := time.Now()
 	config := getConfig(name)
-	checks := config.EnabledChecks(runLevel)
+	enabledChecks := config.EnabledChecks(runLevel)
 	var wg sync.WaitGroup
-	errs := make(chan error, len(checks))
-	for _, c := range checks {
+	errs := make(chan error, len(enabledChecks))
+	for _, c := range enabledChecks {
 		wg.Add(1)
-		go func(check Check) {
+		go func(check checks.Check) {
 			defer wg.Done()
 			log.Printf("%s...", check.GetName())
 			start := time.Now()
@@ -339,11 +340,13 @@ func run(name string, runLevel int) error {
 
 func writeConfig(name string) error {
 	config := getConfig(name)
-	out, err := json.MarshalIndent(config, "", "  ")
+	content, err := yaml.Marshal(config)
 	if err != nil {
-		return err
+		return fmt.Errorf("internal error when marshaling config: %s", err)
 	}
 	_ = os.Remove(name)
+	out := []byte("# https://github.com/maruel/pre-commit-go configuration file to run checks\n# automatically on commit and pull requests.\n#\n# See https://godoc.org/github.com/maruel/pre-commit-go/checks for more\n# information.\n\n")
+	out = append(out, content...)
 	return ioutil.WriteFile(name, out, 0666)
 }
 
@@ -357,7 +360,7 @@ func mainImpl() error {
 		os.Args = os.Args[:len(os.Args)-1]
 	}
 	verbose := flag.Bool("verbose", false, "enables verbose logging output")
-	configPath := flag.String("config", "pre-commit-go.json", "file name of the config to load")
+	configPath := flag.String("config", "pre-commit-go.yml", "file name of the config to load")
 	runLevel := flag.Int("level", 1, "runlevel, between 0 and 3; the higher, the more tests are run")
 	flag.Parse()
 
