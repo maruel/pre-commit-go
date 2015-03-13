@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"sort"
 	"sync"
+	"text/template"
 	"time"
 )
 
@@ -92,7 +93,7 @@ git reset --hard -q && git stash apply --index -q && git stash drop -q
 exit $result
 `)
 
-var helpText = `pre-commit-go: runs pre-commit checks on Go projects.
+var helpText = template.Must(template.New("help").Parse(`pre-commit-go: runs pre-commit checks on Go projects.
 
 Supported commands are:
   help        - this page
@@ -106,89 +107,81 @@ When executed without command, it does the equivalent of 'prereq', 'install'
 then 'run'.
 
 Supported flags are:
-  -verbose
+{{.Usage}}
+Supported checks and their runlevel:
+  Native checks that only depends on the stdlib:{{range .NativeChecks}}
+    - {{printf "%-*s %d" $.Max .GetName .GetRunLevel}} : {{.GetDescription}}{{end}}
 
-Supported checks:
-  Native ones that only depends on the stdlib:
-    - go build
-    - go test
-    - gofmt -s
-  Checks that have prerequisites (which will be automatically installed):
-    - errcheck
-    - goimports
-    - golint
-    - go tool vet
-    - go test -cover
+  Checks that have prerequisites (which will be automatically installed):{{range .OtherChecks}}
+    - {{printf "%-*s %d" $.Max .GetName .GetRunLevel}} : {{.GetDescription}}{{end}}
 
 No check ever modify any file.
-`
+`))
 
 // Configuration.
 
 type Config struct {
-	MaxDuration float64 `json:"maxduration"` // In seconds.
+	MaxDuration float64 // In seconds.
 
 	// Native checks.
-	Build Build `json:"build"`
-	Gofmt Gofmt `json:"gofmt"`
-	Test  Test  `json:"test"`
+	BuildOnly BuildOnly
+	Gofmt     Gofmt
+	Test      Test
 
 	// Checks that require prerequisites.
-	Errcheck     Errcheck     `json:"errcheck"`
-	Goimports    Goimports    `json:"goimports"`
-	Golint       Golint       `json:"golint"`
-	Govet        Govet        `json:"govet"`
-	TestCoverage TestCoverage `json:"testcoverage"`
+	Errcheck     Errcheck
+	Goimports    Goimports
+	Golint       Golint
+	Govet        Govet
+	TestCoverage TestCoverage
 
 	// User configurable presubmit checks.
-	CustomChecks []CustomCheck `json:"customchecks"`
+	CustomChecks []*CustomCheck
 }
 
 // getConfig() returns a Config with defaults set then loads the config from
-// pre-commit-go.json.
-// TODO(maruel): filename is subject to change.
-func getConfig() *Config {
-	config := &Config{MaxDuration: 120}
+// file "name".
+func getConfig(name string) *Config {
+	config := &Config{MaxDuration: 120, CustomChecks: []*CustomCheck{}}
+	for _, c := range config.AllChecks() {
+		c.ResetDefault()
+	}
 
-	// Set defaults for native tools.
-	config.Build.Enabled = true                     //
-	config.Gofmt.Enabled = true                     //
-	config.Test.Enabled = true                      //
-	config.Test.ExtraArgs = []string{"-v", "-race"} // Enable the race detector by default.
-
-	// Set defaults for add-on tools.
-	config.Errcheck.Enabled = true    // TODO(maruel): A future version will disable this by default.
-	config.Errcheck.Ignores = "Close" // "Close|Write.*|Flush|Seek|Read.*"
-	config.Goimports.Enabled = true   //
-	config.Golint.Enabled = true      // TODO(maruel): A future version will disable this by default.
-	config.Govet.Enabled = true       // TODO(maruel): A future version will disable this by default.
-	config.Govet.Blacklist = []string{" composite literal uses unkeyed fields"}
-	config.TestCoverage.Enabled = true //
-	config.TestCoverage.Minimum = 20.  //
-
-	// TODO(maruel): I'd prefer to use yaml (github.com/go-yaml/yaml) but that
-	// would mean slowing down go get .../pre-commit-go. Other option is to godep
-	// it but go-yaml is under active development.
-	content, err := ioutil.ReadFile("pre-commit-go.json")
+	// TODO(maruel): Use a better config format. Options:
+	// - yaml (github.com/go-yaml/yaml)
+	// - JSON5 (github.com/yosuke-furukawa/json5)
+	// - INI (code.google.com/p/gcfg and others)
+	//
+	// In particular, the header should include a reference to
+	// github.com/maruel/pre-commit-go!
+	//
+	// Side effect: either it would slow down go get .../pre-commit-go or we'd
+	// have to use godep and periodically sync.
+	content, err := ioutil.ReadFile(name)
 	if err == nil {
 		_ = json.Unmarshal(content, config)
 	}
 	out, _ := json.MarshalIndent(config, "", "  ")
 	if !bytes.Equal(out, content) {
-		// TODO(maruel): Return an error.
+		log.Printf("%s is not in canonical format, please use \"pre-commit-go writeconfig\"", name)
 	}
 	return config
 }
 
-// allChecks returns all the enabled checks.
-func (c *Config) allChecks() []Check {
-	out := []Check{}
-	all := []Check{&c.Build, &c.Gofmt, &c.Test, &c.Errcheck, &c.Goimports, &c.Golint, &c.Govet, &c.TestCoverage}
-	for i := range c.CustomChecks {
-		all = append(all, &c.CustomChecks[i])
+// AllChecks returns all the checks.
+func (c *Config) AllChecks() []Check {
+	out := []Check{&c.BuildOnly, &c.Gofmt, &c.Test, &c.Errcheck, &c.Goimports, &c.Golint, &c.Govet, &c.TestCoverage}
+	for _, c := range c.CustomChecks {
+		out = append(out, c)
 	}
-	for _, c := range all {
-		if c.enabled() {
+	return out
+}
+
+// EnabledChecks returns all the checks enabled at this run level.
+func (c *Config) EnabledChecks(runLevel int) []Check {
+	out := []Check{}
+	for _, c := range c.AllChecks() {
+		if c.GetRunLevel() <= runLevel {
 			out = append(out, c)
 		}
 	}
@@ -197,14 +190,39 @@ func (c *Config) allChecks() []Check {
 
 // Commands.
 
+func help(name, usage string) error {
+	s := &struct {
+		Usage        string
+		Max          int
+		NativeChecks []Check
+		OtherChecks  []Check
+	}{
+		usage,
+		0,
+		[]Check{},
+		[]Check{},
+	}
+	for _, c := range getConfig(name).AllChecks() {
+		if v := len(c.GetName()); v > s.Max {
+			s.Max = v
+		}
+		if len(c.GetPrerequisites()) == 0 {
+			s.NativeChecks = append(s.NativeChecks, c)
+		} else {
+			s.OtherChecks = append(s.OtherChecks, c)
+		}
+	}
+	return helpText.Execute(os.Stdout, s)
+}
+
 // installPrereq installs all the packages needed to run the enabled checks.
-func installPrereq() error {
-	config := getConfig()
+func installPrereq(name string, runLevel int) error {
+	config := getConfig(name)
 	var wg sync.WaitGroup
-	checks := config.allChecks()
+	checks := config.EnabledChecks(runLevel)
 	c := make(chan string, len(checks))
 	for _, check := range checks {
-		for _, p := range check.prerequisites() {
+		for _, p := range check.GetPrerequisites() {
 			wg.Add(1)
 			go func(prereq CheckPrerequisite) {
 				defer wg.Done()
@@ -257,8 +275,8 @@ func installPrereq() error {
 }
 
 // install first calls installPrereq() then install the .git/hooks/pre-commit hook.
-func install() error {
-	if err := installPrereq(); err != nil {
+func install(name string, runLevel int) error {
+	if err := installPrereq(name, runLevel); err != nil {
 		return err
 	}
 	gitDir, err := captureAbs("git", "rev-parse", "--git-dir")
@@ -274,31 +292,31 @@ func install() error {
 }
 
 // run runs all the enabled checks.
-func run() error {
+func run(name string, runLevel int) error {
 	start := time.Now()
-	config := getConfig()
-	checks := config.allChecks()
+	config := getConfig(name)
+	checks := config.EnabledChecks(runLevel)
 	var wg sync.WaitGroup
 	errs := make(chan error, len(checks))
 	for _, c := range checks {
 		wg.Add(1)
 		go func(check Check) {
 			defer wg.Done()
-			log.Printf("%s...", check.name())
+			log.Printf("%s...", check.GetName())
 			start := time.Now()
-			err := check.run()
+			err := check.Run()
 			duration := time.Now().Sub(start)
-			log.Printf("... %s in %1.2fs", check.name(), duration.Seconds())
+			log.Printf("... %s in %1.2fs", check.GetName(), duration.Seconds())
 			if err != nil {
 				errs <- err
 			}
 			// A check that took too long is a check that failed.
-			max := check.maxDuration()
+			max := check.GetMaxDuration()
 			if max == 0 {
 				max = config.MaxDuration
 			}
 			if duration > time.Duration(max)*time.Second {
-				errs <- fmt.Errorf("check %s took %1.2fs", check.name(), duration.Seconds())
+				errs <- fmt.Errorf("check %s took %1.2fs", check.GetName(), duration.Seconds())
 			}
 		}(c)
 	}
@@ -319,14 +337,14 @@ func run() error {
 	}
 }
 
-func writeConfig() error {
-	config := getConfig()
+func writeConfig(name string) error {
+	config := getConfig(name)
 	out, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {
 		return err
 	}
-	_ = os.Remove("pre-commit-go.json")
-	return ioutil.WriteFile("pre-commit-go.json", out, 0666)
+	_ = os.Remove(name)
+	return ioutil.WriteFile(name, out, 0666)
 }
 
 func mainImpl() error {
@@ -339,6 +357,8 @@ func mainImpl() error {
 		os.Args = os.Args[:len(os.Args)-1]
 	}
 	verbose := flag.Bool("verbose", false, "verbose")
+	name := flag.String("name", "pre-commit-go.json", "file name of the config")
+	runLevel := flag.Int("level", 1, "runlevel, between 0 and 3")
 	flag.Parse()
 
 	log.SetFlags(log.Lmicroseconds)
@@ -355,28 +375,30 @@ func mainImpl() error {
 	}
 
 	if cmd == "help" || cmd == "-help" || cmd == "-h" {
-		fmt.Printf(helpText)
-		return nil
+		b := &bytes.Buffer{}
+		flag.CommandLine.SetOutput(b)
+		flag.CommandLine.PrintDefaults()
+		return help(*name, b.String())
 	}
 	if cmd == "install" || cmd == "i" {
-		return install()
+		return install(*name, *runLevel)
 	}
 	if cmd == "installRun" {
-		if err := install(); err != nil {
+		if err := install(*name, *runLevel); err != nil {
 			return err
 		}
-		return run()
+		return run(*name, *runLevel)
 	}
 	if cmd == "prereq" || cmd == "p" {
-		return installPrereq()
+		return installPrereq(*name, *runLevel)
 	}
 	if cmd == "run" || cmd == "r" {
-		return run()
+		return run(*name, *runLevel)
 	}
 	if cmd == "writeconfig" || cmd == "w" {
-		return writeConfig()
+		return writeConfig(*name)
 	}
-	return errors.New("unknown command")
+	return errors.New("unknown command, try 'help'")
 }
 
 func main() {

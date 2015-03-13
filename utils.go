@@ -99,7 +99,11 @@ func rsplitn(s, sep string, n int) []string {
 }
 
 // goDirs returns the list of directories with '*.go' files or '*_test.go'
-// files, depending on value of 'tests'.
+// files.
+//
+// If 'tests' is true, all directories containing tests are returned.
+// If 'tests' is false, only directories containing go source files but not
+// tests are returned. This is usually 'main' packages.
 func goDirs(tests bool) []string {
 	goDirsCacheLock.Lock()
 	defer goDirsCacheLock.Unlock()
@@ -141,7 +145,9 @@ func goDirs(tests bool) []string {
 		true:  make([]string, 0, len(dirsTestsFound)),
 	}
 	for d := range dirsSourceFound {
-		goDirsCache[false] = append(goDirsCache[false], d)
+		if _, ok := dirsTestsFound[d]; !ok {
+			goDirsCache[false] = append(goDirsCache[false], d)
+		}
 	}
 	for d := range dirsTestsFound {
 		goDirsCache[true] = append(goDirsCache[true], d)

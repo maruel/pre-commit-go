@@ -15,19 +15,22 @@ git pre-commit hook for Golang projects
     then 'run'.
 
     Supported flags are:
-      -verbose
+      -level=1: runlevel, between 0 and 3
+      -name="pre-commit-go.json": file name of the config
+      -verbose=false: verbose
 
-    Supported checks:
-      Native ones that only depends on the stdlib:
-        - go build
-        - go test
-        - gofmt -s
+    Supported checks and their runlevel:
+      Native checks that only depends on the stdlib:
+        - build        1 : builds all packages that do not contain tests, usually all directories with package 'main'
+        - gofmt        1 : enforces all .go sources are formatted with 'gofmt -s'
+        - test         1 : runs all tests, potentially multiple times (with race detector, with different tags, etc)
+
       Checks that have prerequisites (which will be automatically installed):
-        - errcheck
-        - goimports
-        - golint
-        - go tool vet
-        - go test -cover
+        - errcheck     2 : enforces all calls returning an error are checked using tool 'errcheck'
+        - goimports    2 : enforces all .go sources are formatted with 'goimports'
+        - golint       3 : enforces all .go sources passes golint
+        - govet        3 : enforces all .go sources passes go tool vet
+        - testcoverage 2 : enforces minimum test coverage on all packages that are not 'main'
 
     No check ever modify any file.
 
@@ -40,7 +43,7 @@ git pre-commit hook for Golang projects
   * [errcheck](https://github.com/kisielk/errcheck)
   * [goimports](https://golang.org/x/tools/cmd/goimports)
   * [golint](https://github.com/golang/lint)
-  * [govet](https://golang.org/x/tools/cmd/vet)
+  * [govet (go tool vet)](https://golang.org/x/tools/cmd/vet)
   * [go test -cover](https://golang.org/pkg/testing/) with [coverage](https://blog.golang.org/cover)
 
 
@@ -85,4 +88,4 @@ Sample `.travis.yml`:
     before_install:
       - go get github.com/maruel/pre-commit-go
     script:
-      - pre-commit-go
+      - pre-commit-go run -level 2

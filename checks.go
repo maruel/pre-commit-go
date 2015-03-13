@@ -30,54 +30,68 @@ type CheckPrerequisite struct {
 
 // Check describes an check to be executed on the code base.
 type Check interface {
-	enabled() bool
-	maxDuration() float64
-	name() string
-	run() error
-	prerequisites() []CheckPrerequisite
+	GetRunLevel() int                      // GetRunLevel is the level at which this check should be run.
+	GetMaxDuration() float64               // GetMaxDuration is the maximum of seconds allowed to run this check.
+	GetDescription() string                // GetDescription returns the check description.
+	GetName() string                       // GetName returns the check name.
+	GetPrerequisites() []CheckPrerequisite // GetPrerequisites lists all the go packages to be installed before running this check.
+	ResetDefault()                         // ResetDefault resets the check to its default values.
+	Run() error                            // Run executes the check.
 }
 
 // CheckCommon defines the common properties of a check to be serialized in the
 // configuration file.
 type CheckCommon struct {
-	Enabled     bool    `json:"enabled"`
-	MaxDuration float64 `json:"maxduration"` // In seconds. Default to MaxDuration at global scope.
+	RunLevel    int     // [0, 3]. 0 is never, 3 is always.
+	MaxDuration float64 // In seconds. Default to MaxDuration at global scope.
 }
 
-func (c *CheckCommon) enabled() bool {
-	return c.Enabled
+func (c *CheckCommon) GetRunLevel() int {
+	return c.RunLevel
 }
 
-func (c *CheckCommon) maxDuration() float64 {
+func (c *CheckCommon) GetMaxDuration() float64 {
 	return c.MaxDuration
 }
 
 // Native checks.
 
-// Build builds everything inside the current directory via 'go build ./...'.
-type Build struct {
+// BuildOnly builds everything inside the current directory via 'go build ./...'.
+type BuildOnly struct {
 	CheckCommon
-	Tags []string `json:"tags"`
+	ExtraArgs [][]string // Default is empty. Can be used to build multiple times with different tags, e.g. to build -tags foo,zoo then -tags bar.
 }
 
-func (b *Build) name() string {
+func (b *BuildOnly) GetDescription() string {
+	return "builds all packages that do not contain tests, usually all directories with package 'main'"
+}
+
+func (b *BuildOnly) GetName() string {
 	return "build"
 }
 
-func (b *Build) prerequisites() []CheckPrerequisite {
+func (b *BuildOnly) GetPrerequisites() []CheckPrerequisite {
 	return nil
 }
 
-func (b *Build) run() error {
-	tags := b.Tags
-	if len(tags) == 0 {
-		tags = []string{""}
+func (b *BuildOnly) ResetDefault() {
+	b.RunLevel = 1
+	b.MaxDuration = 0
+	b.ExtraArgs = [][]string{{}}
+}
+
+func (b *BuildOnly) Run() error {
+	if len(b.ExtraArgs) == 0 {
+		return fmt.Errorf("ExtraArgs must be at least a list of one empty list")
 	}
-	for _, tag := range tags {
+	// Cannot build concurrently since it leaves files in the tree.
+	// TODO(maruel): Build in a temporary directory to not leave junk in the tree
+	// with -o. On the other hand, ./... and -o foo are incompatible. But
+	// building would have to be done in an efficient way by looking at which
+	// package builds what, to not result in a O(n²) algorithm.
+	for _, extraarg := range b.ExtraArgs {
 		args := []string{"go", "build"}
-		if len(tag) != 0 {
-			args = append(args, "-tags", tag)
-		}
+		args = append(args, extraarg...)
 		args = append(args, "./...")
 		out, _, err := capture(args...)
 		if len(out) != 0 {
@@ -92,20 +106,29 @@ func (b *Build) run() error {
 
 // Gofmt runs gofmt in check mode with code simplification enabled.
 // It is *almost* redundant with goimports except for '-s' which goimports
-// doesn't implement.
+// doesn't implement and gofmt doesn't require any external package.
 type Gofmt struct {
 	CheckCommon
 }
 
-func (g *Gofmt) name() string {
+func (g *Gofmt) GetDescription() string {
+	return "enforces all .go sources are formatted with 'gofmt -s'"
+}
+
+func (g *Gofmt) GetName() string {
 	return "gofmt"
 }
 
-func (g *Gofmt) prerequisites() []CheckPrerequisite {
+func (g *Gofmt) GetPrerequisites() []CheckPrerequisite {
 	return nil
 }
 
-func (g *Gofmt) run() error {
+func (g *Gofmt) ResetDefault() {
+	g.RunLevel = 1
+	g.MaxDuration = 0
+}
+
+func (g *Gofmt) Run() error {
 	// gofmt doesn't return non-zero even if some files need to be updated.
 	out, _, err := capture("gofmt", "-l", "-s", ".")
 	if len(out) != 0 {
@@ -117,36 +140,44 @@ func (g *Gofmt) run() error {
 	return nil
 }
 
-// Test runs all tests.
+// Test runs all tests via go test.
 type Test struct {
 	CheckCommon
-	ExtraArgs []string `json:"extraargs"` // Additional arguments to pass, like -race.
-	Tags      []string `json:"tags"`      // Used to run the tests N times with N tags set.
+	ExtraArgs [][]string // Default is -v -race. Additional arguments to pass, like -race. Can be used multiple times to run tests multiple times, for example with -tags.
 }
 
-func (t *Test) name() string {
+func (t *Test) GetDescription() string {
+	return "runs all tests, potentially multiple times (with race detector, with different tags, etc)"
+}
+
+func (t *Test) GetName() string {
 	return "test"
 }
 
-func (t *Test) prerequisites() []CheckPrerequisite {
+func (t *Test) GetPrerequisites() []CheckPrerequisite {
 	return nil
 }
 
-func (t *Test) run() error {
+func (t *Test) ResetDefault() {
+	t.RunLevel = 1
+	t.MaxDuration = 0
+	t.ExtraArgs = [][]string{{"-v", "-race"}}
+}
+
+func (t *Test) Run() error {
+	if len(t.ExtraArgs) == 0 {
+		return fmt.Errorf("ExtraArgs must be at least a list of one empty list")
+	}
 	// Add tests manually instead of using './...'. The reason is that it permits
 	// running all the tests concurrently, which saves a lot of time when there's
 	// many packages.
 	var wg sync.WaitGroup
 	testDirs := goDirs(true)
-	tags := t.Tags
-	if len(tags) == 0 {
-		tags = []string{""}
-	}
-	for _, tag := range tags {
+	for _, extraarg := range t.ExtraArgs {
 		errs := make(chan error, len(testDirs))
 		for _, td := range testDirs {
 			wg.Add(1)
-			go func(testDir string) {
+			go func(testDir string, extraarg []string) {
 				defer wg.Done()
 				rel, err := relToGOPATH(testDir)
 				if err != nil {
@@ -154,16 +185,13 @@ func (t *Test) run() error {
 					return
 				}
 				args := []string{"go", "test"}
-				args = append(args, t.ExtraArgs...)
-				if len(tag) != 0 {
-					args = append(args, "-tags", tag)
-				}
+				args = append(args, extraarg...)
 				args = append(args, rel)
 				out, exitCode, _ := capture(args...)
 				if exitCode != 0 {
 					errs <- fmt.Errorf("%s failed:\n%s", strings.Join(args, " "), out)
 				}
-			}(td)
+			}(td, extraarg)
 		}
 		wg.Wait()
 		select {
@@ -175,25 +203,37 @@ func (t *Test) run() error {
 	return nil
 }
 
-// Non-native checks.
+// Non-native checks; running these require installing third party packages. As
+// such, they are by default at an higher run level.
 
 // Errcheck runs errcheck on all directories containing .go files.
 type Errcheck struct {
 	CheckCommon
-	Ignores string `json:"ignores"`
+	Ignores string // Flag to pass to -ignore. Default is "Close".
 }
 
-func (e *Errcheck) name() string {
+func (e *Errcheck) GetDescription() string {
+	return "enforces all calls returning an error are checked using tool 'errcheck'"
+}
+
+func (e *Errcheck) GetName() string {
 	return "errcheck"
 }
 
-func (e *Errcheck) prerequisites() []CheckPrerequisite {
+func (e *Errcheck) GetPrerequisites() []CheckPrerequisite {
 	return []CheckPrerequisite{
 		{[]string{"errcheck", "-h"}, 2, "github.com/kisielk/errcheck"},
 	}
 }
 
-func (e *Errcheck) run() error {
+func (e *Errcheck) ResetDefault() {
+	e.RunLevel = 2
+	e.MaxDuration = 0
+	// "Close|Write.*|Flush|Seek|Read.*"
+	e.Ignores = "Close"
+}
+
+func (e *Errcheck) Run() error {
 	dirs := goDirs(false)
 	args := make([]string, 0, len(dirs)+2)
 	args = append(args, "errcheck", "-ignore", e.Ignores)
@@ -219,17 +259,26 @@ type Goimports struct {
 	CheckCommon
 }
 
-func (g *Goimports) name() string {
+func (g *Goimports) GetDescription() string {
+	return "enforces all .go sources are formatted with 'goimports'"
+}
+
+func (g *Goimports) GetName() string {
 	return "goimports"
 }
 
-func (g *Goimports) prerequisites() []CheckPrerequisite {
+func (g *Goimports) GetPrerequisites() []CheckPrerequisite {
 	return []CheckPrerequisite{
 		{[]string{"goimports", "-h"}, 2, "golang.org/x/tools/cmd/goimports"},
 	}
 }
 
-func (g *Goimports) run() error {
+func (g *Goimports) ResetDefault() {
+	g.RunLevel = 2
+	g.MaxDuration = 0
+}
+
+func (g *Goimports) Run() error {
 	// goimports doesn't return non-zero even if some files need to be updated.
 	out, _, err := capture("goimports", "-l", ".")
 	if len(out) != 0 {
@@ -246,20 +295,30 @@ func (g *Goimports) run() error {
 // David.
 type Golint struct {
 	CheckCommon
-	Blacklist []string `json:"blacklist"`
+	Blacklist []string // Messages generated by golint to be ignored.
 }
 
-func (g *Golint) name() string {
+func (g *Golint) GetDescription() string {
+	return "enforces all .go sources passes golint"
+}
+
+func (g *Golint) GetName() string {
 	return "golint"
 }
 
-func (g *Golint) prerequisites() []CheckPrerequisite {
+func (g *Golint) GetPrerequisites() []CheckPrerequisite {
 	return []CheckPrerequisite{
 		{[]string{"golint", "-h"}, 2, "github.com/golang/lint/golint"},
 	}
 }
 
-func (g *Golint) run() error {
+func (g *Golint) ResetDefault() {
+	g.RunLevel = 3
+	g.MaxDuration = 0
+	g.Blacklist = []string{}
+}
+
+func (g *Golint) Run() error {
 	// golint doesn't return non-zero ever.
 	out, _, _ := capture("golint", "./...")
 	result := []string{}
@@ -280,20 +339,30 @@ func (g *Golint) run() error {
 // Govet runs "go tool vet".
 type Govet struct {
 	CheckCommon
-	Blacklist []string `json:"blacklist"`
+	Blacklist []string // Messages generated by go tool vet to be ignored.
 }
 
-func (g *Govet) name() string {
+func (g *Govet) GetDescription() string {
+	return "enforces all .go sources passes go tool vet"
+}
+
+func (g *Govet) GetName() string {
 	return "govet"
 }
 
-func (g *Govet) prerequisites() []CheckPrerequisite {
+func (g *Govet) GetPrerequisites() []CheckPrerequisite {
 	return []CheckPrerequisite{
 		{[]string{"go", "tool", "vet", "-h"}, 1, "golang.org/x/tools/cmd/vet"},
 	}
 }
 
-func (g *Govet) run() error {
+func (g *Govet) ResetDefault() {
+	g.RunLevel = 3
+	g.MaxDuration = 0
+	g.Blacklist = []string{" composite literal uses unkeyed fields"}
+}
+
+func (g *Govet) Run() error {
 	// Ignore the return code since we ignore many errors.
 	out, _, _ := capture("go", "tool", "vet", "-all", ".")
 	result := []string{}
@@ -314,14 +383,18 @@ func (g *Govet) run() error {
 // TestCoverage runs all tests with coverage.
 type TestCoverage struct {
 	CheckCommon
-	Minimum float64 `json:"minimum"`
+	MinimumCoverage float64 // Minimum test coverage to be generated or the check is considered to fail.
 }
 
-func (t *TestCoverage) name() string {
+func (t *TestCoverage) GetDescription() string {
+	return "enforces minimum test coverage on all packages that are not 'main'"
+}
+
+func (t *TestCoverage) GetName() string {
 	return "testcoverage"
 }
 
-func (t *TestCoverage) prerequisites() []CheckPrerequisite {
+func (t *TestCoverage) GetPrerequisites() []CheckPrerequisite {
 	toInstall := []CheckPrerequisite{
 		{[]string{"go", "tool", "cover", "-h"}, 1, "golang.org/x/tools/cmd/cover"},
 	}
@@ -331,7 +404,13 @@ func (t *TestCoverage) prerequisites() []CheckPrerequisite {
 	return toInstall
 }
 
-func (t *TestCoverage) run() (err error) {
+func (t *TestCoverage) ResetDefault() {
+	t.RunLevel = 2
+	t.MaxDuration = 0
+	t.MinimumCoverage = 20.
+}
+
+func (t *TestCoverage) Run() (err error) {
 	pkgRoot, _ := os.Getwd()
 	pkg, err2 := relToGOPATH(pkgRoot)
 	if err2 != nil {
@@ -353,7 +432,7 @@ func (t *TestCoverage) run() (err error) {
 		}
 	}()
 
-	// This part is similar to Test.run() except that it passes a unique
+	// This part is similar to Test.Run() except that it passes a unique
 	// -coverprofile file name, so that all the files can later be merged into a
 	// single file.
 	var wg sync.WaitGroup
@@ -459,7 +538,7 @@ func (t *TestCoverage) run() (err error) {
 			coverage[fn{loc, name}] = percent
 		}
 	}
-	if total < t.Minimum {
+	if total < t.MinimumCoverage {
 		partial := 0
 		for _, percent := range coverage {
 			if percent < 100. {
@@ -487,24 +566,35 @@ func (t *TestCoverage) run() (err error) {
 	return err2
 }
 
+// Extensibility.
+
 // CustomCheck represents a user configured check.
 type CustomCheck struct {
 	CheckCommon
-	Name          string              `json:"name"`          // Check display name.
-	Command       []string            `json:"command"`       // Check command line.
-	CheckExitCode bool                `json:"checkexitcode"` // Check fails if exit code is non-zero.
-	Prerequisites []CheckPrerequisite `json:"prerequisites"`
+	Name          string              // Check's display name, required.
+	Description   string              // Check's description, optional.
+	Command       []string            // Check's command line, required.
+	CheckExitCode bool                // Check's fails if exit code is non-zero.
+	Prerequisites []CheckPrerequisite // Check's prerequisite packages to install first before running the check, optional.
 }
 
-func (c *CustomCheck) name() string {
+func (c *CustomCheck) GetDescription() string {
+	return c.Description
+}
+
+func (c *CustomCheck) GetName() string {
 	return c.Name
 }
 
-func (c *CustomCheck) prerequisites() []CheckPrerequisite {
+func (c *CustomCheck) GetPrerequisites() []CheckPrerequisite {
 	return c.Prerequisites
 }
 
-func (c *CustomCheck) run() error {
+func (c *CustomCheck) ResetDefault() {
+	// There's no default for a custom check.
+}
+
+func (c *CustomCheck) Run() error {
 	out, exitCode, err := capture(c.Command...)
 	if exitCode != 0 && c.CheckExitCode {
 		return fmt.Errorf("%d failed:\n%s", strings.Join(c.Command, " "), out)
