@@ -171,9 +171,18 @@ func getConfig(name string) *Config {
 
 // AllChecks returns all the checks.
 func (c *Config) AllChecks() []checks.Check {
-	out := []checks.Check{&c.BuildOnly, &c.Gofmt, &c.Test, &c.Errcheck, &c.Goimports, &c.Golint, &c.Govet, &c.TestCoverage}
+	out := []checks.Check{
+		c.BuildOnly.Check(),
+		c.Gofmt.Check(),
+		c.Test.Check(),
+		c.Errcheck.Check(),
+		c.Goimports.Check(),
+		c.Golint.Check(),
+		c.Govet.Check(),
+		c.TestCoverage.Check(),
+	}
 	for _, c := range c.CustomChecks {
-		out = append(out, c)
+		out = append(out, c.Check())
 	}
 	return out
 }
