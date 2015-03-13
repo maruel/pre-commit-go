@@ -14,4 +14,4 @@ go:
 #  - go get github.com/maruel/pre-commit-go
 
 script:
-  - pre-commit-go
+  - pre-commit-go run -level 3

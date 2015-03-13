@@ -47,7 +47,8 @@ git pre-commit hook for Golang projects
   * [govet (go tool vet)](https://golang.org/x/tools/cmd/vet)
   * [go test -cover](https://golang.org/pkg/testing/) with [coverage](https://blog.golang.org/cover)
 
-See all the checks documentation at [![GoDoc](https://godoc.org/github.com/maruel/pre-commit-go/checks?status.svg)](https://godoc.org/github.com/maruel/pre-commit-go/checks)
+Checks documentation: [![GoDoc](https://godoc.org/github.com/maruel/pre-commit-go/checks?status.svg)](https://godoc.org/github.com/maruel/pre-commit-go/checks)
+[![Build Status](https://travis-ci.org/maruel/pre-commit.svg?branch=master)](https://travis-ci.org/maruel/pre-commit)
 
 
 ### Getting it
