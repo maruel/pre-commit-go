@@ -7,16 +7,16 @@ git pre-commit hook for Golang projects
     Supported commands are:
       help        - this page
       install     - install the git commit hook as .git/hooks/pre-commit
+                    (runs prereq before)
       prereq      - install prerequisites, e.g.: errcheck, golint, goimports, govet,
                     etc as applicable for the enabled checks.
+      installrun  - runs prequest, install then run run all enabled checks
       run         - run all enabled checks
-      writeconfig - write (or rewrite) a pre-commit-go.json
+      writeconfig - write (or rewrite) a pre-commit-go.yml
 
-    When executed without command, it does the equivalent of 'prereq', 'install'
-    then 'run'.
-
+    When executed without command, it does the equivalent of 'installrun'.
     Supported flags are:
-      -config="pre-commit-go.json": file name of the config to load
+      -config="pre-commit-go.yml": file name of the config to load
       -level=1: runlevel, between 0 and 3; the higher, the more tests are run
       -verbose=false: enables verbose logging output
 
