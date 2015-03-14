@@ -1,8 +1,12 @@
 git pre-commit hook for Golang projects
 =======================================
 
+`pre-commit-go` runs multiple checks on a Go project *on commit* via
+`pre-commit` git hook. It's designed to be simple and fast. Everything is run
+concurrently.
+
     $ ./pre-commit-go help
-    pre-commit-go: runs pre-commit checks on Go projects.
+    pre-commit-go: runs pre-commit checks on Go projects, fast.
 
     Supported commands are:
       help        - this page
@@ -35,8 +39,7 @@ git pre-commit hook for Golang projects
 
     No check ever modify any file.
 
-`pre-commit-go` runs multiple checks on a Go project *before committing* via
-`pre-commit` git hook. Native checks:
+Native checks:
 
   * [go build](https://golang.org/pkg/go/build/) all directories with .go files found
   * [go test](https://golang.org/pkg/testing/) by default with [race detector](https://blog.golang.org/race-detector)
@@ -54,6 +57,9 @@ Checks documentation: [![GoDoc](https://godoc.org/github.com/maruel/pre-commit-g
 ### Getting it
 
     go get github.com/maruel/pre-commit-go
+
+It's safe to update it via `go get -u github.com/maruel/pre-commit-go`. The
+hooks calls pre-commit-go in `$PATH`, which should contain your `$GOPATH/bin`.
 
 
 ### Installing the hook and running checks

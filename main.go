@@ -96,7 +96,7 @@ git reset --hard -q && git stash apply --index -q && git stash drop -q
 exit $result
 `)
 
-var helpText = template.Must(template.New("help").Parse(`pre-commit-go: runs pre-commit checks on Go projects.
+var helpText = template.Must(template.New("help").Parse(`pre-commit-go: runs pre-commit checks on Go projects, fast.
 
 Supported commands are:
   help        - this page
