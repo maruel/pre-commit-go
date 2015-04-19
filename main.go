@@ -123,29 +123,40 @@ No check ever modify any file.
 
 // Configuration.
 
+// RunLevel is between 0 and 3.
+//
+// [0, 3]. 0 is never, 3 is always. Default:
+//   - most checks that only require the stdlib have default RunLevel of 1
+//   - most checks that require third parties have default RunLevel of 2
+//   - checks that may trigger false positives have default RunLevel of 3
+type RunLevel int
+
 type Config struct {
 	MaxDuration int // In seconds.
 
-	// Native checks.
-	BuildOnly checks.BuildOnly
-	Gofmt     checks.Gofmt
-	Test      checks.Test
-
-	// Checks that require prerequisites.
-	Errcheck     checks.Errcheck
-	Goimports    checks.Goimports
-	Golint       checks.Golint
-	Govet        checks.Govet
-	TestCoverage checks.TestCoverage
-
-	// User configurable presubmit checks.
-	CustomChecks []*checks.CustomCheck
+	// Checks per run level.
+	Checks map[RunLevel][]checks.Check
 }
 
 // getConfig() returns a Config with defaults set then loads the config from
 // file "name".
 func getConfig(name string) *Config {
-	config := &Config{MaxDuration: 120, CustomChecks: []*checks.CustomCheck{}}
+	config := &Config{MaxDuration: 120, Checks: map[RunLevel][]checks.Check{}}
+	config.Checks[RunLevel(0)] = []checks.Check{}
+	config.Checks[RunLevel(1)] = []checks.Check{
+		(&checks.BuildOnly{}).Check(),
+		(&checks.Gofmt{}).Check(),
+		(&checks.Test{}).Check(),
+	}
+	config.Checks[RunLevel(2)] = []checks.Check{
+		(&checks.Errcheck{}).Check(),
+		(&checks.Goimports{}).Check(),
+		(&checks.TestCoverage{}).Check(),
+	}
+	config.Checks[RunLevel(3)] = []checks.Check{
+		(&checks.Golint{}).Check(),
+		(&checks.Govet{}).Check(),
+	}
 	for _, c := range config.AllChecks() {
 		c.ResetDefault()
 	}
@@ -171,27 +182,20 @@ func getConfig(name string) *Config {
 
 // AllChecks returns all the checks.
 func (c *Config) AllChecks() []checks.Check {
-	out := []checks.Check{
-		c.BuildOnly.Check(),
-		c.Gofmt.Check(),
-		c.Test.Check(),
-		c.Errcheck.Check(),
-		c.Goimports.Check(),
-		c.Golint.Check(),
-		c.Govet.Check(),
-		c.TestCoverage.Check(),
-	}
-	for _, c := range c.CustomChecks {
-		out = append(out, c.Check())
+	out := []checks.Check{}
+	for _, list := range c.Checks {
+		for _, c := range list {
+			out = append(out, c)
+		}
 	}
 	return out
 }
 
 // EnabledChecks returns all the checks enabled at this run level.
-func (c *Config) EnabledChecks(runLevel int) []checks.Check {
+func (c *Config) EnabledChecks(r RunLevel) []checks.Check {
 	out := []checks.Check{}
-	for _, c := range c.AllChecks() {
-		if c.GetRunLevel() <= runLevel {
+	for i := RunLevel(0); i <= r; i++ {
+		for _, c := range c.Checks[i] {
 			out = append(out, c)
 		}
 	}
@@ -226,10 +230,10 @@ func help(name, usage string) error {
 }
 
 // installPrereq installs all the packages needed to run the enabled checks.
-func installPrereq(name string, runLevel int) error {
+func installPrereq(name string, r RunLevel) error {
 	config := getConfig(name)
 	var wg sync.WaitGroup
-	enabledChecks := config.EnabledChecks(runLevel)
+	enabledChecks := config.EnabledChecks(r)
 	c := make(chan string, len(enabledChecks))
 	for _, check := range enabledChecks {
 		for _, p := range check.GetPrerequisites() {
@@ -285,8 +289,8 @@ func installPrereq(name string, runLevel int) error {
 }
 
 // install first calls installPrereq() then install the .git/hooks/pre-commit hook.
-func install(name string, runLevel int) error {
-	if err := installPrereq(name, runLevel); err != nil {
+func install(name string, r RunLevel) error {
+	if err := installPrereq(name, r); err != nil {
 		return err
 	}
 	gitDir, err := captureAbs("git", "rev-parse", "--git-dir")
@@ -302,10 +306,10 @@ func install(name string, runLevel int) error {
 }
 
 // run runs all the enabled checks.
-func run(name string, runLevel int) error {
+func run(name string, r RunLevel) error {
 	start := time.Now()
 	config := getConfig(name)
-	enabledChecks := config.EnabledChecks(runLevel)
+	enabledChecks := config.EnabledChecks(r)
 	var wg sync.WaitGroup
 	errs := make(chan error, len(enabledChecks))
 	for _, c := range enabledChecks {
@@ -321,10 +325,7 @@ func run(name string, runLevel int) error {
 				errs <- err
 			}
 			// A check that took too long is a check that failed.
-			max := check.GetMaxDuration()
-			if max == 0 {
-				max = config.MaxDuration
-			}
+			max := config.MaxDuration
 			if duration > time.Duration(max)*time.Second {
 				errs <- fmt.Errorf("check %s took %1.2fs", check.GetName(), duration.Seconds())
 			}
@@ -370,7 +371,7 @@ func mainImpl() error {
 	}
 	verbose := flag.Bool("verbose", false, "enables verbose logging output")
 	configPath := flag.String("config", "pre-commit-go.yml", "file name of the config to load")
-	runLevel := flag.Int("level", 1, "runlevel, between 0 and 3; the higher, the more tests are run")
+	runLevelFlag := flag.Int("level", 1, "runlevel, between 0 and 3; the higher, the more tests are run")
 	flag.Parse()
 
 	log.SetFlags(log.Lmicroseconds)
@@ -378,9 +379,10 @@ func mainImpl() error {
 		log.SetOutput(ioutil.Discard)
 	}
 
-	if *runLevel < 0 || *runLevel > 3 {
-		return fmt.Errorf("-level %d is invalid, must be between 0 and 3", *runLevel)
+	if *runLevelFlag < 0 || *runLevelFlag > 3 {
+		return fmt.Errorf("-level %d is invalid, must be between 0 and 3", *runLevelFlag)
 	}
+	runLevel := RunLevel(*runLevelFlag)
 
 	gitRoot, err := captureAbs("git", "rev-parse", "--show-cdup")
 	if err != nil {
@@ -397,19 +399,19 @@ func mainImpl() error {
 		return help(*configPath, b.String())
 	}
 	if cmd == "install" || cmd == "i" {
-		return install(*configPath, *runLevel)
+		return install(*configPath, runLevel)
 	}
 	if cmd == "installrun" {
-		if err := install(*configPath, *runLevel); err != nil {
+		if err := install(*configPath, runLevel); err != nil {
 			return err
 		}
-		return run(*configPath, *runLevel)
+		return run(*configPath, runLevel)
 	}
 	if cmd == "prereq" || cmd == "p" {
-		return installPrereq(*configPath, *runLevel)
+		return installPrereq(*configPath, runLevel)
 	}
 	if cmd == "run" || cmd == "r" {
-		return run(*configPath, *runLevel)
+		return run(*configPath, runLevel)
 	}
 	if cmd == "writeconfig" || cmd == "w" {
 		return writeConfig(*configPath)
