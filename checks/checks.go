@@ -48,35 +48,6 @@ type Check interface {
 	Run() error
 }
 
-// check exists to reduce the noise in the doc.
-type check interface {
-	getDescription() string
-	getName() string
-	getPrerequisites() []CheckPrerequisite
-	resetDefault()
-	run() error
-}
-
-type checkAdaptor struct {
-	check
-}
-
-func (c checkAdaptor) GetDescription() string {
-	return c.getDescription()
-}
-func (c checkAdaptor) GetName() string {
-	return c.getName()
-}
-func (c checkAdaptor) GetPrerequisites() []CheckPrerequisite {
-	return c.getPrerequisites()
-}
-func (c checkAdaptor) ResetDefault() {
-	c.resetDefault()
-}
-func (c checkAdaptor) Run() error {
-	return c.run()
-}
-
 // Native checks.
 
 // BuildOnly builds everything inside the current directory via
@@ -90,27 +61,23 @@ type BuildOnly struct {
 	ExtraArgs [][]string
 }
 
-func (b *BuildOnly) Check() Check {
-	return checkAdaptor{b}
-}
-
-func (b *BuildOnly) getDescription() string {
+func (b *BuildOnly) GetDescription() string {
 	return "builds all packages that do not contain tests, usually all directories with package 'main'"
 }
 
-func (b *BuildOnly) getName() string {
+func (b *BuildOnly) GetName() string {
 	return "build"
 }
 
-func (b *BuildOnly) getPrerequisites() []CheckPrerequisite {
+func (b *BuildOnly) GetPrerequisites() []CheckPrerequisite {
 	return nil
 }
 
-func (b *BuildOnly) resetDefault() {
+func (b *BuildOnly) ResetDefault() {
 	b.ExtraArgs = [][]string{{}}
 }
 
-func (b *BuildOnly) run() error {
+func (b *BuildOnly) Run() error {
 	if len(b.ExtraArgs) == 0 {
 		return fmt.Errorf("ExtraArgs must be at least a list of one empty list")
 	}
@@ -141,26 +108,22 @@ func (b *BuildOnly) run() error {
 type Gofmt struct {
 }
 
-func (g *Gofmt) Check() Check {
-	return checkAdaptor{g}
-}
-
-func (g *Gofmt) getDescription() string {
+func (g *Gofmt) GetDescription() string {
 	return "enforces all .go sources are formatted with 'gofmt -s'"
 }
 
-func (g *Gofmt) getName() string {
+func (g *Gofmt) GetName() string {
 	return "gofmt"
 }
 
-func (g *Gofmt) getPrerequisites() []CheckPrerequisite {
+func (g *Gofmt) GetPrerequisites() []CheckPrerequisite {
 	return nil
 }
 
-func (g *Gofmt) resetDefault() {
+func (g *Gofmt) ResetDefault() {
 }
 
-func (g *Gofmt) run() error {
+func (g *Gofmt) Run() error {
 	// gofmt doesn't return non-zero even if some files need to be updated.
 	out, _, err := capture("gofmt", "-l", "-s", ".")
 	if len(out) != 0 {
@@ -183,27 +146,23 @@ type Test struct {
 	ExtraArgs [][]string
 }
 
-func (t *Test) Check() Check {
-	return checkAdaptor{t}
-}
-
-func (t *Test) getDescription() string {
+func (t *Test) GetDescription() string {
 	return "runs all tests, potentially multiple times (with race detector, with different tags, etc)"
 }
 
-func (t *Test) getName() string {
+func (t *Test) GetName() string {
 	return "test"
 }
 
-func (t *Test) getPrerequisites() []CheckPrerequisite {
+func (t *Test) GetPrerequisites() []CheckPrerequisite {
 	return nil
 }
 
-func (t *Test) resetDefault() {
+func (t *Test) ResetDefault() {
 	t.ExtraArgs = [][]string{{"-v", "-race"}}
 }
 
-func (t *Test) run() error {
+func (t *Test) Run() error {
 	if len(t.ExtraArgs) == 0 {
 		return fmt.Errorf("ExtraArgs must be at least a list of one empty list")
 	}
@@ -251,30 +210,26 @@ type Errcheck struct {
 	Ignores string
 }
 
-func (e *Errcheck) Check() Check {
-	return checkAdaptor{e}
-}
-
-func (e *Errcheck) getDescription() string {
+func (e *Errcheck) GetDescription() string {
 	return "enforces all calls returning an error are checked using tool 'errcheck'"
 }
 
-func (e *Errcheck) getName() string {
+func (e *Errcheck) GetName() string {
 	return "errcheck"
 }
 
-func (e *Errcheck) getPrerequisites() []CheckPrerequisite {
+func (e *Errcheck) GetPrerequisites() []CheckPrerequisite {
 	return []CheckPrerequisite{
 		{[]string{"errcheck", "-h"}, 2, "github.com/kisielk/errcheck"},
 	}
 }
 
-func (e *Errcheck) resetDefault() {
+func (e *Errcheck) ResetDefault() {
 	// "Close|Write.*|Flush|Seek|Read.*"
 	e.Ignores = "Close"
 }
 
-func (e *Errcheck) run() error {
+func (e *Errcheck) Run() error {
 	dirs := goDirs(false)
 	args := make([]string, 0, len(dirs)+2)
 	args = append(args, "errcheck", "-ignore", e.Ignores)
@@ -299,28 +254,24 @@ func (e *Errcheck) run() error {
 type Goimports struct {
 }
 
-func (g *Goimports) Check() Check {
-	return checkAdaptor{g}
-}
-
-func (g *Goimports) getDescription() string {
+func (g *Goimports) GetDescription() string {
 	return "enforces all .go sources are formatted with 'goimports'"
 }
 
-func (g *Goimports) getName() string {
+func (g *Goimports) GetName() string {
 	return "goimports"
 }
 
-func (g *Goimports) getPrerequisites() []CheckPrerequisite {
+func (g *Goimports) GetPrerequisites() []CheckPrerequisite {
 	return []CheckPrerequisite{
 		{[]string{"goimports", "-h"}, 2, "golang.org/x/tools/cmd/goimports"},
 	}
 }
 
-func (g *Goimports) resetDefault() {
+func (g *Goimports) ResetDefault() {
 }
 
-func (g *Goimports) run() error {
+func (g *Goimports) Run() error {
 	// goimports doesn't return non-zero even if some files need to be updated.
 	out, _, err := capture("goimports", "-l", ".")
 	if len(out) != 0 {
@@ -341,29 +292,25 @@ type Golint struct {
 	Blacklist []string
 }
 
-func (g *Golint) Check() Check {
-	return checkAdaptor{g}
-}
-
-func (g *Golint) getDescription() string {
+func (g *Golint) GetDescription() string {
 	return "enforces all .go sources passes golint"
 }
 
-func (g *Golint) getName() string {
+func (g *Golint) GetName() string {
 	return "golint"
 }
 
-func (g *Golint) getPrerequisites() []CheckPrerequisite {
+func (g *Golint) GetPrerequisites() []CheckPrerequisite {
 	return []CheckPrerequisite{
 		{[]string{"golint", "-h"}, 2, "github.com/golang/lint/golint"},
 	}
 }
 
-func (g *Golint) resetDefault() {
+func (g *Golint) ResetDefault() {
 	g.Blacklist = []string{}
 }
 
-func (g *Golint) run() error {
+func (g *Golint) Run() error {
 	// golint doesn't return non-zero ever.
 	out, _, _ := capture("golint", "./...")
 	result := []string{}
@@ -390,29 +337,25 @@ type Govet struct {
 	Blacklist []string
 }
 
-func (g *Govet) Check() Check {
-	return checkAdaptor{g}
-}
-
-func (g *Govet) getDescription() string {
+func (g *Govet) GetDescription() string {
 	return "enforces all .go sources passes go tool vet"
 }
 
-func (g *Govet) getName() string {
+func (g *Govet) GetName() string {
 	return "govet"
 }
 
-func (g *Govet) getPrerequisites() []CheckPrerequisite {
+func (g *Govet) GetPrerequisites() []CheckPrerequisite {
 	return []CheckPrerequisite{
 		{[]string{"go", "tool", "vet", "-h"}, 1, "golang.org/x/tools/cmd/vet"},
 	}
 }
 
-func (g *Govet) resetDefault() {
+func (g *Govet) ResetDefault() {
 	g.Blacklist = []string{" composite literal uses unkeyed fields"}
 }
 
-func (g *Govet) run() error {
+func (g *Govet) Run() error {
 	// Ignore the return code since we ignore many errors.
 	out, _, _ := capture("go", "tool", "vet", "-all", ".")
 	result := []string{}
@@ -446,19 +389,15 @@ type TestCoverage struct {
 	MinimumCoverage float64
 }
 
-func (t *TestCoverage) Check() Check {
-	return checkAdaptor{t}
-}
-
-func (t *TestCoverage) getDescription() string {
+func (t *TestCoverage) GetDescription() string {
 	return "enforces minimum test coverage on all packages that are not 'main'"
 }
 
-func (t *TestCoverage) getName() string {
+func (t *TestCoverage) GetName() string {
 	return "testcoverage"
 }
 
-func (t *TestCoverage) getPrerequisites() []CheckPrerequisite {
+func (t *TestCoverage) GetPrerequisites() []CheckPrerequisite {
 	toInstall := []CheckPrerequisite{
 		{[]string{"go", "tool", "cover", "-h"}, 1, "golang.org/x/tools/cmd/cover"},
 	}
@@ -468,11 +407,11 @@ func (t *TestCoverage) getPrerequisites() []CheckPrerequisite {
 	return toInstall
 }
 
-func (t *TestCoverage) resetDefault() {
+func (t *TestCoverage) ResetDefault() {
 	t.MinimumCoverage = 20.
 }
 
-func (t *TestCoverage) run() (err error) {
+func (t *TestCoverage) Run() (err error) {
 	pkgRoot, _ := os.Getwd()
 	pkg, err2 := relToGOPATH(pkgRoot)
 	if err2 != nil {
@@ -645,27 +584,23 @@ type CustomCheck struct {
 	Prerequisites []CheckPrerequisite
 }
 
-func (c *CustomCheck) Check() Check {
-	return checkAdaptor{c}
-}
-
-func (c *CustomCheck) getDescription() string {
+func (c *CustomCheck) GetDescription() string {
 	return c.Description
 }
 
-func (c *CustomCheck) getName() string {
+func (c *CustomCheck) GetName() string {
 	return c.Name
 }
 
-func (c *CustomCheck) getPrerequisites() []CheckPrerequisite {
+func (c *CustomCheck) GetPrerequisites() []CheckPrerequisite {
 	return c.Prerequisites
 }
 
-func (c *CustomCheck) resetDefault() {
+func (c *CustomCheck) ResetDefault() {
 	// There's no default for a custom check.
 }
 
-func (c *CustomCheck) run() error {
+func (c *CustomCheck) Run() error {
 	out, exitCode, err := capture(c.Command...)
 	if exitCode != 0 && c.CheckExitCode {
 		return fmt.Errorf("%d failed:\n%s", strings.Join(c.Command, " "), out)

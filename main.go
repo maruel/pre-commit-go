@@ -144,18 +144,18 @@ func getConfig(name string) *Config {
 	config := &Config{MaxDuration: 120, Checks: map[RunLevel][]checks.Check{}}
 	config.Checks[RunLevel(0)] = []checks.Check{}
 	config.Checks[RunLevel(1)] = []checks.Check{
-		(&checks.BuildOnly{}).Check(),
-		(&checks.Gofmt{}).Check(),
-		(&checks.Test{}).Check(),
+		&checks.BuildOnly{},
+		&checks.Gofmt{},
+		&checks.Test{},
 	}
 	config.Checks[RunLevel(2)] = []checks.Check{
-		(&checks.Errcheck{}).Check(),
-		(&checks.Goimports{}).Check(),
-		(&checks.TestCoverage{}).Check(),
+		&checks.Errcheck{},
+		&checks.Goimports{},
+		&checks.TestCoverage{},
 	}
 	config.Checks[RunLevel(3)] = []checks.Check{
-		(&checks.Golint{}).Check(),
-		(&checks.Govet{}).Check(),
+		&checks.Golint{},
+		&checks.Govet{},
 	}
 	for _, c := range config.AllChecks() {
 		c.ResetDefault()
