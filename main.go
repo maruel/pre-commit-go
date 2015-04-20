@@ -106,7 +106,6 @@ Supported commands are:
                 govet, etc as applicable for the enabled checks
   installrun  - runs 'prereq', 'install' then 'run'
   run         - runs all enabled checks
-  writeconfig - writes (or rewrite) a pre-commit-go.yml
 
 When executed without command, it does the equivalent of 'installrun'.
 Supported flags are:
@@ -120,6 +119,9 @@ Supported checks and their runlevel:
 
 No check ever modify any file.
 `))
+
+// TODO(maruel): Only document it when it's stable enough.
+//  writeconfig - writes (or rewrite) a pre-commit-go.yml
 
 // Configuration.
 
