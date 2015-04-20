@@ -144,7 +144,7 @@ func getConfig(name string) *Config {
 	config := &Config{MaxDuration: 120, Checks: map[RunLevel][]checks.Check{}}
 	config.Checks[RunLevel(0)] = []checks.Check{}
 	config.Checks[RunLevel(1)] = []checks.Check{
-		&checks.BuildOnly{},
+		&checks.Build{},
 		&checks.Gofmt{},
 		&checks.Test{},
 	}

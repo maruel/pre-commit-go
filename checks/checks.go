@@ -50,34 +50,34 @@ type Check interface {
 
 // Native checks.
 
-// BuildOnly builds everything inside the current directory via
+// Build builds everything inside the current directory via
 // 'go build ./...'.
 //
 // This check is mostly useful for executables, that is, "package main".
 // Packages containing tests are covered via check Test.
-type BuildOnly struct {
+type Build struct {
 	// Default is empty. Can be used to build multiple times with different
 	// tags, e.g. to build -tags foo,zoo then -tags bar.
 	ExtraArgs [][]string
 }
 
-func (b *BuildOnly) GetDescription() string {
+func (b *Build) GetDescription() string {
 	return "builds all packages that do not contain tests, usually all directories with package 'main'"
 }
 
-func (b *BuildOnly) GetName() string {
+func (b *Build) GetName() string {
 	return "build"
 }
 
-func (b *BuildOnly) GetPrerequisites() []CheckPrerequisite {
+func (b *Build) GetPrerequisites() []CheckPrerequisite {
 	return nil
 }
 
-func (b *BuildOnly) ResetDefault() {
+func (b *Build) ResetDefault() {
 	b.ExtraArgs = [][]string{{}}
 }
 
-func (b *BuildOnly) Run() error {
+func (b *Build) Run() error {
 	if len(b.ExtraArgs) == 0 {
 		return fmt.Errorf("ExtraArgs must be at least a list of one empty list")
 	}
