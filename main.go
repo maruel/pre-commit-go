@@ -112,13 +112,16 @@ Supported flags are:
 {{.Usage}}
 Supported checks and their runlevel:
   Native checks that only depends on the stdlib:{{range .NativeChecks}}
-    - {{printf "%-*s %d" $.Max .GetName .GetRunLevel}} : {{.GetDescription}}{{end}}
+    - {{printf "%-*s" $.Max .GetName}} : {{.GetDescription}}{{end}}
 
   Checks that have prerequisites (which will be automatically installed):{{range .OtherChecks}}
-    - {{printf "%-*s %d" $.Max .GetName .GetRunLevel}} : {{.GetDescription}}{{end}}
+    - {{printf "%-*s" $.Max .GetName}} : {{.GetDescription}}{{end}}
 
 No check ever modify any file.
 `))
+
+// TODO(maruel): Only document it when it's stable enough.
+//  writeconfig - writes (or rewrite) a pre-commit-go.yml
 
 // Commands.
 
