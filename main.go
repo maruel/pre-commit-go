@@ -120,90 +120,6 @@ Supported checks and their runlevel:
 No check ever modify any file.
 `))
 
-// TODO(maruel): Only document it when it's stable enough.
-//  writeconfig - writes (or rewrite) a pre-commit-go.yml
-
-// Configuration.
-
-// RunLevel is between 0 and 3.
-//
-// [0, 3]. 0 is never, 3 is always. Default:
-//   - most checks that only require the stdlib have default RunLevel of 1
-//   - most checks that require third parties have default RunLevel of 2
-//   - checks that may trigger false positives have default RunLevel of 3
-type RunLevel int
-
-type Config struct {
-	MaxDuration int // In seconds.
-
-	// Checks per run level.
-	Checks map[RunLevel][]checks.Check
-}
-
-// getConfig() returns a Config with defaults set then loads the config from
-// file "name".
-func getConfig(name string) *Config {
-	config := &Config{MaxDuration: 120, Checks: map[RunLevel][]checks.Check{}}
-	config.Checks[RunLevel(0)] = []checks.Check{}
-	config.Checks[RunLevel(1)] = []checks.Check{
-		&checks.Build{},
-		&checks.Gofmt{},
-		&checks.Test{},
-	}
-	config.Checks[RunLevel(2)] = []checks.Check{
-		&checks.Errcheck{},
-		&checks.Goimports{},
-		&checks.TestCoverage{},
-	}
-	config.Checks[RunLevel(3)] = []checks.Check{
-		&checks.Golint{},
-		&checks.Govet{},
-	}
-	for _, c := range config.AllChecks() {
-		c.ResetDefault()
-	}
-
-	// TODO(maruel): Settle on config format. Options:
-	// - json (encoding/json); does not require anything except stdlib but
-	//   doesn't allow comments.
-	// - yaml (github.com/go-yaml/yaml)
-	// - JSON5 (github.com/yosuke-furukawa/json5)
-	// - INI (code.google.com/p/gcfg and others) Main issue is lack of embedded
-	//   lists.
-	//
-	// Side effect: either it would slow down go get .../pre-commit-go or we'd
-	// have to use godep and periodically sync.
-	content, err := ioutil.ReadFile(name)
-	if err == nil {
-		if err2 := yaml.Unmarshal(content, config); err2 != nil {
-			log.Printf("failed to parse %s: %s", name, err2)
-		}
-	}
-	return config
-}
-
-// AllChecks returns all the checks.
-func (c *Config) AllChecks() []checks.Check {
-	out := []checks.Check{}
-	for _, list := range c.Checks {
-		for _, c := range list {
-			out = append(out, c)
-		}
-	}
-	return out
-}
-
-// EnabledChecks returns all the checks enabled at this run level.
-func (c *Config) EnabledChecks(r RunLevel) []checks.Check {
-	out := []checks.Check{}
-	for i := RunLevel(0); i <= r; i++ {
-		for _, c := range c.Checks[i] {
-			out = append(out, c)
-		}
-	}
-	return out
-}
-
 // Commands.
 
 func help(name, usage string) error {
@@ -218,7 +134,7 @@ func help(name, usage string) error {
 		[]checks.Check{},
 		[]checks.Check{},
 	}
-	for _, c := range getConfig(name).AllChecks() {
+	for _, c := range checks.GetConfig(name).AllChecks() {
 		if v := len(c.GetName()); v > s.Max {
 			s.Max = v
 		}
@@ -232,8 +148,8 @@ func help(name, usage string) error {
 }
 
 // installPrereq installs all the packages needed to run the enabled checks.
-func installPrereq(name string, r RunLevel) error {
-	config := getConfig(name)
+func installPrereq(name string, r checks.RunLevel) error {
+	config := checks.GetConfig(name)
 	var wg sync.WaitGroup
 	enabledChecks := config.EnabledChecks(r)
 	c := make(chan string, len(enabledChecks))
@@ -291,7 +207,7 @@ func installPrereq(name string, r RunLevel) error {
 }
 
 // install first calls installPrereq() then install the .git/hooks/pre-commit hook.
-func install(name string, r RunLevel) error {
+func install(name string, r checks.RunLevel) error {
 	if err := installPrereq(name, r); err != nil {
 		return err
 	}
@@ -308,9 +224,9 @@ func install(name string, r RunLevel) error {
 }
 
 // run runs all the enabled checks.
-func run(name string, r RunLevel) error {
+func run(name string, r checks.RunLevel) error {
 	start := time.Now()
-	config := getConfig(name)
+	config := checks.GetConfig(name)
 	enabledChecks := config.EnabledChecks(r)
 	var wg sync.WaitGroup
 	errs := make(chan error, len(enabledChecks))
@@ -351,7 +267,7 @@ func run(name string, r RunLevel) error {
 }
 
 func writeConfig(name string) error {
-	config := getConfig(name)
+	config := checks.GetConfig(name)
 	content, err := yaml.Marshal(config)
 	if err != nil {
 		return fmt.Errorf("internal error when marshaling config: %s", err)
@@ -384,7 +300,7 @@ func mainImpl() error {
 	if *runLevelFlag < 0 || *runLevelFlag > 3 {
 		return fmt.Errorf("-level %d is invalid, must be between 0 and 3", *runLevelFlag)
 	}
-	runLevel := RunLevel(*runLevelFlag)
+	runLevel := checks.RunLevel(*runLevelFlag)
 
 	gitRoot, err := captureAbs("git", "rev-parse", "--show-cdup")
 	if err != nil {
