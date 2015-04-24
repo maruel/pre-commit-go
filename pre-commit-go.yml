@@ -1,0 +1,30 @@
+# https://github.com/maruel/pre-commit-go configuration file to run checks
+# automatically on commit and pull requests.
+#
+# See https://godoc.org/github.com/maruel/pre-commit-go/checks for more
+# information.
+
+version: 1
+max_duration: 5
+checks:
+  0: []
+  1:
+  - check_type: build
+    extra_args: []
+  - check_type: gofmt
+  - check_type: test
+    extra_args:
+    - -v
+    - -race
+  2:
+  - check_type: errcheck
+    ignores: Close
+  - check_type: goimports
+  - check_type: testcoverage
+    minimum_coverage: 20
+  3:
+  - blacklist: []
+    check_type: golint
+  - blacklist:
+    - ' composite literal uses unkeyed fields'
+    check_type: govet

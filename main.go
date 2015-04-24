@@ -106,6 +106,7 @@ Supported commands are:
                 govet, etc as applicable for the enabled checks
   installrun  - runs 'prereq', 'install' then 'run'
   run         - runs all enabled checks
+  writeconfig - writes (or rewrite) a pre-commit-go.yml
 
 When executed without command, it does the equivalent of 'installrun'.
 Supported flags are:
@@ -119,9 +120,6 @@ Supported checks and their runlevel:
 
 No check ever modify any file.
 `))
-
-// TODO(maruel): Only document it when it's stable enough.
-//  writeconfig - writes (or rewrite) a pre-commit-go.yml
 
 // Commands.
 
@@ -137,8 +135,8 @@ func help(name, usage string) error {
 		[]checks.Check{},
 		[]checks.Check{},
 	}
-	for _, c := range checks.GetConfig(name).AllChecks() {
-		if v := len(c.GetName()); v > s.Max {
+	for name, c := range checks.KnownChecks {
+		if v := len(name); v > s.Max {
 			s.Max = v
 		}
 		if len(c.GetPrerequisites()) == 0 {
@@ -161,8 +159,7 @@ func installPrereq(name string, r checks.RunLevel) error {
 			wg.Add(1)
 			go func(prereq checks.CheckPrerequisite) {
 				defer wg.Done()
-				_, exitCode, _ := capture(prereq.HelpCommand...)
-				if exitCode != prereq.ExpectedExitCode {
+				if !prereq.IsPresent() {
 					c <- prereq.URL
 				}
 			}(p)
@@ -226,6 +223,16 @@ func install(name string, r checks.RunLevel) error {
 	return err
 }
 
+func callRun(check checks.Check) (error, time.Duration) {
+	if l, ok := check.(sync.Locker); ok {
+		l.Lock()
+		defer l.Unlock()
+	}
+	start := time.Now()
+	err := check.Run()
+	return err, time.Now().Sub(start)
+}
+
 // run runs all the enabled checks.
 func run(name string, r checks.RunLevel) error {
 	start := time.Now()
@@ -238,9 +245,7 @@ func run(name string, r checks.RunLevel) error {
 		go func(check checks.Check) {
 			defer wg.Done()
 			log.Printf("%s...", check.GetName())
-			start := time.Now()
-			err := check.Run()
-			duration := time.Now().Sub(start)
+			err, duration := callRun(check)
 			log.Printf("... %s in %1.2fs", check.GetName(), duration.Seconds())
 			if err != nil {
 				errs <- err

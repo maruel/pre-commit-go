@@ -22,15 +22,23 @@ import (
 	"sync"
 )
 
+// See Build.Run() for information.
+var buildLock sync.Mutex
+
 // CheckPrerequisite describe a Go package that is needed to run a Check.
 //
 // It must list a command that is to be executed and the expected exit code to
 // verify that the custom tool is properly installed. If the executable is not
 // detected, "go get $URL" will be executed.
 type CheckPrerequisite struct {
-	HelpCommand      []string
-	ExpectedExitCode int
-	URL              string
+	HelpCommand      []string `yaml:"help_command"`
+	ExpectedExitCode int      `yaml:"expected_exit_code"`
+	URL              string   `yaml:"url"`
+}
+
+func (c *CheckPrerequisite) IsPresent() bool {
+	_, exitCode, _ := capture(c.HelpCommand...)
+	return exitCode == c.ExpectedExitCode
 }
 
 // Check describes an check to be executed on the code base.
@@ -58,7 +66,7 @@ type Check interface {
 type Build struct {
 	// Default is empty. Can be used to build multiple times with different
 	// tags, e.g. to build -tags foo,zoo then -tags bar.
-	ExtraArgs [][]string
+	ExtraArgs []string `yaml:"extra_args"`
 }
 
 func (b *Build) GetDescription() string {
@@ -74,29 +82,32 @@ func (b *Build) GetPrerequisites() []CheckPrerequisite {
 }
 
 func (b *Build) ResetDefault() {
-	b.ExtraArgs = [][]string{{}}
+	b.ExtraArgs = []string{}
+}
+
+func (b *Build) Lock() {
+	buildLock.Lock()
+}
+
+func (b *Build) Unlock() {
+	buildLock.Unlock()
 }
 
 func (b *Build) Run() error {
-	if len(b.ExtraArgs) == 0 {
-		return fmt.Errorf("ExtraArgs must be at least a list of one empty list")
-	}
 	// Cannot build concurrently since it leaves files in the tree.
 	// TODO(maruel): Build in a temporary directory to not leave junk in the tree
 	// with -o. On the other hand, ./... and -o foo are incompatible. But
 	// building would have to be done in an efficient way by looking at which
 	// package builds what, to not result in a O(n²) algorithm.
-	for _, extraarg := range b.ExtraArgs {
-		args := []string{"go", "build"}
-		args = append(args, extraarg...)
-		args = append(args, "./...")
-		out, _, err := capture(args...)
-		if len(out) != 0 {
-			return fmt.Errorf("%s failed: %s", strings.Join(args, " "), out)
-		}
-		if err != nil {
-			return fmt.Errorf("%s failed: %s", strings.Join(args, " "), err.Error())
-		}
+	args := []string{"go", "build"}
+	args = append(args, b.ExtraArgs...)
+	args = append(args, "./...")
+	out, _, err := capture(args...)
+	if len(out) != 0 {
+		return fmt.Errorf("%s failed: %s", strings.Join(args, " "), out)
+	}
+	if err != nil {
+		return fmt.Errorf("%s failed: %s", strings.Join(args, " "), err.Error())
 	}
 	return nil
 }
@@ -143,7 +154,7 @@ func (g *Gofmt) Run() error {
 type Test struct {
 	// Default is -v -race. Additional arguments to pass, like -race. Can be used
 	// multiple times to run tests multiple times, for example with -tags.
-	ExtraArgs [][]string
+	ExtraArgs []string `yaml:"extra_args"`
 }
 
 func (t *Test) GetDescription() string {
@@ -159,44 +170,39 @@ func (t *Test) GetPrerequisites() []CheckPrerequisite {
 }
 
 func (t *Test) ResetDefault() {
-	t.ExtraArgs = [][]string{{"-v", "-race"}}
+	t.ExtraArgs = []string{"-v", "-race"}
 }
 
 func (t *Test) Run() error {
-	if len(t.ExtraArgs) == 0 {
-		return fmt.Errorf("ExtraArgs must be at least a list of one empty list")
-	}
 	// Add tests manually instead of using './...'. The reason is that it permits
 	// running all the tests concurrently, which saves a lot of time when there's
 	// many packages.
 	var wg sync.WaitGroup
 	testDirs := goDirs(true)
-	for _, extraarg := range t.ExtraArgs {
-		errs := make(chan error, len(testDirs))
-		for _, td := range testDirs {
-			wg.Add(1)
-			go func(testDir string, extraarg []string) {
-				defer wg.Done()
-				rel, err := relToGOPATH(testDir)
-				if err != nil {
-					errs <- err
-					return
-				}
-				args := []string{"go", "test"}
-				args = append(args, extraarg...)
-				args = append(args, rel)
-				out, exitCode, _ := capture(args...)
-				if exitCode != 0 {
-					errs <- fmt.Errorf("%s failed:\n%s", strings.Join(args, " "), out)
-				}
-			}(td, extraarg)
-		}
-		wg.Wait()
-		select {
-		case err := <-errs:
-			return err
-		default:
-		}
+	errs := make(chan error, len(testDirs))
+	for _, td := range testDirs {
+		wg.Add(1)
+		go func(testDir string) {
+			defer wg.Done()
+			rel, err := relToGOPATH(testDir)
+			if err != nil {
+				errs <- err
+				return
+			}
+			args := []string{"go", "test"}
+			args = append(args, t.ExtraArgs...)
+			args = append(args, rel)
+			out, exitCode, _ := capture(args...)
+			if exitCode != 0 {
+				errs <- fmt.Errorf("%s failed:\n%s", strings.Join(args, " "), out)
+			}
+		}(td)
+	}
+	wg.Wait()
+	select {
+	case err := <-errs:
+		return err
+	default:
 	}
 	return nil
 }
@@ -207,7 +213,7 @@ func (t *Test) Run() error {
 // Errcheck runs errcheck on all directories containing .go files.
 type Errcheck struct {
 	// Flag to pass to -ignore. Default is "Close".
-	Ignores string
+	Ignores string `yaml:"ignores"`
 }
 
 func (e *Errcheck) GetDescription() string {
@@ -289,7 +295,7 @@ func (g *Goimports) Run() error {
 // messages wholesale.
 type Golint struct {
 	// Messages generated by golint to be ignored.
-	Blacklist []string
+	Blacklist []string `yaml:"blacklist"`
 }
 
 func (g *Golint) GetDescription() string {
@@ -334,7 +340,7 @@ func (g *Golint) Run() error {
 // messages wholesale.
 type Govet struct {
 	// Messages generated by go tool vet to be ignored.
-	Blacklist []string
+	Blacklist []string `yaml:"blacklist"`
 }
 
 func (g *Govet) GetDescription() string {
@@ -386,7 +392,7 @@ func (g *Govet) Run() error {
 // t.MinimumCoverage.
 type TestCoverage struct {
 	// Minimum test coverage to be generated or the check is considered to fail.
-	MinimumCoverage float64
+	MinimumCoverage float64 `yaml:"minimum_coverage"`
 }
 
 func (t *TestCoverage) GetDescription() string {
@@ -572,24 +578,27 @@ func (t *TestCoverage) Run() (err error) {
 // CustomCheck represents a user configured check.
 type CustomCheck struct {
 	// Check's display name, required.
-	Name string
+	DisplayName string `yaml:"display_name"`
 	// Check's description, optional.
-	Description string
+	Description string `yaml:"description"`
 	// Check's command line, required.
-	Command []string
+	Command []string `yaml:"command"`
 	// Check's fails if exit code is non-zero.
-	CheckExitCode bool
+	CheckExitCode bool `yaml:"check_exit_code"`
 	// Check's prerequisite packages to install first before running the check,
 	// optional.
-	Prerequisites []CheckPrerequisite
+	Prerequisites []CheckPrerequisite `yaml:"prerequisites"`
 }
 
 func (c *CustomCheck) GetDescription() string {
-	return c.Description
+	if c.Description != "" {
+		return c.Description
+	}
+	return "runs a custom check from an external package"
 }
 
 func (c *CustomCheck) GetName() string {
-	return c.Name
+	return "custom"
 }
 
 func (c *CustomCheck) GetPrerequisites() []CheckPrerequisite {
@@ -606,4 +615,29 @@ func (c *CustomCheck) Run() error {
 		return fmt.Errorf("%d failed:\n%s", strings.Join(c.Command, " "), out)
 	}
 	return err
+}
+
+// KnownChecks is the map of all known checks per check name.
+var KnownChecks map[string]Check
+
+func init() {
+	known := []Check{
+		&Build{},
+		&Gofmt{},
+		&Test{},
+		&Errcheck{},
+		&Goimports{},
+		&Golint{},
+		&Govet{},
+		&TestCoverage{},
+		&CustomCheck{},
+	}
+	KnownChecks = map[string]Check{}
+	for _, k := range known {
+		name := k.GetName()
+		if _, ok := KnownChecks[name]; ok {
+			panic(fmt.Sprintf("duplicate check named %s", name))
+		}
+		KnownChecks[name] = k
+	}
 }
