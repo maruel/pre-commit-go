@@ -178,9 +178,9 @@ func (t *Test) Run() error {
 	// running all the tests concurrently, which saves a lot of time when there's
 	// many packages.
 	var wg sync.WaitGroup
-	testDirs := goDirs(true)
-	errs := make(chan error, len(testDirs))
-	for _, td := range testDirs {
+	tds := goDirs(testDirs)
+	errs := make(chan error, len(tds))
+	for _, td := range tds {
 		wg.Add(1)
 		go func(testDir string) {
 			defer wg.Done()
@@ -236,7 +236,7 @@ func (e *Errcheck) ResetDefault() {
 }
 
 func (e *Errcheck) Run() error {
-	dirs := goDirs(false)
+	dirs := goDirs(sourceDirs)
 	args := make([]string, 0, len(dirs)+2)
 	args = append(args, "errcheck", "-ignore", e.Ignores)
 	for _, d := range dirs {
@@ -418,13 +418,28 @@ func (t *TestCoverage) ResetDefault() {
 }
 
 func (t *TestCoverage) Run() (err error) {
-	pkgRoot, _ := os.Getwd()
-	pkg, err2 := relToGOPATH(pkgRoot)
-	if err2 != nil {
-		return err2
+	// TODO(maruel): Kept because we may have to revert to using broader
+	// instrumentation due to OS command line argument length limit.
+	//pkgRoot, _ := os.Getwd()
+	//pkg, err2 := relToGOPATH(pkgRoot)
+	//if err2 != nil {
+	//	return err2
+	//}
+	pds := goDirs(packageDirs)
+	coverPkg := ""
+	for i, p := range pds {
+		if i != 0 {
+			coverPkg += ","
+		}
+		rel, err2 := relToGOPATH(p)
+		if err2 != nil {
+			return err2
+		}
+		coverPkg += rel
 	}
-	testDirs := goDirs(true)
-	if len(testDirs) == 0 {
+
+	tds := goDirs(testDirs)
+	if len(tds) == 0 {
 		return nil
 	}
 
@@ -443,13 +458,17 @@ func (t *TestCoverage) Run() (err error) {
 	// -coverprofile file name, so that all the files can later be merged into a
 	// single file.
 	var wg sync.WaitGroup
-	errs := make(chan error, len(testDirs))
-	for i, td := range testDirs {
+	errs := make(chan error, len(tds))
+
+	for i, td := range tds {
 		wg.Add(1)
 		go func(index int, testDir string) {
 			defer wg.Done()
+			// TODO(maruel): Maybe fallback to 'pkg + "/..."' and post process to
+			// remove uninteresting directories. The rationale is that it will
+			// eventually blow up the OS specific command argument length.
 			args := []string{
-				"go", "test", "-v", "-covermode=count", "-coverpkg", pkg + "/...",
+				"go", "test", "-v", "-covermode=count", "-coverpkg", coverPkg,
 				"-coverprofile", filepath.Join(tmpDir, fmt.Sprintf("test%d.cov", index)),
 			}
 			out, exitCode, _ := captureWd(testDir, args...)

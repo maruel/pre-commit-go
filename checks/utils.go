@@ -6,6 +6,9 @@ package checks
 
 import (
 	"fmt"
+	"go/scanner"
+	"go/token"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -19,10 +22,18 @@ import (
 // Globals
 
 var goDirsCacheLock sync.Mutex
-var goDirsCache map[bool][]string
+var goDirsCache map[dirsType][]string
 
 var relToGOPATHLock sync.Mutex
 var relToGOPATHCache = map[string]string{}
+
+type dirsType int
+
+const (
+	sourceDirs  dirsType = 0 // Directories containing go source files.
+	testDirs    dirsType = 1 // Directories containing tests are returned.
+	packageDirs dirsType = 2 // Directories containing non "main" packages.
+)
 
 func readDirNames(dirname string) []string {
 	f, err := os.Open(dirname)
@@ -87,25 +98,46 @@ func rsplitn(s, sep string, n int) []string {
 	return items
 }
 
+func getPackageName(content []byte) string {
+	var s scanner.Scanner
+	fset := token.NewFileSet()
+	file := fset.AddFile("", fset.Base(), len(content))
+	s.Init(file, content, nil, 0)
+	for {
+		_, tok, _ := s.Scan()
+		if tok == token.EOF {
+			return ""
+		}
+		if tok == token.PACKAGE {
+			_, tok, lit := s.Scan()
+			if tok == token.IDENT {
+				return lit
+			}
+		}
+	}
+}
+
 // goDirs returns the list of directories with '*.go' files or '*_test.go'
 // files.
 //
 // If 'tests' is true, all directories containing tests are returned.
 // If 'tests' is false, only directories containing go source files but not
 // tests are returned. This is usually 'main' packages.
-func goDirs(tests bool) []string {
+func goDirs(d dirsType) []string {
 	goDirsCacheLock.Lock()
 	defer goDirsCacheLock.Unlock()
 	if goDirsCache != nil {
-		return goDirsCache[tests]
+		return goDirsCache[d]
 	}
 	root, _ := os.Getwd()
 	if stat, err := os.Stat(root); err != nil || !stat.IsDir() {
 		panic("internal failure")
 	}
 
+	// A directory can be in all 3.
 	dirsSourceFound := map[string]bool{}
 	dirsTestsFound := map[string]bool{}
+	dirsPackageFound := map[string]bool{}
 	var recurse func(dir string)
 	recurse = func(dir string) {
 		for _, f := range readDirNames(dir) {
@@ -124,27 +156,38 @@ func goDirs(tests bool) []string {
 					dirsTestsFound[dir] = true
 				} else if strings.HasSuffix(p, ".go") {
 					dirsSourceFound[dir] = true
+					// Only scan the first file per directory.
+					if _, ok := dirsPackageFound[dir]; !ok {
+						if content, err := ioutil.ReadFile(p); err == nil {
+							name := getPackageName(content)
+							dirsPackageFound[dir] = name != "main" && name != ""
+						}
+					}
 				}
 			}
 		}
 	}
 	recurse(root)
-	goDirsCache = map[bool][]string{
-		false: make([]string, 0, len(dirsSourceFound)),
-		true:  make([]string, 0, len(dirsTestsFound)),
+	goDirsCache = map[dirsType][]string{
+		sourceDirs:  make([]string, 0, len(dirsSourceFound)),
+		testDirs:    make([]string, 0, len(dirsTestsFound)),
+		packageDirs: {},
 	}
 	for d := range dirsSourceFound {
-		if _, ok := dirsTestsFound[d]; !ok {
-			goDirsCache[false] = append(goDirsCache[false], d)
-		}
+		goDirsCache[sourceDirs] = append(goDirsCache[sourceDirs], d)
 	}
 	for d := range dirsTestsFound {
-		goDirsCache[true] = append(goDirsCache[true], d)
+		goDirsCache[testDirs] = append(goDirsCache[testDirs], d)
 	}
-	sort.Strings(goDirsCache[false])
-	sort.Strings(goDirsCache[true])
-	//log.Printf("goDirs() = %v", goDirsCache)
-	return goDirsCache[tests]
+	for d, v := range dirsPackageFound {
+		if v {
+			goDirsCache[packageDirs] = append(goDirsCache[packageDirs], d)
+		}
+	}
+	sort.Strings(goDirsCache[sourceDirs])
+	sort.Strings(goDirsCache[testDirs])
+	sort.Strings(goDirsCache[packageDirs])
+	return goDirsCache[d]
 }
 
 // relToGOPATH returns the path relative to $GOPATH/src.
