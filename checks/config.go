@@ -97,7 +97,7 @@ func (c *Checks) UnmarshalYAML(unmarshal func(interface{}) error) error {
 func New() *Config {
 	config := &Config{
 		Version:     1,
-		MaxDuration: 20,
+		MaxDuration: 120,
 		Checks:      map[RunLevel]Checks{},
 	}
 	config.Checks[RunLevel(0)] = Checks{[]Check{}}

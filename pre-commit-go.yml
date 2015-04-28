@@ -5,7 +5,7 @@
 # information.
 
 version: 1
-max_duration: 20
+max_duration: 120
 checks:
   0: []
   1:
