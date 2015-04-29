@@ -123,7 +123,7 @@ No check ever modify any file.
 
 // Commands.
 
-func help(name, usage string) error {
+func help(config *checks.Config, usage string) error {
 	s := &struct {
 		Usage        string
 		Max          int
@@ -149,8 +149,7 @@ func help(name, usage string) error {
 }
 
 // installPrereq installs all the packages needed to run the enabled checks.
-func installPrereq(name string, r checks.RunLevel) error {
-	config := checks.GetConfig(name)
+func installPrereq(config *checks.Config, r checks.RunLevel) error {
 	var wg sync.WaitGroup
 	enabledChecks := config.EnabledChecks(r)
 	c := make(chan string, len(enabledChecks))
@@ -207,8 +206,8 @@ func installPrereq(name string, r checks.RunLevel) error {
 }
 
 // install first calls installPrereq() then install the .git/hooks/pre-commit hook.
-func install(name string, r checks.RunLevel) error {
-	if err := installPrereq(name, r); err != nil {
+func install(config *checks.Config, r checks.RunLevel) error {
+	if err := installPrereq(config, r); err != nil {
 		return err
 	}
 	gitDir, err := captureAbs("git", "rev-parse", "--git-dir")
@@ -234,9 +233,8 @@ func callRun(check checks.Check) (error, time.Duration) {
 }
 
 // run runs all the enabled checks.
-func run(name string, r checks.RunLevel) error {
+func run(config *checks.Config, r checks.RunLevel) error {
 	start := time.Now()
-	config := checks.GetConfig(name)
 	enabledChecks := config.EnabledChecks(r)
 	var wg sync.WaitGroup
 	errs := make(chan error, len(enabledChecks))
@@ -274,16 +272,15 @@ func run(name string, r checks.RunLevel) error {
 	}
 }
 
-func writeConfig(name string) error {
-	config := checks.GetConfig(name)
+func writeConfig(config *checks.Config, configPath string) error {
 	content, err := yaml.Marshal(config)
 	if err != nil {
 		return fmt.Errorf("internal error when marshaling config: %s", err)
 	}
-	_ = os.Remove(name)
+	_ = os.Remove(configPath)
 	out := []byte("# https://github.com/maruel/pre-commit-go configuration file to run checks\n# automatically on commit and pull requests.\n#\n# See https://godoc.org/github.com/maruel/pre-commit-go/checks for more\n# information.\n\n")
 	out = append(out, content...)
-	return ioutil.WriteFile(name, out, 0666)
+	return ioutil.WriteFile(configPath, out, 0666)
 }
 
 func mainImpl() error {
@@ -314,35 +311,39 @@ func mainImpl() error {
 	if err != nil {
 		return fmt.Errorf("failed to find git checkout root")
 	}
+
+	// Make the config path relative to the current directory, not the git
+	// repository root.
+	if *configPath, err = filepath.Abs(*configPath); err != nil {
+		return err
+	}
 	if err := os.Chdir(gitRoot); err != nil {
 		return fmt.Errorf("failed to chdir to git checkout root: %s", err)
 	}
+	config := checks.GetConfig(*configPath)
 
-	if cmd == "help" || cmd == "-help" || cmd == "-h" {
+	switch cmd {
+	case "help", "-help", "-h":
 		b := &bytes.Buffer{}
 		flag.CommandLine.SetOutput(b)
 		flag.CommandLine.PrintDefaults()
-		return help(*configPath, b.String())
-	}
-	if cmd == "install" || cmd == "i" {
-		return install(*configPath, runLevel)
-	}
-	if cmd == "installrun" {
-		if err := install(*configPath, runLevel); err != nil {
+		return help(config, b.String())
+	case "install", "i":
+		return install(config, runLevel)
+	case "installrun":
+		if err := install(config, runLevel); err != nil {
 			return err
 		}
-		return run(*configPath, runLevel)
+		return run(config, runLevel)
+	case "prereq", "p":
+		return installPrereq(config, runLevel)
+	case "run", "r":
+		return run(config, runLevel)
+	case "writeconfig", "w":
+		return writeConfig(config, *configPath)
+	default:
+		return errors.New("unknown command, try 'help'")
 	}
-	if cmd == "prereq" || cmd == "p" {
-		return installPrereq(*configPath, runLevel)
-	}
-	if cmd == "run" || cmd == "r" {
-		return run(*configPath, runLevel)
-	}
-	if cmd == "writeconfig" || cmd == "w" {
-		return writeConfig(*configPath)
-	}
-	return errors.New("unknown command, try 'help'")
 }
 
 func main() {
