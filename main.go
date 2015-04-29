@@ -121,6 +121,60 @@ Supported checks and their runlevel:
 No check ever modify any file.
 `))
 
+// Utils.
+
+func callRun(check checks.Check) (error, time.Duration) {
+	if l, ok := check.(sync.Locker); ok {
+		l.Lock()
+		defer l.Unlock()
+	}
+	start := time.Now()
+	err := check.Run()
+	return err, time.Now().Sub(start)
+}
+
+func runChecks(config *checks.Config, r checks.RunLevel) error {
+	// TODO(maruel): Run checks selectively based on the actual files modified.
+	// This should affect checks.goDirs() results by calculating all packages
+	// affected via the package import graphs.
+	start := time.Now()
+	enabledChecks := config.EnabledChecks(r)
+	var wg sync.WaitGroup
+	errs := make(chan error, len(enabledChecks))
+	for _, c := range enabledChecks {
+		wg.Add(1)
+		go func(check checks.Check) {
+			defer wg.Done()
+			log.Printf("%s...", check.GetName())
+			err, duration := callRun(check)
+			log.Printf("... %s in %1.2fs", check.GetName(), duration.Seconds())
+			if err != nil {
+				errs <- err
+			}
+			// A check that took too long is a check that failed.
+			max := config.MaxDuration
+			if duration > time.Duration(max)*time.Second {
+				errs <- fmt.Errorf("check %s took %1.2fs", check.GetName(), duration.Seconds())
+			}
+		}(c)
+	}
+	wg.Wait()
+
+	var err error
+	for {
+		select {
+		case err = <-errs:
+			fmt.Printf("%s\n", err)
+		default:
+			if err != nil {
+				duration := time.Now().Sub(start)
+				return fmt.Errorf("checks failed in %1.2fs", duration.Seconds())
+			}
+			return err
+		}
+	}
+}
+
 // Commands.
 
 func help(config *checks.Config, usage string) error {
@@ -222,54 +276,9 @@ func install(config *checks.Config, r checks.RunLevel) error {
 	return err
 }
 
-func callRun(check checks.Check) (error, time.Duration) {
-	if l, ok := check.(sync.Locker); ok {
-		l.Lock()
-		defer l.Unlock()
-	}
-	start := time.Now()
-	err := check.Run()
-	return err, time.Now().Sub(start)
-}
-
 // run runs all the enabled checks.
 func run(config *checks.Config, r checks.RunLevel) error {
-	start := time.Now()
-	enabledChecks := config.EnabledChecks(r)
-	var wg sync.WaitGroup
-	errs := make(chan error, len(enabledChecks))
-	for _, c := range enabledChecks {
-		wg.Add(1)
-		go func(check checks.Check) {
-			defer wg.Done()
-			log.Printf("%s...", check.GetName())
-			err, duration := callRun(check)
-			log.Printf("... %s in %1.2fs", check.GetName(), duration.Seconds())
-			if err != nil {
-				errs <- err
-			}
-			// A check that took too long is a check that failed.
-			max := config.MaxDuration
-			if duration > time.Duration(max)*time.Second {
-				errs <- fmt.Errorf("check %s took %1.2fs", check.GetName(), duration.Seconds())
-			}
-		}(c)
-	}
-	wg.Wait()
-
-	var err error
-	for {
-		select {
-		case err = <-errs:
-			fmt.Printf("%s\n", err)
-		default:
-			if err != nil {
-				duration := time.Now().Sub(start)
-				return fmt.Errorf("checks failed in %1.2fs", duration.Seconds())
-			}
-			return err
-		}
-	}
+	return runChecks(config, r)
 }
 
 func writeConfig(config *checks.Config, configPath string) error {
