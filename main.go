@@ -210,7 +210,7 @@ func install(config *checks.Config, r checks.RunLevel) error {
 	if err := installPrereq(config, r); err != nil {
 		return err
 	}
-	gitDir, err := captureAbs("git", "rev-parse", "--git-dir")
+	gitDir, err := getGitDir()
 	if err != nil {
 		return fmt.Errorf("failed to find .git dir: %s", err)
 	}
@@ -307,18 +307,14 @@ func mainImpl() error {
 	}
 	runLevel := checks.RunLevel(*runLevelFlag)
 
-	gitRoot, err := captureAbs("git", "rev-parse", "--show-cdup")
-	if err != nil {
-		return fmt.Errorf("failed to find git checkout root")
-	}
-
 	// Make the config path relative to the current directory, not the git
 	// repository root.
+	var err error
 	if *configPath, err = filepath.Abs(*configPath); err != nil {
 		return err
 	}
-	if err := os.Chdir(gitRoot); err != nil {
-		return fmt.Errorf("failed to chdir to git checkout root: %s", err)
+	if err = chdirToGitRoot(); err != nil {
+		return err
 	}
 	config := checks.GetConfig(*configPath)
 
