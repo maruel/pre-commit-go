@@ -20,6 +20,8 @@ import (
 	"time"
 
 	"github.com/maruel/pre-commit-go/checks"
+	"github.com/maruel/pre-commit-go/internal"
+	"github.com/maruel/pre-commit-go/scm"
 	"gopkg.in/yaml.v2"
 )
 
@@ -177,7 +179,7 @@ func runChecks(config *checks.Config, r checks.RunLevel) error {
 
 // Commands.
 
-func help(config *checks.Config, usage string) error {
+func cmdHelp(repo scm.Repo, config *checks.Config, usage string) error {
 	s := &struct {
 		Usage        string
 		Max          int
@@ -202,8 +204,8 @@ func help(config *checks.Config, usage string) error {
 	return helpText.Execute(os.Stdout, s)
 }
 
-// installPrereq installs all the packages needed to run the enabled checks.
-func installPrereq(config *checks.Config, r checks.RunLevel) error {
+// cmdInstallPrereq installs all the packages needed to run the enabled checks.
+func cmdInstallPrereq(repo scm.Repo, config *checks.Config, r checks.RunLevel) error {
 	var wg sync.WaitGroup
 	enabledChecks := config.EnabledChecks(r)
 	c := make(chan string, len(enabledChecks))
@@ -245,9 +247,9 @@ func installPrereq(config *checks.Config, r checks.RunLevel) error {
 		// changed its API around go1.3~1.4 time frame. -u slows things down
 		// significantly so it's worth trying out without, and people will
 		// generally do not like to have things upgraded behind them.
-		out, _, err := capture(append([]string{"go", "get"}, urls...)...)
+		out, _, err := internal.Capture(append([]string{"go", "get"}, urls...)...)
 		if len(out) != 0 || err != nil {
-			out, _, err = capture(append([]string{"go", "get", "-u"}, urls...)...)
+			out, _, err = internal.Capture(append([]string{"go", "get", "-u"}, urls...)...)
 		}
 		if len(out) != 0 {
 			return fmt.Errorf("prerequisites installation failed: %s", out)
@@ -259,29 +261,28 @@ func installPrereq(config *checks.Config, r checks.RunLevel) error {
 	return nil
 }
 
-// install first calls installPrereq() then install the .git/hooks/pre-commit hook.
-func install(config *checks.Config, r checks.RunLevel) error {
-	if err := installPrereq(config, r); err != nil {
+// cmdInstall first calls cmdInstallPrereq() then install the .git/hooks/pre-commit hook.
+func cmdInstall(repo scm.Repo, config *checks.Config, r checks.RunLevel) error {
+	if err := cmdInstallPrereq(repo, config, r); err != nil {
 		return err
 	}
-	gitDir, err := getGitDir()
+	p, err := repo.PreCommitHookPath()
 	if err != nil {
-		return fmt.Errorf("failed to find .git dir: %s", err)
+		return err
 	}
 	// Always remove "pre-commit" first if it exists, in case it's a symlink.
-	p := filepath.Join(gitDir, "hooks", "pre-commit")
 	_ = os.Remove(p)
 	err = ioutil.WriteFile(p, preCommitHook, 0766)
 	log.Printf("installation done")
 	return err
 }
 
-// run runs all the enabled checks.
-func run(config *checks.Config, r checks.RunLevel) error {
+// cmdRun runs all the enabled checks.
+func cmdRun(repo scm.Repo, config *checks.Config, r checks.RunLevel) error {
 	return runChecks(config, r)
 }
 
-func writeConfig(config *checks.Config, configPath string) error {
+func cmdWriteConfig(repo scm.Repo, config *checks.Config, configPath string) error {
 	content, err := yaml.Marshal(config)
 	if err != nil {
 		return fmt.Errorf("internal error when marshaling config: %s", err)
@@ -322,7 +323,11 @@ func mainImpl() error {
 	if *configPath, err = filepath.Abs(*configPath); err != nil {
 		return err
 	}
-	if err = chdirToGitRoot(); err != nil {
+	repo, err := scm.GetRepo()
+	if err != nil {
+		return err
+	}
+	if err := os.Chdir(repo.Root()); err != nil {
 		return err
 	}
 	config := checks.GetConfig(*configPath)
@@ -332,20 +337,20 @@ func mainImpl() error {
 		b := &bytes.Buffer{}
 		flag.CommandLine.SetOutput(b)
 		flag.CommandLine.PrintDefaults()
-		return help(config, b.String())
+		return cmdHelp(repo, config, b.String())
 	case "install", "i":
-		return install(config, runLevel)
+		return cmdInstall(repo, config, runLevel)
 	case "installrun":
-		if err := install(config, runLevel); err != nil {
+		if err := cmdInstall(repo, config, runLevel); err != nil {
 			return err
 		}
-		return run(config, runLevel)
+		return cmdRun(repo, config, runLevel)
 	case "prereq", "p":
-		return installPrereq(config, runLevel)
+		return cmdInstallPrereq(repo, config, runLevel)
 	case "run", "r":
-		return run(config, runLevel)
+		return cmdRun(repo, config, runLevel)
 	case "writeconfig", "w":
-		return writeConfig(config, *configPath)
+		return cmdWriteConfig(repo, config, *configPath)
 	default:
 		return errors.New("unknown command, try 'help'")
 	}

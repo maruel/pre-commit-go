@@ -9,14 +9,11 @@ import (
 	"go/scanner"
 	"go/token"
 	"io/ioutil"
-	"log"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
-	"syscall"
 )
 
 // Globals
@@ -43,34 +40,6 @@ func readDirNames(dirname string) []string {
 	names, err := f.Readdirnames(-1)
 	_ = f.Close()
 	return names
-}
-
-// captureWd runs an executable from a directory returns the output, exit code
-// and error if appropriate.
-func captureWd(wd string, args ...string) (string, int, error) {
-	exitCode := -1
-	log.Printf("capture(%s)", args)
-	c := exec.Command(args[0], args[1:]...)
-	if wd != "" {
-		c.Dir = wd
-	}
-	out, err := c.CombinedOutput()
-	if c.ProcessState != nil {
-		if waitStatus, ok := c.ProcessState.Sys().(syscall.WaitStatus); ok {
-			exitCode = waitStatus.ExitStatus()
-			if exitCode != 0 {
-				err = nil
-			}
-		}
-	}
-	// TODO(maruel): Handle code page on Windows.
-	return string(out), exitCode, err
-}
-
-// capture runs an executable and returns the output, exit code and error if
-// appropriate.
-func capture(args ...string) (string, int, error) {
-	return captureWd("", args...)
 }
 
 // reverse reverses a string.
