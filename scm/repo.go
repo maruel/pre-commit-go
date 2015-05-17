@@ -82,6 +82,8 @@ func (g *git) Unstaged() ([]string, error) {
 }
 
 func (g *git) Stash() (bool, error) {
+	// Ensure everything is either tracked or ignored. This is because git stash
+	// doesn't stash untracked files.
 	if untracked, err := g.Untracked(); err != nil {
 		return false, err
 	} else if len(untracked) != 0 {

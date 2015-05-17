@@ -102,12 +102,13 @@ var helpText = template.Must(template.New("help").Parse(`pre-commit-go: runs pre
 
 Supported commands are:
   help        - this page
-  install     - runs 'prereq' then installs the git commit hook as
-                .git/hooks/pre-commit
   prereq      - installs prerequisites, e.g.: errcheck, golint, goimports,
                 govet, etc as applicable for the enabled checks
+  install     - runs 'prereq' then installs the git commit hook as
+                .git/hooks/pre-commit
   installrun  - runs 'prereq', 'install' then 'run'
   run         - runs all enabled checks
+  run-hook    - used by hooks (pre-commit, pre-push) exclusively
   writeconfig - writes (or rewrite) a pre-commit-go.yml
 
 When executed without command, it does the equivalent of 'installrun'.
@@ -282,6 +283,36 @@ func cmdRun(repo scm.Repo, config *checks.Config, r checks.RunLevel) error {
 	return runChecks(config, r)
 }
 
+// cmdRunHook runs the checks in a git repository.
+//
+// Use a precise "stash, run checks, unstash" to ensure that the check is
+// properly run on the data in the index.
+func cmdRunHook(repo scm.Repo, config *checks.Config, r checks.RunLevel) error {
+	if flag.NArg() != 1 {
+		return errors.New("run-hook is only meant to be used by hooks")
+	}
+	if flag.Arg(0) != "pre-commit" {
+		return errors.New("unsupported hook type for run-hook")
+	}
+
+	// First, stash index and work dir, keeping only the to-be-committed changes
+	// in the working directory.
+	stashed, err := repo.Stash()
+	if err != nil {
+		return err
+	}
+	// Run the checks.
+	err = runChecks(config, r)
+
+	// If stashed is false, everything was in the index so no stashing was needed.
+	if stashed {
+		if err2 := repo.Restore(); err == nil {
+			err = err2
+		}
+	}
+	return err
+}
+
 func cmdWriteConfig(repo scm.Repo, config *checks.Config, configPath string) error {
 	content, err := yaml.Marshal(config)
 	if err != nil {
@@ -349,6 +380,8 @@ func mainImpl() error {
 		return cmdInstallPrereq(repo, config, runLevel)
 	case "run", "r":
 		return cmdRun(repo, config, runLevel)
+	case "run-hook":
+		return cmdRunHook(repo, config, runLevel)
 	case "writeconfig", "w":
 		return cmdWriteConfig(repo, config, *configPath)
 	default:
