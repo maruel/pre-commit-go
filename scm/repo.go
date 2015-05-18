@@ -13,6 +13,8 @@ import (
 	"github.com/maruel/pre-commit-go/internal"
 )
 
+const initialCommit = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+
 // Repo represents a source control management checkout.
 type Repo interface {
 	// Root returns the root directory of this repository.
@@ -33,9 +35,8 @@ type Repo interface {
 }
 
 // GetRepo returns a valid Repo if one is found.
-func GetRepo() (Repo, error) {
-	// TODO(maruel): Accept cwd.
-	root, err := internal.CaptureAbs("git", "rev-parse", "--show-cdup")
+func GetRepo(wd string) (Repo, error) {
+	root, err := captureAbs(wd, "git", "rev-parse", "--show-cdup")
 	if err == nil {
 		return &git{root: root}, nil
 	}
@@ -55,7 +56,7 @@ func (g *git) Root() string {
 func (g *git) PreCommitHookPath() (string, error) {
 	if g.gitDir == "" {
 		var err error
-		g.gitDir, err = getGitDir()
+		g.gitDir, err = getGitDir(g.root)
 		if err != nil {
 			return "", fmt.Errorf("failed to find .git dir: %s", err)
 		}
@@ -64,21 +65,28 @@ func (g *git) PreCommitHookPath() (string, error) {
 }
 
 func (g *git) HEAD() string {
-	if _, _, err := g.capture("rev-parse", "--verify", "HEAD"); err == nil {
-		return "HEAD"
+	if out, code, _ := g.capture("rev-parse", "--verify", "HEAD"); code == 0 {
+		return out
 	}
-	// Initial commit: diff against an empty tree object
-	return "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+	return initialCommit
 }
 
 func (g *git) Untracked() ([]string, error) {
 	out, _, err := g.capture("ls-files", "--others", "--exclude-standard")
-	return strings.Split(out, "\n"), err
+	if len(out) != 0 {
+		// Strip the trailing \n.
+		return strings.Split(out[:len(out)-1], "\n"), err
+	}
+	return nil, err
 }
 
 func (g *git) Unstaged() ([]string, error) {
 	out, _, err := g.capture("diff", "--name-only", "--no-color", "--no-ext-diff")
-	return strings.Split(out, "\n"), err
+	if len(out) != 0 {
+		// Strip the trailing \n.
+		return strings.Split(out[:len(out)-1], "\n"), err
+	}
+	return nil, err
 }
 
 func (g *git) Stash() (bool, error) {
@@ -95,10 +103,12 @@ func (g *git) Stash() (bool, error) {
 		// No need to stash, there's no unstaged files.
 		return false, nil
 	}
-
 	oldStash, _, _ := g.capture("rev-parse", "-q", "--verify", "refs/stash")
 	if out, e, err := g.capture("stash", "save", "-q", "--keep-index"); e != 0 || err != nil {
-		return false, fmt.Errorf("failed to stash: %s\n%s", err, out)
+		if g.HEAD() == initialCommit {
+			return false, errors.New("Can't stash until there's at least one commit")
+		}
+		return false, fmt.Errorf("failed to stash:\n%s", out)
 	}
 	newStash, e, err := g.capture("rev-parse", "-q", "--verify", "refs/stash")
 	if e != 0 || err != nil {
@@ -125,10 +135,23 @@ func (g *git) capture(args ...string) (string, int, error) {
 }
 
 // getGitDir returns the .git directory path.
-func getGitDir() (string, error) {
-	gitDir, err := internal.CaptureAbs("git", "rev-parse", "--git-dir")
+func getGitDir(wd string) (string, error) {
+	gitDir, err := captureAbs(wd, "git", "rev-parse", "--git-dir")
 	if err != nil {
 		return "", fmt.Errorf("failed to find .git dir: %s", err)
 	}
 	return gitDir, err
+}
+
+// captureAbs returns an absolute path of whatever a git command returned.
+func captureAbs(wd string, args ...string) (string, error) {
+	out, code, _ := internal.CaptureWd(wd, args...)
+	if code != 0 {
+		return "", fmt.Errorf("failed to run \"%s\"", strings.Join(args, " "))
+	}
+	out = strings.TrimSpace(out)
+	if !filepath.IsAbs(out) {
+		out = filepath.Clean(filepath.Join(wd, out))
+	}
+	return out, nil
 }

@@ -48,6 +48,6 @@ func TestGoDirs(t *testing.T) {
 	scmDir := filepath.Join(preCommitGoDir, "scm")
 	ut.AssertEqual(t, nil, os.Chdir(preCommitGoDir))
 	ut.AssertEqual(t, []string{preCommitGoDir, checksDir, internalDir, scmDir}, goDirs(sourceDirs))
-	ut.AssertEqual(t, []string{checksDir}, goDirs(testDirs))
+	ut.AssertEqual(t, []string{checksDir, scmDir}, goDirs(testDirs))
 	ut.AssertEqual(t, []string{checksDir, internalDir, scmDir}, goDirs(packageDirs))
 }

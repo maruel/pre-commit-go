@@ -354,7 +354,11 @@ func mainImpl() error {
 	if *configPath, err = filepath.Abs(*configPath); err != nil {
 		return err
 	}
-	repo, err := scm.GetRepo()
+	cwd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+	repo, err := scm.GetRepo(cwd)
 	if err != nil {
 		return err
 	}

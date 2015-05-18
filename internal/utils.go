@@ -5,11 +5,8 @@
 package internal
 
 import (
-	"fmt"
 	"log"
 	"os/exec"
-	"path/filepath"
-	"strings"
 	"syscall"
 )
 
@@ -39,15 +36,4 @@ func CaptureWd(wd string, args ...string) (string, int, error) {
 // appropriate.
 func Capture(args ...string) (string, int, error) {
 	return CaptureWd("", args...)
-}
-
-// CaptureAbs returns an absolute path of whatever a git command returned.
-func CaptureAbs(args ...string) (string, error) {
-	out, code, _ := Capture(args...)
-	if code != 0 {
-		return "", fmt.Errorf("failed to run \"%s\"", strings.Join(args, " "))
-	}
-	path, err := filepath.Abs(strings.TrimSpace(out))
-	log.Printf("CaptureAbs(%s) = %s", args, path)
-	return path, err
 }
