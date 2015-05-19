@@ -26,6 +26,8 @@ func TestGetRepoGitSlow(t *testing.T) {
 
 	_, _, err = internal.CaptureWd(tmpDir, "git", "init")
 	ut.AssertEqual(t, nil, err)
+	run(t, tmpDir, "config", "user.email", "nobody@localhost")
+	run(t, tmpDir, "config", "user.name", "nobody")
 	repo, err := GetRepo(tmpDir)
 	ut.AssertEqual(t, nil, err)
 	ut.AssertEqual(t, tmpDir, repo.Root())
@@ -81,8 +83,8 @@ func check(t *testing.T, repo Repo, untracked []string, unstaged []string) {
 
 func run(t *testing.T, tmpDir string, args ...string) {
 	internal := &git{root: tmpDir}
-	_, code, err := internal.capture(args...)
-	ut.AssertEqual(t, 0, code)
+	out, code, err := internal.capture(args...)
+	ut.AssertEqualf(t, 0, code, "%s", out)
 	ut.AssertEqual(t, nil, err)
 }
 
