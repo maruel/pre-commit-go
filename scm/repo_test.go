@@ -67,6 +67,7 @@ func TestGetRepoGitSlow(t *testing.T) {
 	ut.AssertEqual(t, true, done)
 	ut.AssertEqual(t, "hi\n", read(t, tmpDir, "file1"))
 	ut.AssertEqual(t, nil, repo.Restore())
+	ut.AssertEqual(t, "hi\nhello\n", read(t, tmpDir, "file1"))
 }
 
 func check(t *testing.T, repo Repo, untracked []string, unstaged []string) {
