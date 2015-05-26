@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"strings"
 	"syscall"
 )
 
@@ -20,9 +21,20 @@ func Capture(wd string, env []string, args ...string) (string, int, error) {
 	if wd != "" {
 		c.Dir = wd
 	}
-	if len(env) != 0 {
-		c.Env = append(c.Env, os.Environ()...)
-		c.Env = append(c.Env, env...)
+	procEnv := map[string]string{}
+	for _, item := range os.Environ() {
+		items := strings.SplitN(item, "=", 2)
+		procEnv[items[0]] = items[1]
+	}
+	procEnv["LANG"] = "en_US.UTF-8"
+	procEnv["LANGUAGE"] = "en_US.UTF-8"
+	for _, item := range env {
+		items := strings.SplitN(item, "=", 2)
+		procEnv[items[0]] = items[1]
+	}
+	c.Env = make([]string, 0, len(procEnv))
+	for k, v := range procEnv {
+		c.Env = append(c.Env, k+"="+v)
 	}
 	out, err := c.CombinedOutput()
 	if c.ProcessState != nil {

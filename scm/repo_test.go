@@ -7,12 +7,27 @@ package scm
 import (
 	"errors"
 	"io/ioutil"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/maruel/pre-commit-go/internal"
 	"github.com/maruel/ut"
 )
+
+func init() {
+	// Remove any GIT_ function, since it can change git behavior significantly
+	// during the test that it can break them. For example GIT_DIR,
+	// GIT_INDEX_FILE, GIT_PREFIX, GIT_AUTHOR_NAME, GIT_EDITOR are set when the
+	// test is run under a git hook like pre-commit.
+	for _, item := range os.Environ() {
+		if strings.HasPrefix(item, "GIT_") {
+			items := strings.SplitN(item, "=", 2)
+			os.Unsetenv(items[0])
+		}
+	}
+}
 
 func TestGetRepoGitSlow(t *testing.T) {
 	// Make a repository and test behavior against it.
@@ -31,10 +46,12 @@ func TestGetRepoGitSlow(t *testing.T) {
 	repo, err := GetRepo(tmpDir)
 	ut.AssertEqual(t, nil, err)
 	ut.AssertEqual(t, tmpDir, repo.Root())
-	p, err := repo.PreCommitHookPath()
+	p, err := repo.HookPath()
 	ut.AssertEqual(t, nil, err)
-	ut.AssertEqual(t, filepath.Join(tmpDir, ".git", "hooks", "pre-commit"), p)
-	ut.AssertEqual(t, "4b825dc642cb6eb9a060e54bf8d69288fbee4904", repo.HEAD())
+	ut.AssertEqual(t, filepath.Join(tmpDir, ".git", "hooks"), p)
+	ut.AssertEqual(t, GitInitialCommit, repo.HEAD())
+	ut.AssertEqual(t, "master", repo.Ref())
+	ut.AssertEqual(t, errors.New("checkout failed:\nfatal: Cannot switch branch to a non-commit '4b825dc642cb6eb9a060e54bf8d69288fbee4904'"), repo.Checkout(GitInitialCommit))
 
 	untracked, err := repo.Untracked()
 	ut.AssertEqual(t, nil, err)
@@ -66,10 +83,11 @@ func TestGetRepoGitSlow(t *testing.T) {
 	run(t, tmpDir, []string{"GIT_COMMITTER_DATE=2005-04-07T22:13:13 +0000"}, "commit", "-m", "yo", "--date", "2005-04-07T22:13:13 +0000")
 	ut.AssertEqual(t, "hi\nhello\n", read(t, tmpDir, "file1"))
 	head := repo.HEAD()
-	// TODO(maruel): Figure out what makes it slightly non-deterministic.
-	if head != "8d894d29f11f8947a7d82221d579f09f7cb6c9eb" && head != "56e6926b12ee571cfba4515214725b35a8571570" {
+	if head != "56e6926b12ee571cfba4515214725b35a8571570" {
+		t.Errorf("%s", strings.Join(os.Environ(), "\n"))
 		t.Fatalf("%s", run(t, tmpDir, nil, "log", "-p", "--format=fuller"))
 	}
+	ut.AssertEqual(t, "master", repo.Ref())
 
 	done, err = repo.Stash()
 	ut.AssertEqual(t, nil, err)
@@ -77,6 +95,13 @@ func TestGetRepoGitSlow(t *testing.T) {
 	ut.AssertEqual(t, "hi\n", read(t, tmpDir, "file1"))
 	ut.AssertEqual(t, nil, repo.Restore())
 	ut.AssertEqual(t, "hi\nhello\n", read(t, tmpDir, "file1"))
+
+	ut.AssertEqual(t, errors.New("only commit hash is accepted"), repo.Checkout("invalid"))
+	ut.AssertEqual(t, "hi\nhello\n", read(t, tmpDir, "file1"))
+	ut.AssertEqual(t, "master", repo.Ref())
+	ut.AssertEqual(t, nil, repo.Checkout(head))
+	ut.AssertEqual(t, "hi\n", read(t, tmpDir, "file1"))
+	ut.AssertEqual(t, "", repo.Ref())
 }
 
 func TestGetRepoNoRepo(t *testing.T) {
@@ -111,7 +136,7 @@ func TestGetRepoGitSlowFailures(t *testing.T) {
 	ut.AssertEqual(t, tmpDir, repo.Root())
 	ut.AssertEqual(t, nil, internal.RemoveAll(filepath.Join(tmpDir, ".git")))
 
-	p, err := repo.PreCommitHookPath()
+	p, err := repo.HookPath()
 	ut.AssertEqual(t, errors.New("failed to find .git dir: failed to find .git dir: failed to run \"git rev-parse --git-dir\""), err)
 	ut.AssertEqual(t, "", p)
 
@@ -119,9 +144,25 @@ func TestGetRepoGitSlowFailures(t *testing.T) {
 	ut.AssertEqual(t, errors.New("failed to retrieve untracked files"), err)
 	ut.AssertEqual(t, []string(nil), untracked)
 
+	ut.AssertEqual(t, GitInitialCommit, repo.HEAD())
+	ut.AssertEqual(t, "", repo.Ref())
+
 	unstaged, err := repo.Unstaged()
 	ut.AssertEqual(t, errors.New("failed to retrieve unstaged files"), err)
 	ut.AssertEqual(t, []string(nil), unstaged)
+
+	done, err := repo.Stash()
+	ut.AssertEqual(t, errors.New("failed to retrieve untracked files"), err)
+	ut.AssertEqual(t, false, done)
+	errStr := repo.Restore().Error()
+	if errStr != "git reset failed:\nfatal: Not a git repository: '.git'" && errStr != "git reset failed:\nfatal: Not a git repository (or any of the parent directories): .git" {
+		t.Fatalf("Unexpected error: %s", errStr)
+	}
+
+	errStr = repo.Checkout(GitInitialCommit).Error()
+	if errStr != "checkout failed:\nfatal: Not a git repository: '.git'" && errStr != "checkout failed:\nfatal: Not a git repository (or any of the parent directories): .git" {
+		t.Fatalf("Unexpected error: %s", errStr)
+	}
 }
 
 // Private stuff.

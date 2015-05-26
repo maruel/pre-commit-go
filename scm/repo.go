@@ -8,22 +8,25 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/maruel/pre-commit-go/internal"
 )
 
-const initialCommit = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+// GitInitialCommit is the root invisible commit.
+const GitInitialCommit = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 
 // Repo represents a source control management checkout.
 type Repo interface {
 	// Root returns the root directory of this repository.
 	Root() string
-	// PreCommitHookPath returns the path to the bash script called as part of a
-	// commit.
-	PreCommitHookPath() (string, error)
+	// HookPath returns the directory containing the commit and push hooks.
+	HookPath() (string, error)
 	// HEAD returns the HEAD commit hash.
 	HEAD() string
+	// Ref returns the HEAD branch name.
+	Ref() string
 	// Untracked returns the list of untracked files.
 	Untracked() ([]string, error)
 	// Unstaged returns the list with changes not in the staging index.
@@ -32,6 +35,8 @@ type Repo interface {
 	Stash() (bool, error)
 	// Stash restores the stash generated from Stash.
 	Restore() error
+	// Checkout checks out a commit.
+	Checkout(commit string) error
 }
 
 // GetRepo returns a valid Repo if one is found.
@@ -44,6 +49,10 @@ func GetRepo(wd string) (Repo, error) {
 	return nil, fmt.Errorf("failed to find git checkout root")
 }
 
+/// Private details.
+
+var reCommit = regexp.MustCompile("^[0-9a-f]{40}$")
+
 type git struct {
 	root   string
 	gitDir string
@@ -53,7 +62,7 @@ func (g *git) Root() string {
 	return g.root
 }
 
-func (g *git) PreCommitHookPath() (string, error) {
+func (g *git) HookPath() (string, error) {
 	if g.gitDir == "" {
 		var err error
 		g.gitDir, err = getGitDir(g.root)
@@ -61,14 +70,21 @@ func (g *git) PreCommitHookPath() (string, error) {
 			return "", fmt.Errorf("failed to find .git dir: %s", err)
 		}
 	}
-	return filepath.Join(g.gitDir, "hooks", "pre-commit"), nil
+	return filepath.Join(g.gitDir, "hooks"), nil
 }
 
 func (g *git) HEAD() string {
 	if out, code, _ := g.capture(nil, "rev-parse", "--verify", "HEAD"); code == 0 {
 		return out
 	}
-	return initialCommit
+	return GitInitialCommit
+}
+
+func (g *git) Ref() string {
+	if out, code, _ := g.capture(nil, "symbolic-ref", "--short", "HEAD"); code == 0 {
+		return out
+	}
+	return ""
 }
 
 func (g *git) Untracked() ([]string, error) {
@@ -109,7 +125,7 @@ func (g *git) Stash() (bool, error) {
 	}
 	oldStash, _, _ := g.capture(nil, "rev-parse", "-q", "--verify", "refs/stash")
 	if out, e, err := g.capture(nil, "stash", "save", "-q", "--keep-index"); e != 0 || err != nil {
-		if g.HEAD() == initialCommit {
+		if g.HEAD() == GitInitialCommit {
 			return false, errors.New("Can't stash until there's at least one commit")
 		}
 		return false, fmt.Errorf("failed to stash:\n%s", out)
@@ -123,13 +139,23 @@ func (g *git) Stash() (bool, error) {
 
 func (g *git) Restore() error {
 	if out, e, err := g.capture(nil, "reset", "--hard", "-q"); e != 0 || err != nil {
-		return fmt.Errorf("git reset failed: %s\n%s", err, out)
+		return fmt.Errorf("git reset failed:\n%s", out)
 	}
 	if out, e, err := g.capture(nil, "stash", "apply", "--index", "-q"); e != 0 || err != nil {
-		return fmt.Errorf("stash reapplication failed: %s\n%s", err, out)
+		return fmt.Errorf("stash reapplication failed:\n%s", out)
 	}
 	if out, e, err := g.capture(nil, "stash", "drop", "-q"); e != 0 || err != nil {
-		return fmt.Errorf("dropping temporary stash failed: %s\n%s", err, out)
+		return fmt.Errorf("dropping temporary stash failed:\n%s", out)
+	}
+	return nil
+}
+
+func (g *git) Checkout(commit string) error {
+	if !reCommit.MatchString(commit) {
+		return errors.New("only commit hash is accepted")
+	}
+	if out, e, err := g.capture(nil, "checkout", "-f", "-q", commit); e != 0 || err != nil {
+		return fmt.Errorf("checkout failed:\n%s", out)
 	}
 	return nil
 }

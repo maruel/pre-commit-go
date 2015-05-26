@@ -208,13 +208,14 @@ func cmdInstall(repo scm.Repo, config *checks.Config, r checks.RunLevel) error {
 	if err := cmdInstallPrereq(repo, config, r); err != nil {
 		return err
 	}
-	p, err := repo.PreCommitHookPath()
+	hookDir, err := repo.HookPath()
 	if err != nil {
 		return err
 	}
+	p := filepath.Join(hookDir, "pre-commit")
 	// Always remove "pre-commit" first if it exists, in case it's a symlink.
 	_ = os.Remove(p)
-	err = ioutil.WriteFile(p, preCommitHook, 0766)
+	err = ioutil.WriteFile(p, preCommitHook, 0777)
 	log.Printf("installation done")
 	return err
 }
