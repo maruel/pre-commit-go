@@ -6,18 +6,23 @@ package internal
 
 import (
 	"log"
+	"os"
 	"os/exec"
 	"syscall"
 )
 
-// CaptureWd runs an executable from a directory returns the output, exit code
-// and error if appropriate.
-func CaptureWd(wd string, args ...string) (string, int, error) {
+// Capture runs an executable from a directory returns the output, exit code
+// and error if appropriate. It sets the environment variables specified.
+func Capture(wd string, env []string, args ...string) (string, int, error) {
 	exitCode := -1
-	log.Printf("CaptureWd(%s, %s)", wd, args)
+	log.Printf("Capture(%s, %s, %s)", wd, env, args)
 	c := exec.Command(args[0], args[1:]...)
 	if wd != "" {
 		c.Dir = wd
+	}
+	if len(env) != 0 {
+		c.Env = append(c.Env, os.Environ()...)
+		c.Env = append(c.Env, env...)
 	}
 	out, err := c.CombinedOutput()
 	if c.ProcessState != nil {
@@ -30,10 +35,4 @@ func CaptureWd(wd string, args ...string) (string, int, error) {
 	}
 	// TODO(maruel): Handle code page on Windows.
 	return string(out), exitCode, err
-}
-
-// Capture runs an executable and returns the output, exit code and error if
-// appropriate.
-func Capture(args ...string) (string, int, error) {
-	return CaptureWd("", args...)
 }

@@ -65,26 +65,30 @@ func (g *git) PreCommitHookPath() (string, error) {
 }
 
 func (g *git) HEAD() string {
-	if out, code, _ := g.capture("rev-parse", "--verify", "HEAD"); code == 0 {
+	if out, code, _ := g.capture(nil, "rev-parse", "--verify", "HEAD"); code == 0 {
 		return out
 	}
 	return initialCommit
 }
 
 func (g *git) Untracked() ([]string, error) {
-	out, _, err := g.capture("ls-files", "--others", "--exclude-standard")
+	out, code, err := g.capture(nil, "ls-files", "--others", "--exclude-standard")
+	if code != 0 || err != nil {
+		return nil, errors.New("failed to retrieve untracked files")
+	}
 	if len(out) != 0 {
-		// Strip the trailing \n.
-		return strings.Split(out[:len(out)-1], "\n"), err
+		return strings.Split(out, "\n"), err
 	}
 	return nil, err
 }
 
 func (g *git) Unstaged() ([]string, error) {
-	out, _, err := g.capture("diff", "--name-only", "--no-color", "--no-ext-diff")
+	out, code, err := g.capture(nil, "diff", "--name-only", "--no-color", "--no-ext-diff")
+	if code != 0 || err != nil {
+		return nil, errors.New("failed to retrieve unstaged files")
+	}
 	if len(out) != 0 {
-		// Strip the trailing \n.
-		return strings.Split(out[:len(out)-1], "\n"), err
+		return strings.Split(out, "\n"), err
 	}
 	return nil, err
 }
@@ -103,14 +107,14 @@ func (g *git) Stash() (bool, error) {
 		// No need to stash, there's no unstaged files.
 		return false, nil
 	}
-	oldStash, _, _ := g.capture("rev-parse", "-q", "--verify", "refs/stash")
-	if out, e, err := g.capture("stash", "save", "-q", "--keep-index"); e != 0 || err != nil {
+	oldStash, _, _ := g.capture(nil, "rev-parse", "-q", "--verify", "refs/stash")
+	if out, e, err := g.capture(nil, "stash", "save", "-q", "--keep-index"); e != 0 || err != nil {
 		if g.HEAD() == initialCommit {
 			return false, errors.New("Can't stash until there's at least one commit")
 		}
 		return false, fmt.Errorf("failed to stash:\n%s", out)
 	}
-	newStash, e, err := g.capture("rev-parse", "-q", "--verify", "refs/stash")
+	newStash, e, err := g.capture(nil, "rev-parse", "-q", "--verify", "refs/stash")
 	if e != 0 || err != nil {
 		return false, fmt.Errorf("failed to parse stash: %s\n%s", err, newStash)
 	}
@@ -118,20 +122,21 @@ func (g *git) Stash() (bool, error) {
 }
 
 func (g *git) Restore() error {
-	if out, e, err := g.capture("reset", "--hard", "-q"); e != 0 || err != nil {
+	if out, e, err := g.capture(nil, "reset", "--hard", "-q"); e != 0 || err != nil {
 		return fmt.Errorf("git reset failed: %s\n%s", err, out)
 	}
-	if out, e, err := g.capture("stash", "apply", "--index", "-q"); e != 0 || err != nil {
+	if out, e, err := g.capture(nil, "stash", "apply", "--index", "-q"); e != 0 || err != nil {
 		return fmt.Errorf("stash reapplication failed: %s\n%s", err, out)
 	}
-	if out, e, err := g.capture("stash", "drop", "-q"); e != 0 || err != nil {
+	if out, e, err := g.capture(nil, "stash", "drop", "-q"); e != 0 || err != nil {
 		return fmt.Errorf("dropping temporary stash failed: %s\n%s", err, out)
 	}
 	return nil
 }
 
-func (g *git) capture(args ...string) (string, int, error) {
-	return internal.CaptureWd(g.root, append([]string{"git"}, args...)...)
+func (g *git) capture(env []string, args ...string) (string, int, error) {
+	out, code, err := internal.Capture(g.root, env, append([]string{"git"}, args...)...)
+	return strings.TrimRight(out, "\n\r"), code, err
 }
 
 // getGitDir returns the .git directory path.
@@ -145,7 +150,7 @@ func getGitDir(wd string) (string, error) {
 
 // captureAbs returns an absolute path of whatever a git command returned.
 func captureAbs(wd string, args ...string) (string, error) {
-	out, code, _ := internal.CaptureWd(wd, args...)
+	out, code, _ := internal.Capture(wd, nil, args...)
 	if code != 0 {
 		return "", fmt.Errorf("failed to run \"%s\"", strings.Join(args, " "))
 	}

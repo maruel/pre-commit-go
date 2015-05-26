@@ -39,7 +39,7 @@ type CheckPrerequisite struct {
 }
 
 func (c *CheckPrerequisite) IsPresent() bool {
-	_, exitCode, _ := internal.Capture(c.HelpCommand...)
+	_, exitCode, _ := internal.Capture("", nil, c.HelpCommand...)
 	return exitCode == c.ExpectedExitCode
 }
 
@@ -104,7 +104,7 @@ func (b *Build) Run() error {
 	args := []string{"go", "build"}
 	args = append(args, b.ExtraArgs...)
 	args = append(args, "./...")
-	out, _, err := internal.Capture(args...)
+	out, _, err := internal.Capture("", nil, args...)
 	if len(out) != 0 {
 		return fmt.Errorf("%s failed: %s", strings.Join(args, " "), out)
 	}
@@ -138,7 +138,7 @@ func (g *Gofmt) ResetDefault() {
 
 func (g *Gofmt) Run() error {
 	// gofmt doesn't return non-zero even if some files need to be updated.
-	out, _, err := internal.Capture("gofmt", "-l", "-s", ".")
+	out, _, err := internal.Capture("", nil, "gofmt", "-l", "-s", ".")
 	if len(out) != 0 {
 		return fmt.Errorf("these files are improperly formmatted, please run: gofmt -w -s .\n%s", out)
 	}
@@ -194,7 +194,7 @@ func (t *Test) Run() error {
 			args := []string{"go", "test"}
 			args = append(args, t.ExtraArgs...)
 			args = append(args, rel)
-			out, exitCode, _ := internal.Capture(args...)
+			out, exitCode, _ := internal.Capture("", nil, args...)
 			if exitCode != 0 {
 				errs <- fmt.Errorf("%s failed:\n%s", strings.Join(args, " "), out)
 			}
@@ -248,7 +248,7 @@ func (e *Errcheck) Run() error {
 		}
 		args = append(args, rel)
 	}
-	out, _, err := internal.Capture(args...)
+	out, _, err := internal.Capture("", nil, args...)
 	if len(out) != 0 {
 		return fmt.Errorf("%s failed:\n%s", strings.Join(args, " "), out)
 	}
@@ -281,7 +281,7 @@ func (g *Goimports) ResetDefault() {
 
 func (g *Goimports) Run() error {
 	// goimports doesn't return non-zero even if some files need to be updated.
-	out, _, err := internal.Capture("goimports", "-l", ".")
+	out, _, err := internal.Capture("", nil, "goimports", "-l", ".")
 	if len(out) != 0 {
 		return fmt.Errorf("these files are improperly formmatted, please run: goimports -w .\n%s", out)
 	}
@@ -320,7 +320,7 @@ func (g *Golint) ResetDefault() {
 
 func (g *Golint) Run() error {
 	// golint doesn't return non-zero ever.
-	out, _, _ := internal.Capture("golint", "./...")
+	out, _, _ := internal.Capture("", nil, "golint", "./...")
 	result := []string{}
 	for _, line := range strings.Split(string(out), "\n") {
 		for _, b := range g.Blacklist {
@@ -365,7 +365,7 @@ func (g *Govet) ResetDefault() {
 
 func (g *Govet) Run() error {
 	// Ignore the return code since we ignore many errors.
-	out, _, _ := internal.Capture("go", "tool", "vet", "-all", ".")
+	out, _, _ := internal.Capture("", nil, "go", "tool", "vet", "-all", ".")
 	result := []string{}
 	for _, line := range strings.Split(string(out), "\n") {
 		for _, b := range g.Blacklist {
@@ -450,7 +450,7 @@ func (t *TestCoverage) Run() (err error) {
 		return err2
 	}
 	defer func() {
-		err2 := os.RemoveAll(tmpDir)
+		err2 := internal.RemoveAll(tmpDir)
 		if err == nil {
 			err = err2
 		}
@@ -473,7 +473,7 @@ func (t *TestCoverage) Run() (err error) {
 				"go", "test", "-v", "-covermode=count", "-coverpkg", coverPkg,
 				"-coverprofile", filepath.Join(tmpDir, fmt.Sprintf("test%d.cov", index)),
 			}
-			out, exitCode, _ := internal.CaptureWd(testDir, args...)
+			out, exitCode, _ := internal.Capture(testDir, nil, args...)
 			if exitCode != 0 {
 				errs <- fmt.Errorf("%s %s failed:\n%s", strings.Join(args, " "), testDir, out)
 			}
@@ -536,7 +536,7 @@ func (t *TestCoverage) Run() (err error) {
 	f.Close()
 
 	// Analyze the results.
-	out, _, err2 := internal.Capture("go", "tool", "cover", "-func", profilePath)
+	out, _, err2 := internal.Capture("", nil, "go", "tool", "cover", "-func", profilePath)
 	type fn struct {
 		loc  string
 		name string
@@ -585,7 +585,7 @@ func (t *TestCoverage) Run() (err error) {
 	// Sends to coveralls.io if applicable.
 	if len(os.Getenv("TRAVIS_JOB_ID")) != 0 {
 		// Make sure to have registered to https://coveralls.io first!
-		out, _, err3 := internal.Capture("goveralls", "-coverprofile", profilePath)
+		out, _, err3 := internal.Capture("", nil, "goveralls", "-coverprofile", profilePath)
 		fmt.Printf("%s", out)
 		if err2 == nil {
 			err2 = err3
@@ -631,7 +631,7 @@ func (c *CustomCheck) ResetDefault() {
 }
 
 func (c *CustomCheck) Run() error {
-	out, exitCode, err := internal.Capture(c.Command...)
+	out, exitCode, err := internal.Capture("", nil, c.Command...)
 	if exitCode != 0 && c.CheckExitCode {
 		return fmt.Errorf("%d failed:\n%s", strings.Join(c.Command, " "), out)
 	}
