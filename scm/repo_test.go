@@ -24,7 +24,7 @@ func init() {
 	for _, item := range os.Environ() {
 		if strings.HasPrefix(item, "GIT_") {
 			items := strings.SplitN(item, "=", 2)
-			os.Unsetenv(items[0])
+			_ = os.Unsetenv(items[0])
 		}
 	}
 }
