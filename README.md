@@ -16,6 +16,7 @@ concurrently.
                     govet, etc as applicable for the enabled checks
       installrun  - runs 'prereq', 'install' then 'run'
       run         - runs all enabled checks
+      version     - print the tool version number
       writeconfig - writes (or rewrite) a pre-commit-go.yml
 
     When executed without command, it does the equivalent of 'installrun'.
