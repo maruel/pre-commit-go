@@ -48,7 +48,7 @@ func TestConfigNew(t *testing.T) {
 	ut.AssertEqual(t, 3, len(config.Checks[RunLevel(1)].All))
 	ut.AssertEqual(t, 3, len(config.Checks[RunLevel(2)].All))
 	ut.AssertEqual(t, 2, len(config.Checks[RunLevel(3)].All))
-	for _, check := range config.AllChecks() {
+	for _, check := range config.EnabledChecks(3) {
 		ut.AssertEqual(t, true, check.GetDescription() != "")
 	}
 }

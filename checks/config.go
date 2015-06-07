@@ -157,17 +157,6 @@ func GetConfig(pathname string) *Config {
 	return config
 }
 
-// AllChecks returns all the checks.
-func (c *Config) AllChecks() []Check {
-	out := []Check{}
-	for _, list := range c.Checks {
-		for _, c := range list.All {
-			out = append(out, c)
-		}
-	}
-	return out
-}
-
 // EnabledChecks returns all the checks enabled at this run level.
 func (c *Config) EnabledChecks(r RunLevel) []Check {
 	out := []Check{}
