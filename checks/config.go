@@ -100,30 +100,40 @@ func (c *Checks) UnmarshalYAML(unmarshal func(interface{}) error) error {
 }
 
 func New() *Config {
-	config := &Config{
+	return &Config{
 		Version:     1,
 		MaxDuration: 120,
-		Checks:      map[RunLevel]Checks{},
+		Checks: map[RunLevel]Checks{
+			RunLevel(0): {[]Check{}},
+			RunLevel(1): {[]Check{
+				&Build{
+					ExtraArgs: []string{},
+				},
+				&Gofmt{},
+				&Test{
+					ExtraArgs: []string{"-v", "-race"},
+				},
+			}},
+			RunLevel(2): {[]Check{
+				&Errcheck{
+					// "Close|Write.*|Flush|Seek|Read.*"
+					Ignores: "Close",
+				},
+				&Goimports{},
+				&TestCoverage{
+					MinimumCoverage: 20.,
+				},
+			}},
+			RunLevel(3): {[]Check{
+				&Golint{
+					Blacklist: []string{},
+				},
+				&Govet{
+					Blacklist: []string{" composite literal uses unkeyed fields"},
+				},
+			}},
+		},
 	}
-	config.Checks[RunLevel(0)] = Checks{[]Check{}}
-	config.Checks[RunLevel(1)] = Checks{[]Check{
-		&Build{},
-		&Gofmt{},
-		&Test{},
-	}}
-	config.Checks[RunLevel(2)] = Checks{[]Check{
-		&Errcheck{},
-		&Goimports{},
-		&TestCoverage{},
-	}}
-	config.Checks[RunLevel(3)] = Checks{[]Check{
-		&Golint{},
-		&Govet{},
-	}}
-	for _, c := range config.AllChecks() {
-		c.ResetDefault()
-	}
-	return config
 }
 
 // GetConfig returns a Config with defaults set then loads the config from file

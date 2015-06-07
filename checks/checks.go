@@ -52,8 +52,6 @@ type Check interface {
 	// GetPrerequisites lists all the go packages to be installed before running
 	// this check.
 	GetPrerequisites() []CheckPrerequisite
-	// ResetDefault resets the check to its default values.
-	ResetDefault()
 	// Run executes the check.
 	Run() error
 }
@@ -81,10 +79,6 @@ func (b *Build) GetName() string {
 
 func (b *Build) GetPrerequisites() []CheckPrerequisite {
 	return nil
-}
-
-func (b *Build) ResetDefault() {
-	b.ExtraArgs = []string{}
 }
 
 func (b *Build) Lock() {
@@ -133,9 +127,6 @@ func (g *Gofmt) GetPrerequisites() []CheckPrerequisite {
 	return nil
 }
 
-func (g *Gofmt) ResetDefault() {
-}
-
 func (g *Gofmt) Run() error {
 	// gofmt doesn't return non-zero even if some files need to be updated.
 	out, _, err := internal.Capture("", nil, "gofmt", "-l", "-s", ".")
@@ -169,10 +160,6 @@ func (t *Test) GetName() string {
 
 func (t *Test) GetPrerequisites() []CheckPrerequisite {
 	return nil
-}
-
-func (t *Test) ResetDefault() {
-	t.ExtraArgs = []string{"-v", "-race"}
 }
 
 func (t *Test) Run() error {
@@ -232,11 +219,6 @@ func (e *Errcheck) GetPrerequisites() []CheckPrerequisite {
 	}
 }
 
-func (e *Errcheck) ResetDefault() {
-	// "Close|Write.*|Flush|Seek|Read.*"
-	e.Ignores = "Close"
-}
-
 func (e *Errcheck) Run() error {
 	dirs := goDirs(sourceDirs)
 	args := make([]string, 0, len(dirs)+2)
@@ -276,9 +258,6 @@ func (g *Goimports) GetPrerequisites() []CheckPrerequisite {
 	}
 }
 
-func (g *Goimports) ResetDefault() {
-}
-
 func (g *Goimports) Run() error {
 	// goimports doesn't return non-zero even if some files need to be updated.
 	out, _, err := internal.Capture("", nil, "goimports", "-l", ".")
@@ -312,10 +291,6 @@ func (g *Golint) GetPrerequisites() []CheckPrerequisite {
 	return []CheckPrerequisite{
 		{[]string{"golint", "-h"}, 2, "github.com/golang/lint/golint"},
 	}
-}
-
-func (g *Golint) ResetDefault() {
-	g.Blacklist = []string{}
 }
 
 func (g *Golint) Run() error {
@@ -357,10 +332,6 @@ func (g *Govet) GetPrerequisites() []CheckPrerequisite {
 	return []CheckPrerequisite{
 		{[]string{"go", "tool", "vet", "-h"}, 1, "golang.org/x/tools/cmd/vet"},
 	}
-}
-
-func (g *Govet) ResetDefault() {
-	g.Blacklist = []string{" composite literal uses unkeyed fields"}
 }
 
 func (g *Govet) Run() error {
@@ -413,10 +384,6 @@ func (t *TestCoverage) GetPrerequisites() []CheckPrerequisite {
 		toInstall = append(toInstall, CheckPrerequisite{[]string{"goveralls", "-h"}, 2, "github.com/mattn/goveralls"})
 	}
 	return toInstall
-}
-
-func (t *TestCoverage) ResetDefault() {
-	t.MinimumCoverage = 20.
 }
 
 func (t *TestCoverage) Run() (err error) {
@@ -624,10 +591,6 @@ func (c *CustomCheck) GetName() string {
 
 func (c *CustomCheck) GetPrerequisites() []CheckPrerequisite {
 	return c.Prerequisites
-}
-
-func (c *CustomCheck) ResetDefault() {
-	// There's no default for a custom check.
 }
 
 func (c *CustomCheck) Run() error {
