@@ -42,6 +42,24 @@ type Config struct {
 	Checks      map[RunLevel]Checks `yaml:"checks"`       // Checks per run level.
 }
 
+func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	data := &struct {
+		Version     int                 `yaml:"version"`
+		MaxDuration int                 `yaml:"max_duration"`
+		Checks      map[RunLevel]Checks `yaml:"checks"`
+	}{}
+	if err := unmarshal(data); err != nil {
+		return err
+	}
+	if data.Version != currentVersion {
+		return fmt.Errorf("unexpected version %d, expected %d", data.Version, currentVersion)
+	}
+	c.Version = data.Version
+	c.MaxDuration = data.MaxDuration
+	c.Checks = data.Checks
+	return nil
+}
+
 // Checks exists purely to manage YAML serialization.
 type Checks struct {
 	All []Check
@@ -101,7 +119,7 @@ func (c *Checks) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 func New() *Config {
 	return &Config{
-		Version:     1,
+		Version:     currentVersion,
 		MaxDuration: 120,
 		Checks: map[RunLevel]Checks{
 			RunLevel(0): {[]Check{}},
@@ -147,11 +165,6 @@ func GetConfig(pathname string) *Config {
 			// Log but ignore the error, recreate a new config instance.
 			log.Printf("failed to parse %s: %s", pathname, err2)
 			config = New()
-		} else {
-			if config.Version != 1 {
-				log.Printf("Unsupported config version")
-				config = New()
-			}
 		}
 	}
 	return config
@@ -167,3 +180,7 @@ func (c *Config) EnabledChecks(r RunLevel) []Check {
 	}
 	return out
 }
+
+// Private stuff.
+
+const currentVersion = 1

@@ -61,3 +61,9 @@ func TestConfigYAML(t *testing.T) {
 	ut.AssertEqual(t, nil, yaml.Unmarshal(data, actual))
 	ut.AssertEqual(t, config, actual)
 }
+
+func TestConfigVersion(t *testing.T) {
+	data, err := yaml.Marshal(&Config{Version: currentVersion - 1})
+	ut.AssertEqual(t, nil, err)
+	ut.AssertEqual(t, errors.New("unexpected version 0, expected 1"), yaml.Unmarshal(data, &Config{}))
+}
