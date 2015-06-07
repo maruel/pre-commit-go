@@ -77,6 +77,14 @@ Supported checks and their runlevel:
 No check ever modify any file.
 `))
 
+const yamlHeader = `# https://github.com/maruel/pre-commit-go configuration file to run checks
+# automatically on commit, on push and on continuous integration service after
+# a push or on merge of a pull request.
+#
+# See https://godoc.org/github.com/maruel/pre-commit-go/checks for more\n# information.
+
+`
+
 // Utils.
 
 func callRun(check checks.Check) (error, time.Duration) {
@@ -349,9 +357,7 @@ func cmdWriteConfig(repo scm.Repo, config *checks.Config, configPath string) err
 		return fmt.Errorf("internal error when marshaling config: %s", err)
 	}
 	_ = os.Remove(configPath)
-	out := []byte("# https://github.com/maruel/pre-commit-go configuration file to run checks\n# automatically on commit and pull requests.\n#\n# See https://godoc.org/github.com/maruel/pre-commit-go/checks for more\n# information.\n\n")
-	out = append(out, content...)
-	return ioutil.WriteFile(configPath, out, 0666)
+	return ioutil.WriteFile(configPath, append([]byte(yamlHeader), content...), 0666)
 }
 
 func mainImpl() error {
