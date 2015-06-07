@@ -86,6 +86,16 @@ func TestChecksFailure(t *testing.T) {
 	}
 }
 
+func TestChecks(t *testing.T) {
+	for _, name := range getKnownChecks() {
+		c := KnownChecks[name]
+		for _, p := range c.GetPrerequisites() {
+			ut.AssertEqual(t, true, p.IsPresent())
+		}
+		ut.AssertEqual(t, true, c.GetDescription() != "")
+	}
+}
+
 // Private stuff.
 
 // This set of files passes all the tests.
