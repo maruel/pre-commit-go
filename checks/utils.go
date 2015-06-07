@@ -16,6 +16,12 @@ import (
 	"sync"
 )
 
+// IsContinuousIntegration returns true if it thinks it's running on a CI
+// service.
+func IsContinuousIntegration() bool {
+	return len(os.Getenv("TRAVIS_JOB_ID")) != 0
+}
+
 // Globals
 
 var goDirsCacheLock sync.Mutex

@@ -380,7 +380,7 @@ func (t *TestCoverage) GetPrerequisites() []CheckPrerequisite {
 	toInstall := []CheckPrerequisite{
 		{[]string{"go", "tool", "cover", "-h"}, 1, "golang.org/x/tools/cmd/cover"},
 	}
-	if len(os.Getenv("TRAVIS_JOB_ID")) != 0 {
+	if IsContinuousIntegration() {
 		toInstall = append(toInstall, CheckPrerequisite{[]string{"goveralls", "-h"}, 2, "github.com/mattn/goveralls"})
 	}
 	return toInstall
@@ -550,7 +550,7 @@ func (t *TestCoverage) Run() (err error) {
 	}
 
 	// Sends to coveralls.io if applicable.
-	if len(os.Getenv("TRAVIS_JOB_ID")) != 0 {
+	if IsContinuousIntegration() {
 		// Make sure to have registered to https://coveralls.io first!
 		out, _, err3 := internal.Capture("", nil, "goveralls", "-coverprofile", profilePath)
 		fmt.Printf("%s", out)
