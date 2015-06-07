@@ -142,7 +142,7 @@ func setup(t *testing.T, td string, files map[string]string) (string, string) {
 	fooDir := filepath.Join(td, "src", "foo")
 	ut.AssertEqual(t, nil, os.MkdirAll(fooDir, 0700))
 	for f, c := range files {
-		ioutil.WriteFile(filepath.Join(fooDir, f), []byte(c), 0600)
+		ut.AssertEqual(t, nil, ioutil.WriteFile(filepath.Join(fooDir, f), []byte(c), 0600))
 	}
 	oldWd, err := os.Getwd()
 	ut.AssertEqual(t, nil, err)
