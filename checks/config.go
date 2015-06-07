@@ -48,7 +48,11 @@ type Checks struct {
 }
 
 func (c Checks) MarshalYAML() (interface{}, error) {
-	data, err := yaml.Marshal(c.All)
+	all := c.All
+	if all == nil {
+		all = []Check{}
+	}
+	data, err := yaml.Marshal(all)
 	if err != nil {
 		return nil, err
 	}
@@ -67,6 +71,7 @@ func (c *Checks) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	if err := unmarshal(&encoded); err != nil {
 		return err
 	}
+	c.All = []Check{}
 	for _, checkData := range encoded {
 		checkTypeNameRaw, ok := checkData["check_type"]
 		if !ok {

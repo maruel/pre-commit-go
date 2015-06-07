@@ -52,3 +52,12 @@ func TestConfigNew(t *testing.T) {
 		ut.AssertEqual(t, true, check.GetDescription() != "")
 	}
 }
+
+func TestConfigYAML(t *testing.T) {
+	config := New()
+	data, err := yaml.Marshal(config)
+	ut.AssertEqual(t, nil, err)
+	actual := &Config{}
+	ut.AssertEqual(t, nil, yaml.Unmarshal(data, actual))
+	ut.AssertEqual(t, config, actual)
+}
