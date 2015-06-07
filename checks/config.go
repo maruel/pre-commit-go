@@ -36,6 +36,34 @@ func (r *RunLevel) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return nil
 }
 
+// Category is one of the check type.
+type Category string
+
+const (
+	PreCommit             Category = "pre-commit"
+	PrePush               Category = "pre-push"
+	ContinuousIntegration Category = "continuous-integration"
+	Lint                  Category = "lint"
+)
+
+// AllCategories are all valid categories.
+var AllCategories = []Category{PreCommit, PrePush, ContinuousIntegration, Lint}
+
+func (c *Category) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	s := ""
+	if err := unmarshal(&s); err != nil {
+		return err
+	}
+	val := Category(s)
+	for _, known := range AllCategories {
+		if val == known {
+			*c = val
+			return nil
+		}
+	}
+	return fmt.Errorf("invalid category \"%s\"", *c)
+}
+
 type Config struct {
 	Version     int                 `yaml:"version"`      // Should be incremented when it's not compatible anymore.
 	MaxDuration int                 `yaml:"max_duration"` // In seconds.
