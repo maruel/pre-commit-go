@@ -81,7 +81,8 @@ const yamlHeader = `# https://github.com/maruel/pre-commit-go configuration file
 # automatically on commit, on push and on continuous integration service after
 # a push or on merge of a pull request.
 #
-# See https://godoc.org/github.com/maruel/pre-commit-go/checks for more\n# information.
+# See https://godoc.org/github.com/maruel/pre-commit-go/checks for more
+# information.
 
 `
 
