@@ -76,6 +76,7 @@ To bypass the pre-commit hook due to known breakage, use:
 
     git commit --no-verify
 
+or shorthand `-n`
 
 Travis & Coveralls integration
 ---------------------------------
