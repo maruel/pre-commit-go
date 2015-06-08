@@ -39,11 +39,7 @@ func TestGetRepoGitSlow(t *testing.T) {
 		}
 	}()
 
-	_, code, err := internal.Capture(tmpDir, nil, "git", "init")
-	ut.AssertEqual(t, 0, code)
-	ut.AssertEqual(t, nil, err)
-	run(t, tmpDir, nil, "config", "user.email", "nobody@localhost")
-	run(t, tmpDir, nil, "config", "user.name", "nobody")
+	setup(t, tmpDir)
 	repo, err := GetRepo(tmpDir)
 	ut.AssertEqual(t, nil, err)
 	ut.AssertEqual(t, tmpDir, repo.Root())
@@ -128,14 +124,11 @@ func TestGetRepoGitSlowFailures(t *testing.T) {
 		}
 	}()
 
-	_, code, err := internal.Capture(tmpDir, nil, "git", "init")
-	ut.AssertEqual(t, 0, code)
-	ut.AssertEqual(t, nil, err)
-	run(t, tmpDir, nil, "config", "user.email", "nobody@localhost")
-	run(t, tmpDir, nil, "config", "user.name", "nobody")
+	setup(t, tmpDir)
 	repo, err := GetRepo(tmpDir)
 	ut.AssertEqual(t, nil, err)
 	ut.AssertEqual(t, tmpDir, repo.Root())
+	// Remove the .git directory after calling GetRepo().
 	ut.AssertEqual(t, nil, internal.RemoveAll(filepath.Join(tmpDir, ".git")))
 
 	p, err := repo.HookPath()
@@ -168,6 +161,19 @@ func TestGetRepoGitSlowFailures(t *testing.T) {
 }
 
 // Private stuff.
+
+func setup(t *testing.T, tmpDir string) {
+	_, code, err := internal.Capture(tmpDir, nil, "git", "init")
+	ut.AssertEqual(t, 0, code)
+	ut.AssertEqual(t, nil, err)
+	// This is needed explicitly on drone.io. I can only assume they use a global
+	// template which inhibits the default branch name.
+	_, code, err = internal.Capture(tmpDir, nil, "git", "checkout", "-b", "master")
+	ut.AssertEqual(t, 0, code)
+	ut.AssertEqual(t, nil, err)
+	run(t, tmpDir, nil, "config", "user.email", "nobody@localhost")
+	run(t, tmpDir, nil, "config", "user.name", "nobody")
+}
 
 func check(t *testing.T, repo Repo, untracked []string, unstaged []string) {
 	actualUntracked, err := repo.Untracked()
