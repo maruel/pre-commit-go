@@ -486,9 +486,9 @@ func (c *coverage) Run(change scm.Change) (err error) {
 		// goveralls tries to be smart but we need to ensure it works for all
 		// services. Please send a pull request if it doesn't work for you.
 		out, _, err3 := internal.Capture("", nil, "goveralls", "-coverprofile", profilePath)
-		fmt.Printf("%s", out)
-		if err2 == nil {
-			err2 = err3
+		// Don't fail the build.
+		if err3 != nil {
+			fmt.Printf("%s", out)
 		}
 	}
 	return err2
