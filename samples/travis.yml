@@ -1,0 +1,16 @@
+# Copy this file into your project and name it ".travis.yml" to use
+# https://travis-ci.org.
+#
+# See https://github.com/maruel/pre-commit-go for more information.
+
+sudo: false
+language: go
+
+go:
+- tip
+
+before_install:
+- go get github.com/maruel/pre-commit-go
+
+script:
+- pre-commit-go
