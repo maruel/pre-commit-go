@@ -428,11 +428,6 @@ func mainImpl() error {
 		return err
 	}
 
-	// Make the config path relative to the current directory, not the git
-	// repository root.
-	if *configPath, err = filepath.Abs(*configPath); err != nil {
-		return err
-	}
 	cwd, err := os.Getwd()
 	if err != nil {
 		return err
@@ -444,7 +439,20 @@ func mainImpl() error {
 	if err := os.Chdir(repo.Root()); err != nil {
 		return err
 	}
-	config := checks.GetConfig(*configPath)
+
+	// Load the config.
+	var config *checks.Config
+	if filepath.IsAbs(*configPath) {
+		config = checks.LoadConfig(*configPath)
+	} else {
+		if config = checks.LoadConfig(filepath.Join(".git", *configPath)); config == nil {
+			config = checks.LoadConfig(*configPath)
+		}
+	}
+	if config == nil {
+		// Default config.
+		config := checks.New()
+	}
 
 	switch cmd {
 	case "help", "-help", "-h":

@@ -44,9 +44,23 @@ func (c *Category) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return fmt.Errorf("invalid category \"%s\"", *c)
 }
 
+// Config is the serialized form of pre-commit-go.yml.
 type Config struct {
 	Version int                           `yaml:"version"` // Should be incremented when it's not compatible anymore.
 	Modes   map[Category]CategorySettings `yaml:"modes"`   // Checks per category.
+}
+
+// EnabledChecks returns all the checks enabled.
+func (c *Config) EnabledChecks(categories []Category) ([]Check, int) {
+	max := 0
+	out := []Check{}
+	for _, category := range categories {
+		out = append(out, c.Modes[category].Checks...)
+		if c.Modes[category].MaxDuration > max {
+			max = c.Modes[category].MaxDuration
+		}
+	}
+	return out, max
 }
 
 func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
@@ -185,33 +199,20 @@ func New() *Config {
 	}
 }
 
-// GetConfig returns a Config with defaults set then loads the config from file
+// LoadConfig returns a Config with defaults set then loads the config from file
 // "pathname".
-func GetConfig(pathname string) *Config {
-	config := New()
-
+func LoadConfig(pathname string) *Config {
 	content, err := ioutil.ReadFile(pathname)
 	if err == nil {
-		if err2 := yaml.Unmarshal(content, config); err2 != nil {
-			// Log but ignore the error, recreate a new config instance.
-			log.Printf("failed to parse %s: %s", pathname, err2)
-			config = New()
-		}
+		return nil
+	}
+	config := &Config{Version: currentVersion}
+	if err2 := yaml.Unmarshal(content, config); err2 != nil {
+		// Log but ignore the error, recreate a new config instance.
+		log.Printf("failed to parse %s: %s", pathname, err2)
+		return nil
 	}
 	return config
-}
-
-// EnabledChecks returns all the checks enabled.
-func (c *Config) EnabledChecks(categories []Category) ([]Check, int) {
-	max := 0
-	out := []Check{}
-	for _, category := range categories {
-		out = append(out, c.Modes[category].Checks...)
-		if c.Modes[category].MaxDuration > max {
-			max = c.Modes[category].MaxDuration
-		}
-	}
-	return out, max
 }
 
 // Private stuff.

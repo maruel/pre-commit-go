@@ -22,7 +22,8 @@ Modes
 
 Default checks are meant to be sensible but it can be configured by adding a
 [pre-commit-go.yml](https://github.com/maruel/pre-commit-go/blob/master/pre-commit-go.yml)
-in your git checkout root directory.
+in your git checkout root directory. If you don't want to pollute your git
+repository with yml files, put it at `.git/pre-commit-go.yml`.
 
 
 Checks
