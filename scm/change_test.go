@@ -38,10 +38,11 @@ func TestGoDirs(t *testing.T) {
 	if isCircleCI() {
 		t.Skipf("Give up on circleci, it's using symlinks to ~/.go_project/src which confused the assertions below")
 	}
+	t.Parallel()
 	scmDir, err := os.Getwd()
 	ut.AssertEqual(t, nil, err)
 	repo, err := GetRepo(scmDir)
-	ut.AssertEqual(t, nil, err)
+	ut.AssertEqualf(t, nil, err, "%s: %s", scmDir, err)
 	change := repo.All().(*change)
 	preCommitGoDir := filepath.Dir(scmDir)
 	defer func() {

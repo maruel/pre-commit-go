@@ -537,7 +537,7 @@ func (c *custom) GetPrerequisites() []definitions.CheckPrerequisite {
 func (c *custom) Run(change scm.Change) error {
 	out, exitCode, err := internal.Capture("", nil, c.Command...)
 	if exitCode != 0 && c.CheckExitCode {
-		return fmt.Errorf("\"%s\" failed:\n%s", strings.Join(c.Command, " "), out)
+		return fmt.Errorf("\"%s\" failed with code %d:\n%s", strings.Join(c.Command, " "), exitCode, out)
 	}
 	return err
 }
