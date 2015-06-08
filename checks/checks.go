@@ -596,7 +596,7 @@ func (c *CustomCheck) GetPrerequisites() []CheckPrerequisite {
 func (c *CustomCheck) Run() error {
 	out, exitCode, err := internal.Capture("", nil, c.Command...)
 	if exitCode != 0 && c.CheckExitCode {
-		return fmt.Errorf("%d failed:\n%s", strings.Join(c.Command, " "), out)
+		return fmt.Errorf("\"%s\" failed:\n%s", strings.Join(c.Command, " "), out)
 	}
 	return err
 }
