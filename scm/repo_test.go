@@ -39,7 +39,8 @@ func TestGetRepoGitSlow(t *testing.T) {
 		}
 	}()
 
-	_, _, err = internal.Capture(tmpDir, nil, "git", "init")
+	_, code, err := internal.Capture(tmpDir, nil, "git", "init")
+	ut.AssertEqual(t, 0, code)
 	ut.AssertEqual(t, nil, err)
 	run(t, tmpDir, nil, "config", "user.email", "nobody@localhost")
 	run(t, tmpDir, nil, "config", "user.name", "nobody")
@@ -127,7 +128,8 @@ func TestGetRepoGitSlowFailures(t *testing.T) {
 		}
 	}()
 
-	_, _, err = internal.Capture(tmpDir, nil, "git", "init")
+	_, code, err := internal.Capture(tmpDir, nil, "git", "init")
+	ut.AssertEqual(t, 0, code)
 	ut.AssertEqual(t, nil, err)
 	run(t, tmpDir, nil, "config", "user.email", "nobody@localhost")
 	run(t, tmpDir, nil, "config", "user.name", "nobody")

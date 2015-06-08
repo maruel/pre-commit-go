@@ -133,7 +133,7 @@ github organizations.
       host provider) to Drone. Enable your repository.
    2. At page "Setup your Build Script", put:
 
-   go -t -v get ./...
+   go get -d -t ./...
    go get github.com/maruel/pre-commit-go
    pre-commit-go
 
