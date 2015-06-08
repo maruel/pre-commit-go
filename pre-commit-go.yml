@@ -13,7 +13,7 @@ modes:
       extra_args: []
     - check_type: gofmt
     - check_type: goimports
-    - check_type: testcoverage
+    - check_type: coverage
       minimum_coverage: 60
     - check_type: test
       extra_args:
@@ -45,6 +45,8 @@ modes:
     max_duration: 15
   pre-commit:
     checks:
+    - check_type: build
+      extra_args: []
     - check_type: gofmt
     - check_type: test
       extra_args:
@@ -52,10 +54,8 @@ modes:
     max_duration: 5
   pre-push:
     checks:
-    - check_type: build
-      extra_args: []
     - check_type: goimports
-    - check_type: testcoverage
+    - check_type: coverage
       minimum_coverage: 60
     - check_type: test
       extra_args:
