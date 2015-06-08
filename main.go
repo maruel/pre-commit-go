@@ -451,7 +451,7 @@ func mainImpl() error {
 	}
 	if config == nil {
 		// Default config.
-		config := checks.New()
+		config = checks.New()
 	}
 
 	switch cmd {
