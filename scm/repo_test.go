@@ -47,7 +47,14 @@ func TestGetRepoGitSlow(t *testing.T) {
 	ut.AssertEqual(t, nil, err)
 	ut.AssertEqual(t, filepath.Join(tmpDir, ".git", "hooks"), p)
 	ut.AssertEqual(t, GitInitialCommit, repo.HEAD())
-	ut.AssertEqual(t, errors.New("checkout failed:\nfatal: Cannot switch branch to a non-commit '4b825dc642cb6eb9a060e54bf8d69288fbee4904'"), repo.Checkout(GitInitialCommit))
+	err = repo.Checkout(GitInitialCommit)
+	base := "checkout failed:\nfatal: Cannot switch branch to a non-commit"
+	if os.Getenv("DRONE") == "true" {
+		// #thanksdrone
+		ut.AssertEqual(t, errors.New(base+"."), err)
+	} else {
+		ut.AssertEqual(t, errors.New(base+" '4b825dc642cb6eb9a060e54bf8d69288fbee4904'"), err)
+	}
 
 	untracked, err := repo.Untracked()
 	ut.AssertEqual(t, nil, err)

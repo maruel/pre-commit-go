@@ -406,6 +406,7 @@ func cmdInstall(repo scm.Repo, config *checks.Config, modes []checks.Mode) error
 		log.Printf("Running under CI; not installing hooks")
 		return nil
 	}
+	log.Printf("Installing hooks")
 	hookDir, err := repo.HookPath()
 	if err != nil {
 		return err
