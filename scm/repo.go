@@ -18,8 +18,10 @@ import (
 // GitInitialCommit is the root invisible commit.
 const GitInitialCommit = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 
-// Repo represents a source control management checkout.
-type Repo interface {
+// ReadOnlyRepo represents a source control managemed checkout.
+//
+// ReadOnlyRepo exposes no function that would modify the state of the checkout.
+type ReadOnlyRepo interface {
 	// Root returns the root directory of this repository.
 	Root() string
 	// HookPath returns the directory containing the commit and push hooks.
@@ -32,6 +34,16 @@ type Repo interface {
 	Untracked() ([]string, error)
 	// Unstaged returns the list with changes not in the staging index.
 	Unstaged() ([]string, error)
+	// All returns a change with everything in it.
+	All() Change
+}
+
+// Repo represents a source control managed checkout.
+//
+// It is possible to modify this repository with the functions exposed by this
+// interface.
+type Repo interface {
+	ReadOnlyRepo
 	// Stash stashes the content that is not in the index.
 	Stash() (bool, error)
 	// Stash restores the stash generated from Stash.
@@ -50,7 +62,7 @@ func GetRepo(wd string) (Repo, error) {
 	return nil, fmt.Errorf("failed to find git checkout root")
 }
 
-/// Private details.
+// Private details.
 
 var reCommit = regexp.MustCompile("^[0-9a-f]{40}$")
 
@@ -108,6 +120,10 @@ func (g *git) Unstaged() ([]string, error) {
 		return strings.Split(out, "\n"), err
 	}
 	return nil, err
+}
+
+func (g *git) All() Change {
+	return &change{repo: g}
 }
 
 func (g *git) Stash() (bool, error) {

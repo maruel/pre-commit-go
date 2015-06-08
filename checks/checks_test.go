@@ -11,6 +11,8 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/maruel/pre-commit-go/internal"
+	"github.com/maruel/pre-commit-go/scm"
 	"github.com/maruel/ut"
 )
 
@@ -19,9 +21,6 @@ func TestSuccess(t *testing.T) {
 	if testing.Short() {
 		t.SkipNow()
 	}
-	defer func() {
-		goDirsCache = nil
-	}()
 	td, err := ioutil.TempDir("", "pre-commit-go")
 	ut.AssertEqual(t, nil, err)
 	defer func() {
@@ -29,7 +28,7 @@ func TestSuccess(t *testing.T) {
 			t.Fail()
 		}
 	}()
-	oldWd, _ := setup(t, td, goodFiles)
+	oldWd, change := setup(t, td, goodFiles)
 	defer func() {
 		ut.ExpectEqual(t, nil, os.Chdir(oldWd))
 	}()
@@ -44,7 +43,7 @@ func TestSuccess(t *testing.T) {
 		if name == "custom" || name == "errcheck" {
 			continue
 		}
-		if err := c.Run(); err != nil {
+		if err := c.Run(change); err != nil {
 			t.Errorf("%s failed: %s", c.GetName(), err)
 		}
 	}
@@ -55,9 +54,6 @@ func TestChecksFailure(t *testing.T) {
 	if testing.Short() {
 		t.SkipNow()
 	}
-	defer func() {
-		goDirsCache = nil
-	}()
 	td, err := ioutil.TempDir("", "pre-commit-go")
 	ut.AssertEqual(t, nil, err)
 	defer func() {
@@ -65,7 +61,7 @@ func TestChecksFailure(t *testing.T) {
 			t.Fail()
 		}
 	}()
-	oldWd, _ := setup(t, td, badFiles)
+	oldWd, change := setup(t, td, badFiles)
 	defer func() {
 		ut.ExpectEqual(t, nil, os.Chdir(oldWd))
 	}()
@@ -80,7 +76,7 @@ func TestChecksFailure(t *testing.T) {
 		if name == "custom" || name == "golint" || name == "govet" {
 			continue
 		}
-		if err := c.Run(); err == nil {
+		if err := c.Run(change); err == nil {
 			t.Errorf("%s didn't fail but was expected to", c.GetName())
 		}
 	}
@@ -147,8 +143,7 @@ t.Fail()
 `,
 }
 
-func setup(t *testing.T, td string, files map[string]string) (string, string) {
-	goDirsCache = nil
+func setup(t *testing.T, td string, files map[string]string) (string, scm.Change) {
 	fooDir := filepath.Join(td, "src", "foo")
 	ut.AssertEqual(t, nil, os.MkdirAll(fooDir, 0700))
 	for f, c := range files {
@@ -157,7 +152,12 @@ func setup(t *testing.T, td string, files map[string]string) (string, string) {
 	oldWd, err := os.Getwd()
 	ut.AssertEqual(t, nil, err)
 	ut.AssertEqual(t, nil, os.Chdir(fooDir))
-	return oldWd, fooDir
+	_, code, err := internal.Capture(fooDir, nil, "git", "init")
+	ut.AssertEqual(t, 0, code)
+	ut.AssertEqual(t, nil, err)
+	repo, err := scm.GetRepo(fooDir)
+	ut.AssertEqual(t, nil, err)
+	return oldWd, repo.All()
 }
 
 func getKnownChecks() []string {

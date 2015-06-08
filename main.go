@@ -112,17 +112,17 @@ func loadConfig(pathname string) *checks.Config {
 	return config
 }
 
-func callRun(check checks.Check) (error, time.Duration) {
+func callRun(check checks.Check, change scm.Change) (error, time.Duration) {
 	if l, ok := check.(sync.Locker); ok {
 		l.Lock()
 		defer l.Unlock()
 	}
 	start := time.Now()
-	err := check.Run()
+	err := check.Run(change)
 	return err, time.Now().Sub(start)
 }
 
-func runChecks(config *checks.Config, modes []checks.Mode) error {
+func runChecks(config *checks.Config, change scm.Change, modes []checks.Mode) error {
 	// TODO(maruel): Run checks selectively based on the actual files modified.
 	// This should affect checks.goDirs() results by calculating all packages
 	// affected via the package import graphs.
@@ -136,7 +136,7 @@ func runChecks(config *checks.Config, modes []checks.Mode) error {
 		go func(check checks.Check) {
 			defer wg.Done()
 			log.Printf("%s...", check.GetName())
-			err, duration := callRun(check)
+			err, duration := callRun(check, change)
 			log.Printf("... %s in %1.2fs", check.GetName(), duration.Seconds())
 			if err != nil {
 				errs <- err
@@ -172,7 +172,7 @@ func runPreCommit(repo scm.Repo, config *checks.Config) error {
 		return err
 	}
 	// Run the checks.
-	err = runChecks(config, []checks.Mode{checks.PreCommit})
+	err = runChecks(config, repo.All(), []checks.Mode{checks.PreCommit})
 
 	// If stashed is false, everything was in the index so no stashing was needed.
 	if stashed {
@@ -237,7 +237,7 @@ func runPrePush(repo scm.Repo, config *checks.Config) (err error) {
 			from = scm.GitInitialCommit
 		}
 		// TODO(maruel): Relative [from,to].
-		err = runChecks(config, []checks.Mode{checks.PrePush})
+		err = runChecks(config, repo.All(), []checks.Mode{checks.PrePush})
 	}
 	if err == io.EOF {
 		err = nil
@@ -418,7 +418,7 @@ func cmdInstall(repo scm.Repo, config *checks.Config, modes []checks.Mode) error
 
 // cmdRun runs all the enabled checks.
 func cmdRun(repo scm.Repo, config *checks.Config, modes []checks.Mode) error {
-	return runChecks(config, modes)
+	return runChecks(config, repo.All(), modes)
 }
 
 // cmdRunHook runs the checks in a git repository.
@@ -434,7 +434,7 @@ func cmdRunHook(repo scm.Repo, config *checks.Config, mode string) error {
 		return runPrePush(repo, config)
 
 	case checks.ContinuousIntegration:
-		return runChecks(config, []checks.Mode{checks.ContinuousIntegration})
+		return runChecks(config, repo.All(), []checks.Mode{checks.ContinuousIntegration})
 
 	default:
 		return errors.New("unsupported hook type for run-hook")

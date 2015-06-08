@@ -20,6 +20,7 @@ import (
 
 	"github.com/maruel/pre-commit-go/checks/definitions"
 	"github.com/maruel/pre-commit-go/internal"
+	"github.com/maruel/pre-commit-go/scm"
 )
 
 // Checks are alias of the corresponding checks in package definitions. The
@@ -43,7 +44,7 @@ type Check interface {
 	// this check.
 	GetPrerequisites() []definitions.CheckPrerequisite
 	// Run executes the check.
-	Run() error
+	Run(change scm.Change) error
 }
 
 // Native checks.
@@ -70,7 +71,7 @@ func (b *build) Unlock() {
 	buildLock.Unlock()
 }
 
-func (b *build) Run() error {
+func (b *build) Run(change scm.Change) error {
 	// Cannot build concurrently since it leaves files in the tree.
 	// TODO(maruel): Build in a temporary directory to not leave junk in the tree
 	// with -o. On the other hand, ./... and -o foo are incompatible. But
@@ -103,7 +104,7 @@ func (g *gofmt) GetPrerequisites() []definitions.CheckPrerequisite {
 	return nil
 }
 
-func (g *gofmt) Run() error {
+func (g *gofmt) Run(change scm.Change) error {
 	// gofmt doesn't return non-zero even if some files need to be updated.
 	out, _, err := internal.Capture("", nil, "gofmt", "-l", "-s", ".")
 	if len(out) != 0 {
@@ -129,12 +130,12 @@ func (t *test) GetPrerequisites() []definitions.CheckPrerequisite {
 	return nil
 }
 
-func (t *test) Run() error {
+func (t *test) Run(change scm.Change) error {
 	// Add tests manually instead of using './...'. The reason is that it permits
 	// running all the tests concurrently, which saves a lot of time when there's
 	// many packages.
 	var wg sync.WaitGroup
-	tds := goDirs(testDirs)
+	tds := change.TestDirs()
 	errs := make(chan error, len(tds))
 	for _, td := range tds {
 		wg.Add(1)
@@ -179,8 +180,8 @@ func (e *errcheck) GetPrerequisites() []definitions.CheckPrerequisite {
 	}
 }
 
-func (e *errcheck) Run() error {
-	dirs := goDirs(sourceDirs)
+func (e *errcheck) Run(change scm.Change) error {
+	dirs := change.SourceDirs()
 	args := make([]string, 0, len(dirs)+2)
 	args = append(args, "errcheck", "-ignore", e.Ignores)
 	for _, d := range dirs {
@@ -216,7 +217,7 @@ func (g *goimports) GetPrerequisites() []definitions.CheckPrerequisite {
 	}
 }
 
-func (g *goimports) Run() error {
+func (g *goimports) Run(change scm.Change) error {
 	// goimports doesn't return non-zero even if some files need to be updated.
 	out, _, err := internal.Capture("", nil, "goimports", "-l", ".")
 	if len(out) != 0 {
@@ -244,7 +245,7 @@ func (g *golint) GetPrerequisites() []definitions.CheckPrerequisite {
 	}
 }
 
-func (g *golint) Run() error {
+func (g *golint) Run(change scm.Change) error {
 	// golint doesn't return non-zero ever.
 	out, _, _ := internal.Capture("", nil, "golint", "./...")
 	result := []string{}
@@ -278,7 +279,7 @@ func (g *govet) GetPrerequisites() []definitions.CheckPrerequisite {
 	}
 }
 
-func (g *govet) Run() error {
+func (g *govet) Run(change scm.Change) error {
 	// Ignore the return code since we ignore many errors.
 	out, _, _ := internal.Capture("", nil, "go", "tool", "vet", "-all", ".")
 	result := []string{}
@@ -316,7 +317,7 @@ func (c *coverage) GetPrerequisites() []definitions.CheckPrerequisite {
 	return toInstall
 }
 
-func (c *coverage) Run() (err error) {
+func (c *coverage) Run(change scm.Change) (err error) {
 	// TODO(maruel): Kept because we may have to revert to using broader
 	// instrumentation due to OS command line argument length limit.
 	//pkgRoot, _ := os.Getwd()
@@ -324,7 +325,7 @@ func (c *coverage) Run() (err error) {
 	//if err2 != nil {
 	//	return err2
 	//}
-	pds := goDirs(packageDirs)
+	pds := change.PackageDirs()
 	coverPkg := ""
 	for i, p := range pds {
 		if i != 0 {
@@ -337,7 +338,7 @@ func (c *coverage) Run() (err error) {
 		coverPkg += rel
 	}
 
-	tds := goDirs(testDirs)
+	tds := change.TestDirs()
 	if len(tds) == 0 {
 		return nil
 	}
@@ -510,7 +511,7 @@ func (c *custom) GetPrerequisites() []definitions.CheckPrerequisite {
 	return c.Prerequisites
 }
 
-func (c *custom) Run() error {
+func (c *custom) Run(change scm.Change) error {
 	out, exitCode, err := internal.Capture("", nil, c.Command...)
 	if exitCode != 0 && c.CheckExitCode {
 		return fmt.Errorf("\"%s\" failed:\n%s", strings.Join(c.Command, " "), out)
