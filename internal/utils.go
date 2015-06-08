@@ -5,7 +5,6 @@
 package internal
 
 import (
-	"log"
 	"os"
 	"os/exec"
 	"strings"
@@ -16,8 +15,13 @@ import (
 // and error if appropriate. It sets the environment variables specified.
 func Capture(wd string, env []string, args ...string) (string, int, error) {
 	exitCode := -1
-	log.Printf("Capture(%s, %s, %s)", wd, env, args)
-	c := exec.Command(args[0], args[1:]...)
+	//log.Printf("Capture(%s, %s, %s)", wd, env, args)
+	var c *exec.Cmd
+	if len(args) > 1 {
+		c = exec.Command(args[0], args[1:]...)
+	} else {
+		c = exec.Command(args[0])
+	}
 	if wd != "" {
 		c.Dir = wd
 	}
