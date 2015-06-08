@@ -15,7 +15,11 @@ import (
 // IsContinuousIntegration returns true if it thinks it's running on a known CI
 // service.
 func IsContinuousIntegration() bool {
-	return len(os.Getenv("TRAVIS_JOB_ID")) != 0
+	// Refs:
+	// - http://docs.travis-ci.com/user/environment-variables/
+	// - http://docs.drone.io/env.html
+	// - https://circleci.com/docs/environment-variables
+	return os.Getenv("CI") == "true"
 }
 
 // Globals

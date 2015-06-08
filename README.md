@@ -7,7 +7,11 @@ simple and *fast*. Everything is run concurrently. It also includes linting
 support and Continuous Integration service (CI) support. No check ever modify
 any file.
 
-[![Build Status](https://travis-ci.org/maruel/pre-commit-go.svg?branch=master)](https://travis-ci.org/maruel/pre-commit-go)
+Travis: [![Build Status](https://travis-ci.org/maruel/pre-commit-go.svg?branch=master)](https://travis-ci.org/maruel/pre-commit-go)
+
+Done: [![Build Status](https://drone.io/github.com/maruel/pre-commit-go/status.png)](https://drone.io/github.com/maruel/pre-commit-go/latest)
+
+CircleCI: [![Build Status](https://circleci.com/gh/maruel/pre-commit-go.svg?style=shield&circle-token=:circle-token)](https://circleci.com/gh/maruel/pre-commit-go)
 
 
 Usage
@@ -121,12 +125,38 @@ github organizations.
       as `.travis.yml` in your repository and push it.
 
 
+### drone.io
+
+*Unverified*
+
+   1. Visit https://drone.io and connect your github account (or whatever git
+      host provider) to Drone. Enable your repository.
+   2. At page "Setup your Build Script", put:
+
+   go -t -v get ./...
+   go get github.com/maruel/pre-commit-go
+   pre-commit-go
+
+
+### circleci
+
+*Unverified*
+
+   1. Visit https://circleci.com and enable your repository.
+   2. Click 'Project Settings', 'Dependency Commands' and type:
+
+   go get github.com/maruel/pre-commit-go
+
+   3. Click 'Test Commands' and type:
+
+   pre-commit-go
+
+
 ### coveralls.io
 
 Integrate with travis-ci first, then visit https://coveralls.io and enable your
-repository. That's all automatic.
+repository.
 
-
-### drone.io
-
-TODO(maruel): Add explanation.
+[goveralls](https://github.com/mattn/goveralls) doesn't detect drone.io job id
+automatically yet. Please send a Pull Request to fix this if this is your
+preferred setup.
