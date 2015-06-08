@@ -2,10 +2,7 @@
 // Use of this source code is governed under the Apache License, Version 2.0
 // that can be found in the LICENSE file.
 
-// Package checks defines pre-made checks and custom checks for pre-commit-go.
-//
-// Each of the struct in this files will be embedded into pre-commit-go.yml.
-// Use the comments here as a guidance to set the relevant values.
+// Package checks implements pre-made checks for pre-commit-go.
 package checks
 
 import (

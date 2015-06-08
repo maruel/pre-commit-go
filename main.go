@@ -3,6 +3,8 @@
 // that can be found in the LICENSE file.
 
 // pre-commit-go: runs pre-commit checks on Go projects.
+//
+// See https://github.com/maruel/pre-commit-go for more details.
 package main
 
 import (

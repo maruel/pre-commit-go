@@ -2,6 +2,11 @@
 // Use of this source code is governed under the Apache License, Version 2.0
 // that can be found in the LICENSE file.
 
+// Package internal contains internal code used by multiple packages within
+// pre-commit-go.
+//
+// It contains a reimplementation of os.Remove() that works even with files
+// with the read-only bit on Windows.
 package internal
 
 import (
