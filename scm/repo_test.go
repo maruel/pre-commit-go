@@ -52,7 +52,7 @@ func TestGetRepoGitSlow(t *testing.T) {
 	if isDrone() {
 		// #thanksdrone
 		ut.AssertEqual(t, errors.New(base+"."), err)
-		ut.AssertEqual(t, nil, repo.Checkout("master"))
+		run(t, tmpDir, nil, "checkout", "master")
 	} else {
 		ut.AssertEqual(t, errors.New(base+" '4b825dc642cb6eb9a060e54bf8d69288fbee4904'"), err)
 	}

@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -435,11 +436,8 @@ func (c *coverage) Run(change scm.Change) (err error) {
 
 	// Analyze the results.
 	out, _, err2 := internal.Capture("", nil, "go", "tool", "cover", "-func", profilePath)
-	type fn struct {
-		loc  string
-		name string
-	}
-	coverage := map[fn]float64{}
+	coverage := ordered{}
+	partial := 0
 	var total float64
 	for i, line := range strings.Split(out, "\n") {
 		if i == 0 || len(line) == 0 {
@@ -448,6 +446,9 @@ func (c *coverage) Run(change scm.Change) (err error) {
 		}
 		items := strings.SplitN(line, "\t", 2)
 		loc := items[0]
+		if strings.HasSuffix(loc, ":") {
+			loc = loc[:len(loc)-1]
+		}
 		if len(items) == 1 {
 			panic(fmt.Sprintf("%#v %#v", line, items))
 		}
@@ -458,20 +459,40 @@ func (c *coverage) Run(change scm.Change) (err error) {
 		if err2 != nil {
 			return fmt.Errorf("malformed coverage file")
 		}
-		if loc == "total:" {
+		if loc == "total" {
 			total = percent
 		} else {
-			coverage[fn{loc, name}] = percent
-		}
-	}
-	if total < c.MinimumCoverage {
-		partial := 0
-		for _, percent := range coverage {
+			coverage = append(coverage, covered{percent, loc, name})
 			if percent < 100. {
 				partial++
 			}
 		}
+	}
+	log.Printf("%d functions profiled", len(coverage))
+
+	// TODO(maruel): Calculate the sorted list only when -verbose is specified.
+	maxLoc := 0
+	maxName := 0
+	sort.Sort(coverage)
+	for _, item := range coverage {
+		if item.percent < 100. {
+			if l := len(item.loc); l > maxLoc {
+				maxLoc = l
+			}
+			if l := len(item.name); l > maxName {
+				maxName = l
+			}
+		}
+	}
+	for _, item := range coverage {
+		if item.percent < 100. {
+			log.Printf("%-*s %-*s %1.1f%%", maxLoc, item.loc, maxName, item.name, item.percent)
+		}
+	}
+	if total < c.MinimumCoverage {
 		err2 = fmt.Errorf("code coverage: %3.1f%%; %d untested functions", total, partial)
+	} else {
+		log.Printf("code coverage: %3.1f%%; %d untested functions", total, partial)
 	}
 	if err2 == nil {
 		select {
@@ -521,6 +542,8 @@ func (c *custom) Run(change scm.Change) error {
 	return err
 }
 
+// Rest.
+
 // KnownChecks is the map of all known checks per check name.
 var KnownChecks map[string]Check
 
@@ -544,4 +567,27 @@ func init() {
 		}
 		KnownChecks[name] = k
 	}
+}
+
+type ordered []covered
+
+func (o ordered) Len() int      { return len(o) }
+func (o ordered) Swap(i, j int) { o[i], o[j] = o[j], o[i] }
+func (o ordered) Less(i, j int) bool {
+	if o[i].percent > o[j].percent {
+		return true
+	}
+	if o[i].percent < o[j].percent {
+		return false
+	}
+	if o[i].loc < o[j].loc {
+		return true
+	}
+	return false
+}
+
+type covered struct {
+	percent float64
+	loc     string
+	name    string
 }
