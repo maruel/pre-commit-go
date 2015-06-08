@@ -1,102 +1,129 @@
-git pre-commit hook for Golang projects
-=======================================
+pre-commit-go
+=============
 
 `pre-commit-go` runs multiple checks on a Go project *on commit* via
-`pre-commit` git hook. It's designed to be simple and fast. Everything is run
-concurrently.
+`pre-commit` git hook and *on push* via `pre-push` git hook. It's designed to be
+simple and *fast*. Everything is run concurrently. It also includes linting
+support and Continuous Integration service (CI) support. No check ever modify
+any file.
 
-    $ ./pre-commit-go help
-    pre-commit-go: runs pre-commit checks on Go projects, fast.
-
-    Supported commands are:
-      help        - this page
-      install     - runs 'prereq' then installs the git commit hook as
-                    .git/hooks/pre-commit
-      prereq      - installs prerequisites, e.g.: errcheck, golint, goimports,
-                    govet, etc as applicable for the enabled checks
-      installrun  - runs 'prereq', 'install' then 'run'
-      run         - runs all enabled checks
-      version     - print the tool version number
-      writeconfig - writes (or rewrite) a pre-commit-go.yml
-
-    When executed without command, it does the equivalent of 'installrun'.
-    Supported flags are:
-      -config="pre-commit-go.yml": file name of the config to load
-      -level=1: runlevel, between 0 and 3; the higher, the more tests are run
-      -verbose=false: enables verbose logging output
-
-    Supported checks and their runlevel:
-      Native checks that only depends on the stdlib:
-        - build        1 : builds all packages that do not contain tests, usually all directories with package 'main'
-        - gofmt        1 : enforces all .go sources are formatted with 'gofmt -s'
-        - test         1 : runs all tests, potentially multiple times (with race detector, with different tags, etc)
-
-      Checks that have prerequisites (which will be automatically installed):
-        - errcheck     2 : enforces all calls returning an error are checked using tool 'errcheck'
-        - goimports    2 : enforces all .go sources are formatted with 'goimports'
-        - golint       3 : enforces all .go sources passes golint
-        - govet        3 : enforces all .go sources passes go tool vet
-        - testcoverage 2 : enforces minimum test coverage on all packages that are not 'main'
-
-    No check ever modify any file.
-
-Native checks:
-
-  * [go build](https://golang.org/pkg/go/build/) all directories with .go files found
-  * [go test](https://golang.org/pkg/testing/) by default with [race detector](https://blog.golang.org/race-detector)
-  * [gofmt](https://golang.org/cmd/gofmt/) and [goimports](https://godoc.org/code.google.com/p/go.tools/cmd/goimports) (redundant except for gofmt -s)
-  * [errcheck](https://github.com/kisielk/errcheck)
-  * [goimports](https://golang.org/x/tools/cmd/goimports)
-  * [golint](https://github.com/golang/lint)
-  * [govet (go tool vet)](https://golang.org/x/tools/cmd/vet)
-  * [go test -cover](https://golang.org/pkg/testing/) with [coverage](https://blog.golang.org/cover)
-
-Checks documentation: [![GoDoc](https://godoc.org/github.com/maruel/pre-commit-go/checks/definitions?status.svg)](https://godoc.org/github.com/maruel/pre-commit-go/checks/definitions)
 [![Build Status](https://travis-ci.org/maruel/pre-commit-go.svg?branch=master)](https://travis-ci.org/maruel/pre-commit-go)
 
+
+Modes
+-----
+
+`pre-commit-go` runs on 4 different modes:
+
+  * `pre-commit`: it's the fast tests, e.g. running go test -short
+  * `pre-push`: the slower checks but still bearable for interactive usage.
+  * `continuous-integration`: runs every checks, including the race detector.
+  * `lint`: are off-by-default checks.
+
+Default checks are meant to be sensible but it can be configured by adding a
+[pre-commit-go.yml](https://github.com/maruel/pre-commit-go/blob/master/pre-commit-go.yml)
+in your git checkout root directory.
+
+
+Checks
+------
+
+Checks documentation:
+[![GoDoc](https://godoc.org/github.com/maruel/pre-commit-go/checks/definitions?status.svg)](https://godoc.org/github.com/maruel/pre-commit-go/checks/definitions)
+
+
+### Native checks
+
+  * [go build](https://golang.org/pkg/go/build/) all directories with .go files
+    found
+  * [go test -race](https://golang.org/pkg/testing/) by default with [race
+    detector](https://blog.golang.org/race-detector)
+  * [go test -cover](https://golang.org/pkg/testing/) with
+    [coverage](https://blog.golang.org/cover)
+  * [gofmt](https://golang.org/cmd/gofmt/), especially for the -s flag.
+  * [goimports](https://golang.org/x/tools/cmd/goimports)
+  * [errcheck](https://github.com/kisielk/errcheck)
+  * [golint](https://github.com/golang/lint)
+  * [govet (go tool vet)](https://golang.org/x/tools/cmd/vet)
+
+
+### Custom check
+
+A custom check can be defined by adding a `custom` check in one of the modes.
+Here's an example running `sample-pre-commit-go-custom-check` on the tree in
+mode continuous-integration:
+
+```yaml
+modes:
+  continous-integration:
+    checks:
+    - check_type: custom
+      display_name: sample-pre-commit-go-custom-check
+      description: runs the check sample-pre-commit-go-custom-check on this repository
+      command:
+      - sample-pre-commit-go-custom-check
+      - check
+      check_exit_code: true
+      prerequisites:
+      - help_command:
+        - sample-pre-commit-go-custom-check
+        - -help
+        expected_exit_code: 2
+        url: github.com/maruel/pre-commit-go/samples/sample-pre-commit-go-custom-check
+```
+
+
+Usage
+-----
 
 ### Getting it
 
     go get github.com/maruel/pre-commit-go
 
-It's safe to update it via `go get -u github.com/maruel/pre-commit-go`. The
-hooks calls pre-commit-go in `$PATH`, which should contain your `$GOPATH/bin`.
 
+### Installing the git hooks and running checks
 
-### Installing the hook and running checks
-
-From within a git checkout inside `$GOPATH`:
+Run from within a git checkout inside `$GOPATH`:
 
     pre-commit-go
+
+Then use built-in help:
+
+    pre-commit-go help
 
 
 ### Bypassing hook
 
-To bypass the pre-commit hook due to known breakage, use:
+It may become necessary to commit something known to be broken. To bypass the
+pre-commit hook, use:
 
     git commit --no-verify
 
 or shorthand `-n`
 
-Travis & Coveralls integration
----------------------------------
 
-Post push CI (continuous integration) works with Travis and Coveralls. This
+Continous integration support
+-----------------------------
+
+### travis-ci.org
+
+Post push CI (continuous integration) works with Travis. This
 runs the checks on pull requests automatically! This also works with
 github organizations.
 
    1. Visit https://travis-ci.org and connect your github account (or whatever
       git host provider) to Travis. Enable your repository.
-   2. Do the same via https://coveralls.io.
-   3. Add a `.travis.yml` file to your repository and push it.
+   2. Copy
+      [sample/travis.yml](https://github.com/maruel/pre-commit-go/blob/master/sample/travis.yml)
+      as `.travis.yml` in your repository and push it.
 
-Sample `.travis.yml`:
 
-    sudo: false
-    language: go
-    go:
-    - 1.4
-    before_install:
-      - go get github.com/maruel/pre-commit-go
-    script:
-      - pre-commit-go installrun -level 2
+### coveralls.io
+
+Integrate with travis-ci first, then visit https://coveralls.io and enable your
+repository. That's all automatic.
+
+
+### drone.io
+
+TODO(maruel): Add explanation.

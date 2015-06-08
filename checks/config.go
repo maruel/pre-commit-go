@@ -16,26 +16,6 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-// RunLevel is between 0 and 3.
-//
-// [0, 3]. 0 is never, 3 is always. Default:
-//   - most checks that only require the stdlib have default RunLevel of 1
-//   - most checks that require third parties have default RunLevel of 2
-//   - checks that may trigger false positives have default RunLevel of 3
-type RunLevel int
-
-func (r *RunLevel) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	level := 0
-	if err := unmarshal(&level); err != nil {
-		return err
-	}
-	if level < 0 || level > 3 {
-		return fmt.Errorf("invalid runlevel %d", level)
-	}
-	*r = RunLevel(level)
-	return nil
-}
-
 // Category is one of the check type.
 type Category string
 
@@ -65,16 +45,14 @@ func (c *Category) UnmarshalYAML(unmarshal func(interface{}) error) error {
 }
 
 type Config struct {
-	Version     int                 `yaml:"version"`      // Should be incremented when it's not compatible anymore.
-	MaxDuration int                 `yaml:"max_duration"` // In seconds.
-	Checks      map[RunLevel]Checks `yaml:"checks"`       // Checks per run level.
+	Version int                           `yaml:"version"` // Should be incremented when it's not compatible anymore.
+	Modes   map[Category]CategorySettings `yaml:"modes"`   // Checks per category.
 }
 
 func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	data := &struct {
-		Version     int                 `yaml:"version"`
-		MaxDuration int                 `yaml:"max_duration"`
-		Checks      map[RunLevel]Checks `yaml:"checks"`
+		Version int                           `yaml:"version"`
+		Modes   map[Category]CategorySettings `yaml:"modes"`
 	}{}
 	if err := unmarshal(data); err != nil {
 		return err
@@ -83,22 +61,21 @@ func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 		return fmt.Errorf("unexpected version %d, expected %d", data.Version, currentVersion)
 	}
 	c.Version = data.Version
-	c.MaxDuration = data.MaxDuration
-	c.Checks = data.Checks
+	c.Modes = data.Modes
 	return nil
 }
 
-// Checks exists purely to manage YAML serialization.
-type Checks struct {
-	All []Check
+// CategorySettings is the settings used for a category.
+type CategorySettings struct {
+	Checks      Checks `yaml:"checks"`
+	MaxDuration int    `yaml:"max_duration"` // In seconds.
 }
 
+// Checks helps with Check serialization.
+type Checks []Check
+
 func (c Checks) MarshalYAML() (interface{}, error) {
-	all := c.All
-	if all == nil {
-		all = []Check{}
-	}
-	data, err := yaml.Marshal(all)
+	data, err := yaml.Marshal([]Check(c))
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +84,7 @@ func (c Checks) MarshalYAML() (interface{}, error) {
 		return nil, err
 	}
 	for i, item := range encoded {
-		item["check_type"] = c.All[i].GetName()
+		item["check_type"] = c[i].GetName()
 	}
 	return encoded, nil
 }
@@ -117,7 +94,6 @@ func (c *Checks) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	if err := unmarshal(&encoded); err != nil {
 		return err
 	}
-	c.All = []Check{}
 	for _, checkData := range encoded {
 		checkTypeNameRaw, ok := checkData["check_type"]
 		if !ok {
@@ -140,44 +116,71 @@ func (c *Checks) UnmarshalYAML(unmarshal func(interface{}) error) error {
 		if err = yaml.Unmarshal(rawCheckData, check); err != nil {
 			return err
 		}
-		c.All = append(c.All, check)
+		*c = append(*c, check)
 	}
 	return nil
 }
 
+// New returns a default initialized Config instance.
 func New() *Config {
 	return &Config{
-		Version:     currentVersion,
-		MaxDuration: 120,
-		Checks: map[RunLevel]Checks{
-			RunLevel(0): {[]Check{}},
-			RunLevel(1): {[]Check{
-				&build{
-					ExtraArgs: []string{},
+		Version: currentVersion,
+		Modes: map[Category]CategorySettings{
+			PreCommit: {
+				MaxDuration: 5,
+				Checks: Checks{
+					&gofmt{},
+					&test{
+						ExtraArgs: []string{"-short"},
+					},
 				},
-				&gofmt{},
-				&test{
-					ExtraArgs: []string{"-v", "-race"},
+			},
+			PrePush: {
+				MaxDuration: 15,
+				Checks: Checks{
+					&build{
+						ExtraArgs: []string{},
+					},
+					&goimports{},
+					&testCoverage{
+						MinimumCoverage: 60,
+					},
+					&test{
+						ExtraArgs: []string{"-v", "-race"},
+					},
 				},
-			}},
-			RunLevel(2): {[]Check{
-				&errcheck{
-					// "Close|Write.*|Flush|Seek|Read.*"
-					Ignores: "Close",
+			},
+			ContinuousIntegration: {
+				MaxDuration: 120,
+				Checks: Checks{
+					&build{
+						ExtraArgs: []string{},
+					},
+					&gofmt{},
+					&goimports{},
+					&testCoverage{
+						MinimumCoverage: 60,
+					},
+					&test{
+						ExtraArgs: []string{"-v", "-race"},
+					},
 				},
-				&goimports{},
-				&testCoverage{
-					MinimumCoverage: 20.,
+			},
+			Lint: {
+				MaxDuration: 15,
+				Checks: Checks{
+					&errcheck{
+						// "Close|Write.*|Flush|Seek|Read.*"
+						Ignores: "Close",
+					},
+					&golint{
+						Blacklist: []string{},
+					},
+					&govet{
+						Blacklist: []string{" composite literal uses unkeyed fields"},
+					},
 				},
-			}},
-			RunLevel(3): {[]Check{
-				&golint{
-					Blacklist: []string{},
-				},
-				&govet{
-					Blacklist: []string{" composite literal uses unkeyed fields"},
-				},
-			}},
+			},
 		},
 	}
 }
@@ -198,17 +201,19 @@ func GetConfig(pathname string) *Config {
 	return config
 }
 
-// EnabledChecks returns all the checks enabled at this run level.
-func (c *Config) EnabledChecks(r RunLevel) []Check {
+// EnabledChecks returns all the checks enabled.
+func (c *Config) EnabledChecks(categories []Category) ([]Check, int) {
+	max := 0
 	out := []Check{}
-	for i := RunLevel(0); i <= r; i++ {
-		for _, c := range c.Checks[i].All {
-			out = append(out, c)
+	for _, category := range categories {
+		out = append(out, c.Modes[category].Checks...)
+		if c.Modes[category].MaxDuration > max {
+			max = c.Modes[category].MaxDuration
 		}
 	}
-	return out
+	return out, max
 }
 
 // Private stuff.
 
-const currentVersion = 1
+const currentVersion = 2

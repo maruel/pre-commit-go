@@ -5,27 +5,60 @@
 # See https://godoc.org/github.com/maruel/pre-commit-go/checks for more
 # information.
 
-version: 1
-max_duration: 120
-checks:
-  0: []
-  1:
-  - check_type: build
-    extra_args: []
-  - check_type: gofmt
-  - check_type: test
-    extra_args:
-    - -v
-    - -race
-  2:
-  - check_type: errcheck
-    ignores: Close
-  - check_type: goimports
-  - check_type: testcoverage
-    minimum_coverage: 20
-  3:
-  - blacklist: []
-    check_type: golint
-  - blacklist:
-    - ' composite literal uses unkeyed fields'
-    check_type: govet
+version: 2
+modes:
+  continuous-integration:
+    checks:
+    - check_type: build
+      extra_args: []
+    - check_type: gofmt
+    - check_type: goimports
+    - check_type: testcoverage
+      minimum_coverage: 60
+    - check_type: test
+      extra_args:
+      - -v
+      - -race
+    - check_type: custom
+      display_name: sample-pre-commit-go-custom-check
+      description: runs the check sample-pre-commit-go-custom-check on this repository
+      command:
+      - sample-pre-commit-go-custom-check
+      - check
+      check_exit_code: true
+      prerequisites:
+      - help_command:
+        - sample-pre-commit-go-custom-check
+        - -help
+        expected_exit_code: 2
+        url: github.com/maruel/pre-commit-go/samples/sample-pre-commit-go-custom-check
+    max_duration: 120
+  lint:
+    checks:
+    - check_type: errcheck
+      ignores: Close
+    - blacklist: []
+      check_type: golint
+    - blacklist:
+      - ' composite literal uses unkeyed fields'
+      check_type: govet
+    max_duration: 15
+  pre-commit:
+    checks:
+    - check_type: gofmt
+    - check_type: test
+      extra_args:
+      - -short
+    max_duration: 5
+  pre-push:
+    checks:
+    - check_type: build
+      extra_args: []
+    - check_type: goimports
+    - check_type: testcoverage
+      minimum_coverage: 60
+    - check_type: test
+      extra_args:
+      - -v
+      - -race
+    max_duration: 15

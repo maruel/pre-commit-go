@@ -12,42 +12,15 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-func TestRunLevelUnmarshalYAML1(t *testing.T) {
-	t.Parallel()
-	data := []byte("foo: 1")
-	out := &struct {
-		Foo RunLevel
-	}{}
-	ut.AssertEqual(t, nil, yaml.Unmarshal(data, out))
-	ut.AssertEqual(t, RunLevel(1), out.Foo)
-}
-
-func TestRunLevelUnmarshalYAML4(t *testing.T) {
-	t.Parallel()
-	data := []byte("foo: 4")
-	out := &struct {
-		Foo RunLevel
-	}{}
-	ut.AssertEqual(t, errors.New("invalid runlevel 4"), yaml.Unmarshal(data, out))
-	ut.AssertEqual(t, RunLevel(0), out.Foo)
-}
-
-func TestRunLevelUnmarshalYAMLBad(t *testing.T) {
-	t.Parallel()
-	data := []byte("foo: hi")
-	out := &struct {
-		Foo RunLevel
-	}{}
-	ut.AssertEqual(t, &yaml.TypeError{Errors: []string{"line 1: cannot unmarshal !!str `hi` into int"}}, yaml.Unmarshal(data, out))
-	ut.AssertEqual(t, RunLevel(0), out.Foo)
-}
-
 func TestConfigNew(t *testing.T) {
 	config := New()
-	ut.AssertEqual(t, 0, len(config.Checks[RunLevel(0)].All))
-	ut.AssertEqual(t, 3, len(config.Checks[RunLevel(1)].All))
-	ut.AssertEqual(t, 3, len(config.Checks[RunLevel(2)].All))
-	ut.AssertEqual(t, 2, len(config.Checks[RunLevel(3)].All))
+	ut.AssertEqual(t, 2, len(config.Modes[PreCommit].Checks))
+	ut.AssertEqual(t, 4, len(config.Modes[PrePush].Checks))
+	ut.AssertEqual(t, 5, len(config.Modes[ContinuousIntegration].Checks))
+	ut.AssertEqual(t, 3, len(config.Modes[Lint].Checks))
+	checks, max := config.EnabledChecks([]Category{PreCommit, PrePush, ContinuousIntegration, Lint})
+	ut.AssertEqual(t, 120, max)
+	ut.AssertEqual(t, 2+4+5+3, len(checks))
 }
 
 func TestConfigYAML(t *testing.T) {
@@ -62,5 +35,5 @@ func TestConfigYAML(t *testing.T) {
 func TestConfigVersion(t *testing.T) {
 	data, err := yaml.Marshal(&Config{Version: currentVersion - 1})
 	ut.AssertEqual(t, nil, err)
-	ut.AssertEqual(t, errors.New("unexpected version 0, expected 1"), yaml.Unmarshal(data, &Config{}))
+	ut.AssertEqual(t, errors.New("unexpected version 1, expected 2"), yaml.Unmarshal(data, &Config{}))
 }

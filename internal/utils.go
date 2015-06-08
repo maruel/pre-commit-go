@@ -10,6 +10,7 @@
 package internal
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"strings"
@@ -22,10 +23,13 @@ func Capture(wd string, env []string, args ...string) (string, int, error) {
 	exitCode := -1
 	//log.Printf("Capture(%s, %s, %s)", wd, env, args)
 	var c *exec.Cmd
-	if len(args) > 1 {
-		c = exec.Command(args[0], args[1:]...)
-	} else {
+	switch len(args) {
+	case 0:
+		return "", -1, errors.New("no command specified")
+	case 1:
 		c = exec.Command(args[0])
+	default:
+		c = exec.Command(args[0], args[1:]...)
 	}
 	if wd != "" {
 		c.Dir = wd
