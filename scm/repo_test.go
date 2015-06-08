@@ -47,7 +47,6 @@ func TestGetRepoGitSlow(t *testing.T) {
 	ut.AssertEqual(t, nil, err)
 	ut.AssertEqual(t, filepath.Join(tmpDir, ".git", "hooks"), p)
 	ut.AssertEqual(t, GitInitialCommit, repo.HEAD())
-	ut.AssertEqual(t, "master", repo.Ref())
 	ut.AssertEqual(t, errors.New("checkout failed:\nfatal: Cannot switch branch to a non-commit '4b825dc642cb6eb9a060e54bf8d69288fbee4904'"), repo.Checkout(GitInitialCommit))
 
 	untracked, err := repo.Untracked()
@@ -78,6 +77,7 @@ func TestGetRepoGitSlow(t *testing.T) {
 	// Author date is specified via --date but committer date is via environment
 	// variable. Go figure.
 	run(t, tmpDir, []string{"GIT_COMMITTER_DATE=2005-04-07T22:13:13 +0000"}, "commit", "-m", "yo", "--date", "2005-04-07T22:13:13 +0000")
+	ut.AssertEqual(t, "master", repo.Ref())
 	ut.AssertEqual(t, "hi\nhello\n", read(t, tmpDir, "file1"))
 	head := repo.HEAD()
 	if head != "56e6926b12ee571cfba4515214725b35a8571570" {

@@ -9,4 +9,4 @@ go:
 - 1.4.2
 
 script:
-- pre-commit-go installrun -mode continuous-integration,lint
+- pre-commit-go installrun -mode all

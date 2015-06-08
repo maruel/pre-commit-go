@@ -160,3 +160,13 @@ repository.
 [goveralls](https://github.com/mattn/goveralls) doesn't detect drone.io job id
 automatically yet. Please send a Pull Request to fix this if this is your
 preferred setup.
+
+
+### Fine tuning what is tested.
+
+When running under CI, you'll want it to run more tests than run locally, in
+particular things that take too much time for a user to test. You can configure
+this with adding a pre-commit-go.yml file in your repository. You can also
+enable running lint checks by default on your CI by enabling it explicitly:
+
+    pre-commit-go installrun -M all
