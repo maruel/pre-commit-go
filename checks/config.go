@@ -147,6 +147,9 @@ func New() *Config {
 			PreCommit: {
 				MaxDuration: 5,
 				Checks: Checks{
+					&build{
+						ExtraArgs: []string{},
+					},
 					&gofmt{},
 					&test{
 						ExtraArgs: []string{"-short"},
@@ -156,11 +159,8 @@ func New() *Config {
 			PrePush: {
 				MaxDuration: 15,
 				Checks: Checks{
-					&build{
-						ExtraArgs: []string{},
-					},
 					&goimports{},
-					&testCoverage{
+					&coverage{
 						MinimumCoverage: 60,
 					},
 					&test{
@@ -176,7 +176,7 @@ func New() *Config {
 					},
 					&gofmt{},
 					&goimports{},
-					&testCoverage{
+					&coverage{
 						MinimumCoverage: 60,
 					},
 					&test{

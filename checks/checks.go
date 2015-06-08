@@ -118,7 +118,7 @@ func (g *gofmt) Run() error {
 type test definitions.Test
 
 func (t *test) GetDescription() string {
-	return "runs all tests, potentially multiple times (with race detector, with different tags, etc)"
+	return "runs all tests, potentially with options (race detector, different tags, etc)"
 }
 
 func (t *test) GetName() string {
@@ -296,17 +296,17 @@ func (g *govet) Run() error {
 	return nil
 }
 
-type testCoverage definitions.TestCoverage
+type coverage definitions.Coverage
 
-func (t *testCoverage) GetDescription() string {
+func (c *coverage) GetDescription() string {
 	return "enforces minimum test coverage on all packages that are not 'main'"
 }
 
-func (t *testCoverage) GetName() string {
-	return "testcoverage"
+func (c *coverage) GetName() string {
+	return "coverage"
 }
 
-func (t *testCoverage) GetPrerequisites() []definitions.CheckPrerequisite {
+func (c *coverage) GetPrerequisites() []definitions.CheckPrerequisite {
 	toInstall := []definitions.CheckPrerequisite{
 		{[]string{"go", "tool", "cover", "-h"}, 1, "golang.org/x/tools/cmd/cover"},
 	}
@@ -316,7 +316,7 @@ func (t *testCoverage) GetPrerequisites() []definitions.CheckPrerequisite {
 	return toInstall
 }
 
-func (t *testCoverage) Run() (err error) {
+func (c *coverage) Run() (err error) {
 	// TODO(maruel): Kept because we may have to revert to using broader
 	// instrumentation due to OS command line argument length limit.
 	//pkgRoot, _ := os.Getwd()
@@ -463,7 +463,7 @@ func (t *testCoverage) Run() (err error) {
 			coverage[fn{loc, name}] = percent
 		}
 	}
-	if total < t.MinimumCoverage {
+	if total < c.MinimumCoverage {
 		partial := 0
 		for _, percent := range coverage {
 			if percent < 100. {
@@ -493,24 +493,24 @@ func (t *testCoverage) Run() (err error) {
 
 // Extensibility.
 
-type customCheck definitions.CustomCheck
+type custom definitions.Custom
 
-func (c *customCheck) GetDescription() string {
+func (c *custom) GetDescription() string {
 	if c.Description != "" {
 		return c.Description
 	}
 	return "runs a custom check from an external package"
 }
 
-func (c *customCheck) GetName() string {
+func (c *custom) GetName() string {
 	return "custom"
 }
 
-func (c *customCheck) GetPrerequisites() []definitions.CheckPrerequisite {
+func (c *custom) GetPrerequisites() []definitions.CheckPrerequisite {
 	return c.Prerequisites
 }
 
-func (c *customCheck) Run() error {
+func (c *custom) Run() error {
 	out, exitCode, err := internal.Capture("", nil, c.Command...)
 	if exitCode != 0 && c.CheckExitCode {
 		return fmt.Errorf("\"%s\" failed:\n%s", strings.Join(c.Command, " "), out)
@@ -530,8 +530,8 @@ func init() {
 		&goimports{},
 		&golint{},
 		&govet{},
-		&testCoverage{},
-		&customCheck{},
+		&coverage{},
+		&custom{},
 	}
 	KnownChecks = map[string]Check{}
 	for _, k := range known {

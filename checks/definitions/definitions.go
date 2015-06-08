@@ -35,7 +35,7 @@
 //          extra_args: []
 //        - check_type: gofmt
 //        - check_type: goimports
-//        - check_type: testcoverage
+//        - check_type: coverage
 //          minimum_coverage: 60
 //        - check_type: test
 //          extra_args:
@@ -118,7 +118,7 @@ type Gofmt struct {
 
 // Test runs all tests via go test.
 //
-// Use the specialized check TestCoverage when -cover is desired.
+// Use the specialized check Coverage when -cover is desired.
 //
 // Use multiple Test instances to test multiple times with different flags,
 // like with different tags, with or without the race detector, etc.
@@ -170,7 +170,7 @@ type Govet struct {
 	Blacklist []string `yaml:"blacklist"`
 }
 
-// TestCoverage runs all tests with coverage.
+// Coverage runs all tests with coverage.
 //
 // Each testable package is run with 'go test -cover' then all coverage
 // information is merged together. This means that package X/Y may create code
@@ -181,7 +181,7 @@ type Govet struct {
 //
 // Otherwise, only a summary is printed in case code coverage is not above
 // t.MinimumCoverage.
-type TestCoverage struct {
+type Coverage struct {
 	// MinimumCoverage is the minimum test coverage to be generated or the check
 	// is considered to fail.
 	MinimumCoverage float64 `yaml:"minimum_coverage"`
@@ -189,10 +189,10 @@ type TestCoverage struct {
 
 // Extensibility.
 
-// CustomCheck represents a user configured check.
+// Custom represents a user configured check running an external program.
 //
 // It can be used multiple times to run multiple external checks.
-type CustomCheck struct {
+type Custom struct {
 	// DisplayName is check's display name, required.
 	DisplayName string `yaml:"display_name"`
 	// Description is check's description, optional.
