@@ -298,6 +298,42 @@ func cmdHelp(repo scm.Repo, config *checks.Config, usage string) error {
 	return helpText.Execute(os.Stdout, s)
 }
 
+// cmdInfo displays the current configuration used.
+func cmdInfo(repo scm.Repo, config *checks.Config, modes []checks.Mode, file string) error {
+	fmt.Printf("File: %s\n", file)
+	fmt.Printf("Repo: %s\n", repo.Root())
+
+	if len(modes) == 0 {
+		modes = checks.AllModes
+	}
+	for _, mode := range modes {
+		settings := config.Modes[mode]
+		maxLen := 0
+		for _, check := range settings.Checks {
+			if l := len(check.GetName()); l > maxLen {
+				maxLen = l
+			}
+		}
+		fmt.Printf("\n%s:\n  %-*s %d seconds\n", mode, maxLen+1, "Limit:", settings.MaxDuration)
+		for _, check := range settings.Checks {
+			name := check.GetName()
+			fmt.Printf("  %s:%s %s\n", name, strings.Repeat(" ", maxLen-len(name)), check.GetDescription())
+			content, err := yaml.Marshal(check)
+			if err != nil {
+				return err
+			}
+			options := strings.TrimSpace(string(content))
+			if options == "{}" {
+				// It means there's no options.
+				options = "<no option>"
+			}
+			lines := strings.Join(strings.Split(options, "\n"), "\n    ")
+			fmt.Printf("    %s\n", lines)
+		}
+	}
+	return nil
+}
+
 // cmdInstallPrereq installs all the packages needed to run the enabled checks.
 func cmdInstallPrereq(repo scm.Repo, config *checks.Config, modes []checks.Mode) error {
 	var wg sync.WaitGroup
@@ -355,42 +391,7 @@ func cmdInstallPrereq(repo scm.Repo, config *checks.Config, modes []checks.Mode)
 			return fmt.Errorf("prerequisites installation failed: %s", err)
 		}
 	}
-	return nil
-}
-
-// cmdInfo displays the current configuration used.
-func cmdInfo(repo scm.Repo, config *checks.Config, modes []checks.Mode, file string) error {
-	fmt.Printf("File: %s\n", file)
-	fmt.Printf("Repo: %s\n", repo.Root())
-
-	if len(modes) == 0 {
-		modes = checks.AllModes
-	}
-	for _, mode := range modes {
-		settings := config.Modes[mode]
-		maxLen := 0
-		for _, check := range settings.Checks {
-			if l := len(check.GetName()); l > maxLen {
-				maxLen = l
-			}
-		}
-		fmt.Printf("\n%s:\n  %-*s %d seconds\n", mode, maxLen+1, "Limit:", settings.MaxDuration)
-		for _, check := range settings.Checks {
-			name := check.GetName()
-			fmt.Printf("  %s:%s %s\n", name, strings.Repeat(" ", maxLen-len(name)), check.GetDescription())
-			content, err := yaml.Marshal(check)
-			if err != nil {
-				return err
-			}
-			options := strings.TrimSpace(string(content))
-			if options == "{}" {
-				// It means there's no options.
-				options = "<no option>"
-			}
-			lines := strings.Join(strings.Split(options, "\n"), "\n    ")
-			fmt.Printf("    %s\n", lines)
-		}
-	}
+	log.Printf("Prerequisites installtion succeeded")
 	return nil
 }
 
@@ -420,7 +421,7 @@ func cmdInstall(repo scm.Repo, config *checks.Config, modes []checks.Mode) error
 			return err
 		}
 	}
-	log.Printf("installation done")
+	log.Printf("Installation done")
 	return nil
 }
 

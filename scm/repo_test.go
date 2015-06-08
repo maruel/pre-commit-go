@@ -49,7 +49,7 @@ func TestGetRepoGitSlow(t *testing.T) {
 	ut.AssertEqual(t, GitInitialCommit, repo.HEAD())
 	err = repo.Checkout(GitInitialCommit)
 	base := "checkout failed:\nfatal: Cannot switch branch to a non-commit"
-	if os.Getenv("DRONE") == "true" {
+	if isDrone() {
 		// #thanksdrone
 		ut.AssertEqual(t, errors.New(base+"."), err)
 	} else {
@@ -84,6 +84,13 @@ func TestGetRepoGitSlow(t *testing.T) {
 	// Author date is specified via --date but committer date is via environment
 	// variable. Go figure.
 	run(t, tmpDir, []string{"GIT_COMMITTER_DATE=2005-04-07T22:13:13 +0000"}, "commit", "-m", "yo", "--date", "2005-04-07T22:13:13 +0000")
+	if repo.Ref() == "" {
+		// #thanksdrone
+		ut.AssertEqual(t, true, isDrone())
+		run(t, tmpDir, nil, "checkout", "-b", "master")
+	} else {
+		ut.AssertEqual(t, false, isDrone())
+	}
 	ut.AssertEqual(t, "master", repo.Ref())
 	ut.AssertEqual(t, "hi\nhello\n", read(t, tmpDir, "file1"))
 	head := repo.HEAD()
@@ -207,4 +214,9 @@ func read(t *testing.T, tmpDir, name string) string {
 	content, err := ioutil.ReadFile(filepath.Join(tmpDir, name))
 	ut.AssertEqual(t, nil, err)
 	return string(content)
+}
+
+// isDrone returns true if running under https://drone.io.
+func isDrone() bool {
+	return os.Getenv("DRONE") == "true"
 }
