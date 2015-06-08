@@ -9,55 +9,56 @@ package checks
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
-	"log"
 	"reflect"
 
 	"gopkg.in/yaml.v2"
 )
 
-// Category is one of the check type.
-type Category string
+// Mode is one of the check mode. When running checks, the mode determine what
+// checks are executed.
+type Mode string
 
+// All predefined modes are executed automatically based on the context, except
+// for Lint which needs to be selected manually.
 const (
-	PreCommit             Category = "pre-commit"
-	PrePush               Category = "pre-push"
-	ContinuousIntegration Category = "continuous-integration"
-	Lint                  Category = "lint"
+	PreCommit             Mode = "pre-commit"
+	PrePush               Mode = "pre-push"
+	ContinuousIntegration Mode = "continuous-integration"
+	Lint                  Mode = "lint"
 )
 
-// AllCategories are all valid categories.
-var AllCategories = []Category{PreCommit, PrePush, ContinuousIntegration, Lint}
+// AllModes are all known valid modes that can be used in pre-commit-go.yml.
+var AllModes = []Mode{PreCommit, PrePush, ContinuousIntegration, Lint}
 
-func (c *Category) UnmarshalYAML(unmarshal func(interface{}) error) error {
+func (m *Mode) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	s := ""
 	if err := unmarshal(&s); err != nil {
 		return err
 	}
-	val := Category(s)
-	for _, known := range AllCategories {
+	val := Mode(s)
+	for _, known := range AllModes {
 		if val == known {
-			*c = val
+			*m = val
 			return nil
 		}
 	}
-	return fmt.Errorf("invalid category \"%s\"", *c)
+	return fmt.Errorf("invalid mode \"%s\"", *c)
 }
 
 // Config is the serialized form of pre-commit-go.yml.
 type Config struct {
-	Version int                           `yaml:"version"` // Should be incremented when it's not compatible anymore.
-	Modes   map[Category]CategorySettings `yaml:"modes"`   // Checks per category.
+	Version int               `yaml:"version"` // Should be incremented when it's not compatible anymore.
+	Modes   map[Mode]Settings `yaml:"modes"`   // Settings per mode. Settings includes the checks and the maximum allowed time spent to run them.
 }
 
 // EnabledChecks returns all the checks enabled.
-func (c *Config) EnabledChecks(categories []Category) ([]Check, int) {
+func (c *Config) EnabledChecks(modes []Mode) ([]Check, int) {
 	max := 0
 	out := []Check{}
-	for _, category := range categories {
-		out = append(out, c.Modes[category].Checks...)
-		if c.Modes[category].MaxDuration > max {
-			max = c.Modes[category].MaxDuration
+	for _, mode := range modes {
+		out = append(out, c.Modes[mode].Checks...)
+		if c.Modes[mode].MaxDuration > max {
+			max = c.Modes[mode].MaxDuration
 		}
 	}
 	return out, max
@@ -65,8 +66,8 @@ func (c *Config) EnabledChecks(categories []Category) ([]Check, int) {
 
 func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	data := &struct {
-		Version int                           `yaml:"version"`
-		Modes   map[Category]CategorySettings `yaml:"modes"`
+		Version int               `yaml:"version"`
+		Modes   map[Mode]Settings `yaml:"modes"`
 	}{}
 	if err := unmarshal(data); err != nil {
 		return err
@@ -79,10 +80,13 @@ func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return nil
 }
 
-// CategorySettings is the settings used for a category.
-type CategorySettings struct {
-	Checks      Checks `yaml:"checks"`
-	MaxDuration int    `yaml:"max_duration"` // In seconds.
+// Settings is the settings used for a mode.
+type Settings struct {
+	// Checks is the list of all checks enabled for this mode.
+	Checks Checks `yaml:"checks"`
+	// MaxDuration is the maximum allowed duration to run all the checks in
+	// seconds. If it takes more time than that, it is marked as failed.
+	MaxDuration int `yaml:"max_duration"`
 }
 
 // Checks helps with Check serialization.
@@ -139,7 +143,7 @@ func (c *Checks) UnmarshalYAML(unmarshal func(interface{}) error) error {
 func New() *Config {
 	return &Config{
 		Version: currentVersion,
-		Modes: map[Category]CategorySettings{
+		Modes: map[Mode]Settings{
 			PreCommit: {
 				MaxDuration: 5,
 				Checks: Checks{
@@ -197,22 +201,6 @@ func New() *Config {
 			},
 		},
 	}
-}
-
-// LoadConfig returns a Config with defaults set then loads the config from file
-// "pathname".
-func LoadConfig(pathname string) *Config {
-	content, err := ioutil.ReadFile(pathname)
-	if err == nil {
-		return nil
-	}
-	config := &Config{Version: currentVersion}
-	if err2 := yaml.Unmarshal(content, config); err2 != nil {
-		// Log but ignore the error, recreate a new config instance.
-		log.Printf("failed to parse %s: %s", pathname, err2)
-		return nil
-	}
-	return config
 }
 
 // Private stuff.

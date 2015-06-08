@@ -93,6 +93,22 @@ const yamlHeader = `# https://github.com/maruel/pre-commit-go configuration file
 
 // Utils.
 
+// loadConfig returns a Config with defaults set then loads the config from file
+// "pathname".
+func loadConfig(pathname string) *Config {
+	content, err := ioutil.ReadFile(pathname)
+	if err == nil {
+		return nil
+	}
+	config := &checks.Config{}
+	if err2 := yaml.Unmarshal(content, config); err2 != nil {
+		// Log but ignore the error, recreate a new config instance.
+		log.Printf("failed to parse %s: %s", pathname, err2)
+		return nil
+	}
+	return config
+}
+
 func callRun(check checks.Check) (error, time.Duration) {
 	if l, ok := check.(sync.Locker); ok {
 		l.Lock()
@@ -103,12 +119,12 @@ func callRun(check checks.Check) (error, time.Duration) {
 	return err, time.Now().Sub(start)
 }
 
-func runChecks(config *checks.Config, categories []checks.Category) error {
+func runChecks(config *checks.Config, modes []checks.Mode) error {
 	// TODO(maruel): Run checks selectively based on the actual files modified.
 	// This should affect checks.goDirs() results by calculating all packages
 	// affected via the package import graphs.
 	start := time.Now()
-	enabledChecks, maxDuration := config.EnabledChecks(categories)
+	enabledChecks, maxDuration := config.EnabledChecks(modes)
 	var wg sync.WaitGroup
 	errs := make(chan error, len(enabledChecks))
 	for _, c := range enabledChecks {
@@ -152,7 +168,7 @@ func runPreCommit(repo scm.Repo, config *checks.Config) error {
 		return err
 	}
 	// Run the checks.
-	err = runChecks(config, []checks.Category{checks.PreCommit})
+	err = runChecks(config, []checks.Mode{checks.PreCommit})
 
 	// If stashed is false, everything was in the index so no stashing was needed.
 	if stashed {
@@ -217,7 +233,7 @@ func runPrePush(repo scm.Repo, config *checks.Config) (err error) {
 			from = scm.GitInitialCommit
 		}
 		// TODO(maruel): Relative [from,to].
-		err = runChecks(config, []checks.Category{checks.PrePush})
+		err = runChecks(config, []checks.Mode{checks.PrePush})
 	}
 	if err == io.EOF {
 		err = nil
@@ -225,11 +241,11 @@ func runPrePush(repo scm.Repo, config *checks.Config) (err error) {
 	return
 }
 
-// processCategory returns "" if the category is not valid.
+// processMode returns "" if the mode alias is not valid.
 //
 // It implements the shortnames.
-func processCategory(c string) checks.Category {
-	switch c {
+func processMode(m string) checks.Mode {
+	switch m {
 	case string(checks.PreCommit), "fast", "pc":
 		return checks.PreCommit
 	case string(checks.PrePush), "slow", "pp":
@@ -239,25 +255,25 @@ func processCategory(c string) checks.Category {
 	case string(checks.Lint):
 		return checks.Lint
 	default:
-		return checks.Category("")
+		return checks.Mode("")
 	}
 }
 
-func processCategories(categoryFlag string) ([]checks.Category, error) {
-	if len(categoryFlag) == 0 {
+func processModes(modeFlag string) ([]checks.Mode, error) {
+	if len(modeFlag) == 0 {
 		return nil, nil
 	}
-	var categories []checks.Category
-	for _, p := range strings.Split(categoryFlag, ",") {
+	var modes []checks.Mode
+	for _, p := range strings.Split(modeFlag, ",") {
 		if len(p) != 0 {
-			c := processCategory(p)
+			c := processMode(p)
 			if c == "" {
-				return nil, fmt.Errorf("invalid category \"%s\"\n\nSupported categories (with shortcut names):\n- pre-commit / fast / pc\n- pre-push / slow / pp  (default)\n- continous-integration / full / ci\n- lint", p)
+				return nil, fmt.Errorf("invalid mode \"%s\"\n\nSupported modes (with shortcut names):\n- pre-commit / fast / pc\n- pre-push / slow / pp  (default)\n- continous-integration / full / ci\n- lint", p)
 			}
-			categories = append(categories, c)
+			modes = append(modes, c)
 		}
 	}
-	return categories, nil
+	return modes, nil
 }
 
 // Commands.
@@ -288,9 +304,9 @@ func cmdHelp(repo scm.Repo, config *checks.Config, usage string) error {
 }
 
 // cmdInstallPrereq installs all the packages needed to run the enabled checks.
-func cmdInstallPrereq(repo scm.Repo, config *checks.Config, categories []checks.Category) error {
+func cmdInstallPrereq(repo scm.Repo, config *checks.Config, modes []checks.Mode) error {
 	var wg sync.WaitGroup
-	enabledChecks, _ := config.EnabledChecks(categories)
+	enabledChecks, _ := config.EnabledChecks(modes)
 	c := make(chan string, len(enabledChecks))
 	for _, check := range enabledChecks {
 		for _, p := range check.GetPrerequisites() {
@@ -345,8 +361,8 @@ func cmdInstallPrereq(repo scm.Repo, config *checks.Config, categories []checks.
 }
 
 // cmdInstall first calls cmdInstallPrereq() then install the .git/hooks/pre-commit hook.
-func cmdInstall(repo scm.Repo, config *checks.Config, categories []checks.Category) error {
-	if err := cmdInstallPrereq(repo, config, categories); err != nil {
+func cmdInstall(repo scm.Repo, config *checks.Config, modes []checks.Mode) error {
+	if err := cmdInstallPrereq(repo, config, modes); err != nil {
 		return err
 	}
 	hookDir, err := repo.HookPath()
@@ -367,8 +383,8 @@ func cmdInstall(repo scm.Repo, config *checks.Config, categories []checks.Catego
 }
 
 // cmdRun runs all the enabled checks.
-func cmdRun(repo scm.Repo, config *checks.Config, categories []checks.Category) error {
-	return runChecks(config, categories)
+func cmdRun(repo scm.Repo, config *checks.Config, modes []checks.Mode) error {
+	return runChecks(config, modes)
 }
 
 // cmdRunHook runs the checks in a git repository.
@@ -376,7 +392,7 @@ func cmdRun(repo scm.Repo, config *checks.Config, categories []checks.Category) 
 // Use a precise "stash, run checks, unstash" to ensure that the check is
 // properly run on the data in the index.
 func cmdRunHook(repo scm.Repo, config *checks.Config, mode string) error {
-	switch checks.Category(mode) {
+	switch checks.Mode(mode) {
 	case checks.PreCommit:
 		return runPreCommit(repo, config)
 
@@ -384,7 +400,7 @@ func cmdRunHook(repo scm.Repo, config *checks.Config, mode string) error {
 		return runPrePush(repo, config)
 
 	case checks.ContinuousIntegration:
-		return runChecks(config, []checks.Category{checks.ContinuousIntegration})
+		return runChecks(config, []checks.Mode{checks.ContinuousIntegration})
 
 	default:
 		return errors.New("unsupported hook type for run-hook")
@@ -411,8 +427,8 @@ func mainImpl() error {
 	}
 	verbose := flag.Bool("verbose", false, "enables verbose logging output")
 	configPath := flag.String("config", "pre-commit-go.yml", "file name of the config to load")
-	categoryFlag := flag.String("mode", "", "coma separated list of categories to process; default depends on the command")
-	flag.StringVar(categoryFlag, "M", "", "shortcut to -mode")
+	modeFlag := flag.String("mode", "", "coma separated list of modes to process; default depends on the command")
+	flag.StringVar(modeFlag, "M", "", "shortcut to -mode")
 	// Ignored, keep for a moment for compatibility with older clients.
 	// TODO(maruel): Remove.
 	_ = flag.Int("level", 0, "deprecated, unused")
@@ -423,7 +439,7 @@ func mainImpl() error {
 		log.SetOutput(ioutil.Discard)
 	}
 
-	categories, err := processCategories(*categoryFlag)
+	modes, err := processModes(*modeFlag)
 	if err != nil {
 		return err
 	}
@@ -443,10 +459,10 @@ func mainImpl() error {
 	// Load the config.
 	var config *checks.Config
 	if filepath.IsAbs(*configPath) {
-		config = checks.LoadConfig(*configPath)
+		config = loadConfig(*configPath)
 	} else {
-		if config = checks.LoadConfig(filepath.Join(".git", *configPath)); config == nil {
-			config = checks.LoadConfig(*configPath)
+		if config = loadConfig(filepath.Join(".git", *configPath)); config == nil {
+			config = loadConfig(*configPath)
 		}
 	}
 	if config == nil {
@@ -461,49 +477,49 @@ func mainImpl() error {
 		flag.CommandLine.PrintDefaults()
 		return cmdHelp(repo, config, b.String())
 	case "install", "i":
-		if len(categories) == 0 {
-			categories = checks.AllCategories
+		if len(modes) == 0 {
+			modes = checks.AllModes
 		}
-		return cmdInstall(repo, config, categories)
+		return cmdInstall(repo, config, modes)
 	case "installrun":
-		if len(categories) == 0 {
+		if len(modes) == 0 {
 			if checks.IsContinuousIntegration() {
-				categories = []checks.Category{checks.ContinuousIntegration}
+				modes = []checks.Mode{checks.ContinuousIntegration}
 			} else {
-				categories = []checks.Category{checks.PrePush}
+				modes = []checks.Mode{checks.PrePush}
 			}
 		}
-		if err := cmdInstall(repo, config, categories); err != nil {
+		if err := cmdInstall(repo, config, modes); err != nil {
 			return err
 		}
-		return cmdRun(repo, config, categories)
+		return cmdRun(repo, config, modes)
 	case "prereq", "p":
-		if len(categories) == 0 {
-			categories = checks.AllCategories
+		if len(modes) == 0 {
+			modes = checks.AllModes
 		}
-		return cmdInstallPrereq(repo, config, categories)
+		return cmdInstallPrereq(repo, config, modes)
 	case "run", "r":
-		if len(categories) == 0 {
-			categories = []checks.Category{checks.PrePush}
+		if len(modes) == 0 {
+			modes = []checks.Mode{checks.PrePush}
 		}
-		return cmdRun(repo, config, categories)
+		return cmdRun(repo, config, modes)
 	case "run-hook":
-		if categories != nil {
-			return errors.New("-category can't be used with run-hook")
+		if modes != nil {
+			return errors.New("-mode can't be used with run-hook")
 		}
 		if flag.NArg() != 1 {
 			return errors.New("run-hook is only meant to be used by hooks")
 		}
 		return cmdRunHook(repo, config, flag.Arg(0))
 	case "version":
-		if categories != nil {
-			return errors.New("-category can't be used with version")
+		if modes != nil {
+			return errors.New("-modes can't be used with version")
 		}
 		fmt.Println(version)
 		return nil
 	case "writeconfig", "w":
-		if categories != nil {
-			return errors.New("-category can't be used with writeconfig")
+		if modes != nil {
+			return errors.New("-modes can't be used with writeconfig")
 		}
 		return cmdWriteConfig(repo, config, *configPath)
 	default:
