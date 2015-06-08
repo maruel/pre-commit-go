@@ -391,7 +391,7 @@ func cmdInstallPrereq(repo scm.Repo, config *checks.Config, modes []checks.Mode)
 			return fmt.Errorf("prerequisites installation failed: %s", err)
 		}
 	}
-	log.Printf("Prerequisites installtion succeeded")
+	log.Printf("Prerequisites installation succeeded")
 	return nil
 }
 
