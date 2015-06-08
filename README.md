@@ -10,6 +10,37 @@ any file.
 [![Build Status](https://travis-ci.org/maruel/pre-commit-go.svg?branch=master)](https://travis-ci.org/maruel/pre-commit-go)
 
 
+Usage
+-----
+
+### Setup
+
+    go get github.com/maruel/pre-commit-go
+
+Use built-in help to list all options and commands:
+
+    pre-commit-go help
+
+Print the enabled checks:
+
+    pre-commit-go info
+
+Run from within a git checkout inside `$GOPATH`. This installs the git hooks
+within `.git/hooks` and runs the checks in mode `pre-push` by default:
+
+    pre-commit-go
+
+
+### Bypassing hook
+
+It may become necessary to commit something known to be broken. To bypass the
+pre-commit hook, use:
+
+    git commit --no-verify
+
+or shorthand `-n`
+
+
 Modes
 -----
 
@@ -72,35 +103,6 @@ modes:
         expected_exit_code: 2
         url: github.com/maruel/pre-commit-go/samples/sample-pre-commit-go-custom-check
 ```
-
-
-Usage
------
-
-### Getting it
-
-    go get github.com/maruel/pre-commit-go
-
-
-### Installing the git hooks and running checks
-
-Run from within a git checkout inside `$GOPATH`:
-
-    pre-commit-go
-
-Then use built-in help:
-
-    pre-commit-go help
-
-
-### Bypassing hook
-
-It may become necessary to commit something known to be broken. To bypass the
-pre-commit hook, use:
-
-    git commit --no-verify
-
-or shorthand `-n`
 
 
 Continous integration support

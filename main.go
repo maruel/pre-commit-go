@@ -60,6 +60,7 @@ Supported commands are:
   help        - this page
   prereq      - installs prerequisites, e.g.: errcheck, golint, goimports,
                 govet, etc as applicable for the enabled checks
+  info        - prints the current configuration used
   install     - runs 'prereq' then installs the git commit hook as
                 .git/hooks/pre-commit
   installrun  - runs 'prereq', 'install' then 'run'
@@ -95,15 +96,15 @@ const yamlHeader = `# https://github.com/maruel/pre-commit-go configuration file
 
 // loadConfig returns a Config with defaults set then loads the config from file
 // "pathname".
-func loadConfig(pathname string) *Config {
+func loadConfig(pathname string) *checks.Config {
 	content, err := ioutil.ReadFile(pathname)
-	if err == nil {
+	if err != nil {
 		return nil
 	}
 	config := &checks.Config{}
-	if err2 := yaml.Unmarshal(content, config); err2 != nil {
+	if err := yaml.Unmarshal(content, config); err != nil {
 		// Log but ignore the error, recreate a new config instance.
-		log.Printf("failed to parse %s: %s", pathname, err2)
+		log.Printf("failed to parse %s: %s", pathname, err)
 		return nil
 	}
 	return config
@@ -123,10 +124,11 @@ func runChecks(config *checks.Config, modes []checks.Mode) error {
 	// TODO(maruel): Run checks selectively based on the actual files modified.
 	// This should affect checks.goDirs() results by calculating all packages
 	// affected via the package import graphs.
-	start := time.Now()
 	enabledChecks, maxDuration := config.EnabledChecks(modes)
+	log.Printf("mode: %s; %d checks; %d max seconds allowed", modes, len(enabledChecks), maxDuration)
 	var wg sync.WaitGroup
 	errs := make(chan error, len(enabledChecks))
+	start := time.Now()
 	for _, c := range enabledChecks {
 		wg.Add(1)
 		go func(check checks.Check) {
@@ -307,9 +309,11 @@ func cmdHelp(repo scm.Repo, config *checks.Config, usage string) error {
 func cmdInstallPrereq(repo scm.Repo, config *checks.Config, modes []checks.Mode) error {
 	var wg sync.WaitGroup
 	enabledChecks, _ := config.EnabledChecks(modes)
+	number := 0
 	c := make(chan string, len(enabledChecks))
 	for _, check := range enabledChecks {
 		for _, p := range check.GetPrerequisites() {
+			number++
 			wg.Add(1)
 			go func(prereq definitions.CheckPrerequisite) {
 				defer wg.Done()
@@ -320,6 +324,7 @@ func cmdInstallPrereq(repo scm.Repo, config *checks.Config, modes []checks.Mode)
 		}
 	}
 	wg.Wait()
+	log.Printf("Checked for %d prerequisites", number)
 	loop := true
 	// Use a map to remove duplicates.
 	m := map[string]bool{}
@@ -355,6 +360,30 @@ func cmdInstallPrereq(repo scm.Repo, config *checks.Config, modes []checks.Mode)
 		}
 		if err != nil {
 			return fmt.Errorf("prerequisites installation failed: %s", err)
+		}
+	}
+	return nil
+}
+
+// cmdInfo displays the current configuration used.
+func cmdInfo(repo scm.Repo, config *checks.Config, modes []checks.Mode, file string) error {
+	fmt.Printf("File: %s\n", file)
+	fmt.Printf("Repo: %s\n", repo.Root())
+
+	if len(modes) == 0 {
+		modes = checks.AllModes
+	}
+	for _, mode := range modes {
+		settings := config.Modes[mode]
+		fmt.Printf("\n%s:\n  Max: %d seconds\n", mode, settings.MaxDuration)
+		for _, check := range settings.Checks {
+			fmt.Printf("  %s: %s\n", check.GetName(), check.GetDescription())
+			content, err := yaml.Marshal(check)
+			if err != nil {
+				return err
+			}
+			lines := strings.Join(strings.Split(strings.TrimSpace(string(content)), "\n"), "\n    ")
+			fmt.Printf("    %s\n", lines)
 		}
 	}
 	return nil
@@ -458,15 +487,20 @@ func mainImpl() error {
 
 	// Load the config.
 	var config *checks.Config
+	file := ""
 	if filepath.IsAbs(*configPath) {
-		config = loadConfig(*configPath)
+		file = *configPath
+		config = loadConfig(file)
 	} else {
-		if config = loadConfig(filepath.Join(".git", *configPath)); config == nil {
-			config = loadConfig(*configPath)
+		file = filepath.Join(repo.Root(), ".git", *configPath)
+		if config = loadConfig(file); config == nil {
+			file = filepath.Join(repo.Root(), *configPath)
+			config = loadConfig(file)
 		}
 	}
 	if config == nil {
 		// Default config.
+		file = "<N/A>"
 		config = checks.New()
 	}
 
@@ -476,6 +510,8 @@ func mainImpl() error {
 		flag.CommandLine.SetOutput(b)
 		flag.CommandLine.PrintDefaults()
 		return cmdHelp(repo, config, b.String())
+	case "info":
+		return cmdInfo(repo, config, modes, file)
 	case "install", "i":
 		if len(modes) == 0 {
 			modes = checks.AllModes
