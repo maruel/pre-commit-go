@@ -51,7 +51,7 @@ Native checks:
   * [govet (go tool vet)](https://golang.org/x/tools/cmd/vet)
   * [go test -cover](https://golang.org/pkg/testing/) with [coverage](https://blog.golang.org/cover)
 
-Checks documentation: [![GoDoc](https://godoc.org/github.com/maruel/pre-commit-go/checks?status.svg)](https://godoc.org/github.com/maruel/pre-commit-go/checks)
+Checks documentation: [![GoDoc](https://godoc.org/github.com/maruel/pre-commit-go/checks/definitions?status.svg)](https://godoc.org/github.com/maruel/pre-commit-go/checks/definitions)
 [![Build Status](https://travis-ci.org/maruel/pre-commit-go.svg?branch=master)](https://travis-ci.org/maruel/pre-commit-go)
 
 

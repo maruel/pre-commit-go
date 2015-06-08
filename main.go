@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/maruel/pre-commit-go/checks"
+	"github.com/maruel/pre-commit-go/checks/definitions"
 	"github.com/maruel/pre-commit-go/internal"
 	"github.com/maruel/pre-commit-go/scm"
 	"gopkg.in/yaml.v2"
@@ -256,7 +257,7 @@ func cmdInstallPrereq(repo scm.Repo, config *checks.Config, r checks.RunLevel) e
 	for _, check := range enabledChecks {
 		for _, p := range check.GetPrerequisites() {
 			wg.Add(1)
-			go func(prereq checks.CheckPrerequisite) {
+			go func(prereq definitions.CheckPrerequisite) {
 				defer wg.Done()
 				if !prereq.IsPresent() {
 					c <- prereq.URL

@@ -152,29 +152,29 @@ func New() *Config {
 		Checks: map[RunLevel]Checks{
 			RunLevel(0): {[]Check{}},
 			RunLevel(1): {[]Check{
-				&Build{
+				&build{
 					ExtraArgs: []string{},
 				},
-				&Gofmt{},
-				&Test{
+				&gofmt{},
+				&test{
 					ExtraArgs: []string{"-v", "-race"},
 				},
 			}},
 			RunLevel(2): {[]Check{
-				&Errcheck{
+				&errcheck{
 					// "Close|Write.*|Flush|Seek|Read.*"
 					Ignores: "Close",
 				},
-				&Goimports{},
-				&TestCoverage{
+				&goimports{},
+				&testCoverage{
 					MinimumCoverage: 20.,
 				},
 			}},
 			RunLevel(3): {[]Check{
-				&Golint{
+				&golint{
 					Blacklist: []string{},
 				},
-				&Govet{
+				&govet{
 					Blacklist: []string{" composite literal uses unkeyed fields"},
 				},
 			}},

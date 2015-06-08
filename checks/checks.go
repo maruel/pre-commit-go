@@ -21,27 +21,12 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/maruel/pre-commit-go/checks/definitions"
 	"github.com/maruel/pre-commit-go/internal"
 )
 
 // See Build.Run() for information.
 var buildLock sync.Mutex
-
-// CheckPrerequisite describe a Go package that is needed to run a Check.
-//
-// It must list a command that is to be executed and the expected exit code to
-// verify that the custom tool is properly installed. If the executable is not
-// detected, "go get $URL" will be executed.
-type CheckPrerequisite struct {
-	HelpCommand      []string `yaml:"help_command"`
-	ExpectedExitCode int      `yaml:"expected_exit_code"`
-	URL              string   `yaml:"url"`
-}
-
-func (c *CheckPrerequisite) IsPresent() bool {
-	_, exitCode, _ := internal.Capture("", nil, c.HelpCommand...)
-	return exitCode == c.ExpectedExitCode
-}
 
 // Check describes an check to be executed on the code base.
 type Check interface {
@@ -51,45 +36,36 @@ type Check interface {
 	GetName() string
 	// GetPrerequisites lists all the go packages to be installed before running
 	// this check.
-	GetPrerequisites() []CheckPrerequisite
+	GetPrerequisites() []definitions.CheckPrerequisite
 	// Run executes the check.
 	Run() error
 }
 
 // Native checks.
 
-// Build builds everything inside the current directory via
-// 'go build ./...'.
-//
-// This check is mostly useful for executables, that is, "package main".
-// Packages containing tests are covered via check Test.
-type Build struct {
-	// Default is empty. Can be used to build multiple times with different
-	// tags, e.g. to build -tags foo,zoo then -tags bar.
-	ExtraArgs []string `yaml:"extra_args"`
-}
+type build definitions.Build
 
-func (b *Build) GetDescription() string {
+func (b *build) GetDescription() string {
 	return "builds all packages that do not contain tests, usually all directories with package 'main'"
 }
 
-func (b *Build) GetName() string {
+func (b *build) GetName() string {
 	return "build"
 }
 
-func (b *Build) GetPrerequisites() []CheckPrerequisite {
+func (b *build) GetPrerequisites() []definitions.CheckPrerequisite {
 	return nil
 }
 
-func (b *Build) Lock() {
+func (b *build) Lock() {
 	buildLock.Lock()
 }
 
-func (b *Build) Unlock() {
+func (b *build) Unlock() {
 	buildLock.Unlock()
 }
 
-func (b *Build) Run() error {
+func (b *build) Run() error {
 	// Cannot build concurrently since it leaves files in the tree.
 	// TODO(maruel): Build in a temporary directory to not leave junk in the tree
 	// with -o. On the other hand, ./... and -o foo are incompatible. But
@@ -108,26 +84,21 @@ func (b *Build) Run() error {
 	return nil
 }
 
-// Gofmt runs gofmt in check mode with code simplification enabled.
-//
-// It is almost redundant with goimports except for '-s' which goimports
-// doesn't implement and gofmt doesn't require any external package.
-type Gofmt struct {
-}
+type gofmt definitions.Gofmt
 
-func (g *Gofmt) GetDescription() string {
+func (g *gofmt) GetDescription() string {
 	return "enforces all .go sources are formatted with 'gofmt -s'"
 }
 
-func (g *Gofmt) GetName() string {
+func (g *gofmt) GetName() string {
 	return "gofmt"
 }
 
-func (g *Gofmt) GetPrerequisites() []CheckPrerequisite {
+func (g *gofmt) GetPrerequisites() []definitions.CheckPrerequisite {
 	return nil
 }
 
-func (g *Gofmt) Run() error {
+func (g *gofmt) Run() error {
 	// gofmt doesn't return non-zero even if some files need to be updated.
 	out, _, err := internal.Capture("", nil, "gofmt", "-l", "-s", ".")
 	if len(out) != 0 {
@@ -139,30 +110,21 @@ func (g *Gofmt) Run() error {
 	return nil
 }
 
-// Test runs all tests via go test.
-//
-// It is possible to run all tests multiple times, for example if one want to
-// use -tags. Note that TestCoverage is generally a better choice, the main
-// exception is the use of -race.
-type Test struct {
-	// Default is -v -race. Additional arguments to pass, like -race. Can be used
-	// multiple times to run tests multiple times, for example with -tags.
-	ExtraArgs []string `yaml:"extra_args"`
-}
+type test definitions.Test
 
-func (t *Test) GetDescription() string {
+func (t *test) GetDescription() string {
 	return "runs all tests, potentially multiple times (with race detector, with different tags, etc)"
 }
 
-func (t *Test) GetName() string {
+func (t *test) GetName() string {
 	return "test"
 }
 
-func (t *Test) GetPrerequisites() []CheckPrerequisite {
+func (t *test) GetPrerequisites() []definitions.CheckPrerequisite {
 	return nil
 }
 
-func (t *Test) Run() error {
+func (t *test) Run() error {
 	// Add tests manually instead of using './...'. The reason is that it permits
 	// running all the tests concurrently, which saves a lot of time when there's
 	// many packages.
@@ -196,30 +158,23 @@ func (t *Test) Run() error {
 	return nil
 }
 
-// Non-native checks; running these require installing third party packages. As
-// such, they are by default at an higher run level.
+type errcheck definitions.Errcheck
 
-// Errcheck runs errcheck on all directories containing .go files.
-type Errcheck struct {
-	// Flag to pass to -ignore. Default is "Close".
-	Ignores string `yaml:"ignores"`
-}
-
-func (e *Errcheck) GetDescription() string {
+func (e *errcheck) GetDescription() string {
 	return "enforces all calls returning an error are checked using tool 'errcheck'"
 }
 
-func (e *Errcheck) GetName() string {
+func (e *errcheck) GetName() string {
 	return "errcheck"
 }
 
-func (e *Errcheck) GetPrerequisites() []CheckPrerequisite {
-	return []CheckPrerequisite{
+func (e *errcheck) GetPrerequisites() []definitions.CheckPrerequisite {
+	return []definitions.CheckPrerequisite{
 		{[]string{"errcheck", "-h"}, 2, "github.com/kisielk/errcheck"},
 	}
 }
 
-func (e *Errcheck) Run() error {
+func (e *errcheck) Run() error {
 	dirs := goDirs(sourceDirs)
 	args := make([]string, 0, len(dirs)+2)
 	args = append(args, "errcheck", "-ignore", e.Ignores)
@@ -240,25 +195,23 @@ func (e *Errcheck) Run() error {
 	return nil
 }
 
-// Goimports runs goimports in check mode.
-type Goimports struct {
-}
+type goimports definitions.Goimports
 
-func (g *Goimports) GetDescription() string {
+func (g *goimports) GetDescription() string {
 	return "enforces all .go sources are formatted with 'goimports'"
 }
 
-func (g *Goimports) GetName() string {
+func (g *goimports) GetName() string {
 	return "goimports"
 }
 
-func (g *Goimports) GetPrerequisites() []CheckPrerequisite {
-	return []CheckPrerequisite{
+func (g *goimports) GetPrerequisites() []definitions.CheckPrerequisite {
+	return []definitions.CheckPrerequisite{
 		{[]string{"goimports", "-h"}, 2, "golang.org/x/tools/cmd/goimports"},
 	}
 }
 
-func (g *Goimports) Run() error {
+func (g *goimports) Run() error {
 	// goimports doesn't return non-zero even if some files need to be updated.
 	out, _, err := internal.Capture("", nil, "goimports", "-l", ".")
 	if len(out) != 0 {
@@ -270,30 +223,23 @@ func (g *Goimports) Run() error {
 	return nil
 }
 
-// Golint runs golint.
-//
-// golint triggers false positives by design. Use Blacklist to ignore
-// messages wholesale.
-type Golint struct {
-	// Messages generated by golint to be ignored.
-	Blacklist []string `yaml:"blacklist"`
-}
+type golint definitions.Golint
 
-func (g *Golint) GetDescription() string {
+func (g *golint) GetDescription() string {
 	return "enforces all .go sources passes golint"
 }
 
-func (g *Golint) GetName() string {
+func (g *golint) GetName() string {
 	return "golint"
 }
 
-func (g *Golint) GetPrerequisites() []CheckPrerequisite {
-	return []CheckPrerequisite{
+func (g *golint) GetPrerequisites() []definitions.CheckPrerequisite {
+	return []definitions.CheckPrerequisite{
 		{[]string{"golint", "-h"}, 2, "github.com/golang/lint/golint"},
 	}
 }
 
-func (g *Golint) Run() error {
+func (g *golint) Run() error {
 	// golint doesn't return non-zero ever.
 	out, _, _ := internal.Capture("", nil, "golint", "./...")
 	result := []string{}
@@ -311,30 +257,23 @@ func (g *Golint) Run() error {
 	return nil
 }
 
-// Govet runs "go tool vet".
-//
-// govet triggers false positives by design. Use Blacklist to ignore
-// messages wholesale.
-type Govet struct {
-	// Messages generated by go tool vet to be ignored.
-	Blacklist []string `yaml:"blacklist"`
-}
+type govet definitions.Govet
 
-func (g *Govet) GetDescription() string {
+func (g *govet) GetDescription() string {
 	return "enforces all .go sources passes go tool vet"
 }
 
-func (g *Govet) GetName() string {
+func (g *govet) GetName() string {
 	return "govet"
 }
 
-func (g *Govet) GetPrerequisites() []CheckPrerequisite {
-	return []CheckPrerequisite{
+func (g *govet) GetPrerequisites() []definitions.CheckPrerequisite {
+	return []definitions.CheckPrerequisite{
 		{[]string{"go", "tool", "vet", "-h"}, 1, "golang.org/x/tools/cmd/vet"},
 	}
 }
 
-func (g *Govet) Run() error {
+func (g *govet) Run() error {
 	// Ignore the return code since we ignore many errors.
 	out, _, _ := internal.Capture("", nil, "go", "tool", "vet", "-all", ".")
 	result := []string{}
@@ -352,41 +291,27 @@ func (g *Govet) Run() error {
 	return nil
 }
 
-// TestCoverage runs all tests with coverage.
-//
-// Each testable package is run with 'go test -cover' then all coverage
-// information is merged together. This means that package X/Y may create code
-// coverage for package X/Z.
-//
-// When running on https://travis-ci.org, it tries to upload code coverage
-// results to https://coveralls.io.
-//
-// Otherwise, only a summary is printed in case code coverage is not above
-// t.MinimumCoverage.
-type TestCoverage struct {
-	// Minimum test coverage to be generated or the check is considered to fail.
-	MinimumCoverage float64 `yaml:"minimum_coverage"`
-}
+type testCoverage definitions.TestCoverage
 
-func (t *TestCoverage) GetDescription() string {
+func (t *testCoverage) GetDescription() string {
 	return "enforces minimum test coverage on all packages that are not 'main'"
 }
 
-func (t *TestCoverage) GetName() string {
+func (t *testCoverage) GetName() string {
 	return "testcoverage"
 }
 
-func (t *TestCoverage) GetPrerequisites() []CheckPrerequisite {
-	toInstall := []CheckPrerequisite{
+func (t *testCoverage) GetPrerequisites() []definitions.CheckPrerequisite {
+	toInstall := []definitions.CheckPrerequisite{
 		{[]string{"go", "tool", "cover", "-h"}, 1, "golang.org/x/tools/cmd/cover"},
 	}
 	if IsContinuousIntegration() {
-		toInstall = append(toInstall, CheckPrerequisite{[]string{"goveralls", "-h"}, 2, "github.com/mattn/goveralls"})
+		toInstall = append(toInstall, definitions.CheckPrerequisite{[]string{"goveralls", "-h"}, 2, "github.com/mattn/goveralls"})
 	}
 	return toInstall
 }
 
-func (t *TestCoverage) Run() (err error) {
+func (t *testCoverage) Run() (err error) {
 	// TODO(maruel): Kept because we may have to revert to using broader
 	// instrumentation due to OS command line argument length limit.
 	//pkgRoot, _ := os.Getwd()
@@ -563,37 +488,24 @@ func (t *TestCoverage) Run() (err error) {
 
 // Extensibility.
 
-// CustomCheck represents a user configured check.
-type CustomCheck struct {
-	// Check's display name, required.
-	DisplayName string `yaml:"display_name"`
-	// Check's description, optional.
-	Description string `yaml:"description"`
-	// Check's command line, required.
-	Command []string `yaml:"command"`
-	// Check's fails if exit code is non-zero.
-	CheckExitCode bool `yaml:"check_exit_code"`
-	// Check's prerequisite packages to install first before running the check,
-	// optional.
-	Prerequisites []CheckPrerequisite `yaml:"prerequisites"`
-}
+type customCheck definitions.CustomCheck
 
-func (c *CustomCheck) GetDescription() string {
+func (c *customCheck) GetDescription() string {
 	if c.Description != "" {
 		return c.Description
 	}
 	return "runs a custom check from an external package"
 }
 
-func (c *CustomCheck) GetName() string {
+func (c *customCheck) GetName() string {
 	return "custom"
 }
 
-func (c *CustomCheck) GetPrerequisites() []CheckPrerequisite {
+func (c *customCheck) GetPrerequisites() []definitions.CheckPrerequisite {
 	return c.Prerequisites
 }
 
-func (c *CustomCheck) Run() error {
+func (c *customCheck) Run() error {
 	out, exitCode, err := internal.Capture("", nil, c.Command...)
 	if exitCode != 0 && c.CheckExitCode {
 		return fmt.Errorf("\"%s\" failed:\n%s", strings.Join(c.Command, " "), out)
@@ -606,15 +518,15 @@ var KnownChecks map[string]Check
 
 func init() {
 	known := []Check{
-		&Build{},
-		&Gofmt{},
-		&Test{},
-		&Errcheck{},
-		&Goimports{},
-		&Golint{},
-		&Govet{},
-		&TestCoverage{},
-		&CustomCheck{},
+		&build{},
+		&gofmt{},
+		&test{},
+		&errcheck{},
+		&goimports{},
+		&golint{},
+		&govet{},
+		&testCoverage{},
+		&customCheck{},
 	}
 	KnownChecks = map[string]Check{}
 	for _, k := range known {
