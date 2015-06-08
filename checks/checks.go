@@ -22,7 +22,15 @@ import (
 	"github.com/maruel/pre-commit-go/internal"
 )
 
-// See Build.Run() for information.
+// Checks are alias of the corresponding checks in package definitions. The
+// reason is so the definitions package documentation at
+// https://godoc.org/github.com/maruel/pre-commit-go/checks/definitions is
+// clean and the code in this package focus on the implementation.
+//
+// They are not exported since they are meant to be created by deserializing a
+// pre-commit-go.yml, not to be instantiated manually.
+
+// See build.Run() for information.
 var buildLock sync.Mutex
 
 // Check describes an check to be executed on the code base.

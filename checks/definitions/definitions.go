@@ -7,6 +7,65 @@
 //
 // Each of the struct in this file is to be embedded into pre-commit-go.yml.
 // Use the comments here as a guidance to set the relevant values.
+//
+// The config has two root keys, 'version' and 'modes'. The valid values for
+// 'modes' are 'pre-commit', 'pre-push', 'continuous-integration' and 'lint'.
+// Each mode has two values; checks and max_duration. 'checks' is a list of
+// check, 'max_duration' is the maximum duration allowed to run all the checks,
+// otherwise the run is marked as failed because it is too slow.
+//
+// Here's a sample pre-commit-go.yaml file:
+//
+//    version: 2
+//    modes:
+//      pre-commit:
+//        checks:
+//        - check_type: gofmt
+//        - check_type: test
+//          extra_args:
+//          - -short
+//        max_duration: 5
+//      pre-push:
+//        checks:
+//        - check_type: build
+//          extra_args: []
+//      continuous-integration:
+//        checks:
+//        - check_type: build
+//          extra_args: []
+//        - check_type: gofmt
+//        - check_type: goimports
+//        - check_type: testcoverage
+//          minimum_coverage: 60
+//        - check_type: test
+//          extra_args:
+//          - -v
+//          - -race
+//        - check_type: custom
+//          display_name: my-check
+//          description: runs my check
+//          command:
+//          - my-check
+//          - -all
+//          check_exit_code: true
+//          prerequisites:
+//          - help_command:
+//            - my-check -all
+//            - -help
+//            expected_exit_code: 2
+//            url: github.com/me/my-check
+//        max_duration: 120
+//      lint:
+//        checks:
+//        - check_type: errcheck
+//          ignores: Close
+//        - blacklist: []
+//          check_type: golint
+//        - blacklist:
+//          - ' composite literal uses unkeyed fields'
+//          check_type: govet
+//        max_duration: 15
+
 package definitions
 
 import "github.com/maruel/pre-commit-go/internal"
