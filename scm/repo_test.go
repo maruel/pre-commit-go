@@ -32,6 +32,9 @@ func init() {
 func TestGetRepoGitSlow(t *testing.T) {
 	// Make a repository and test behavior against it.
 	t.Parallel()
+	if isDrone() {
+		t.Skipf("Give up on drone, it uses a weird go template which makes it not standard when using git init")
+	}
 	tmpDir, err := ioutil.TempDir("", "pre-commit-go")
 	defer func() {
 		if err := internal.RemoveAll(tmpDir); err != nil {
@@ -48,14 +51,7 @@ func TestGetRepoGitSlow(t *testing.T) {
 	ut.AssertEqual(t, filepath.Join(tmpDir, ".git", "hooks"), p)
 	ut.AssertEqual(t, GitInitialCommit, repo.HEAD())
 	err = repo.Checkout(GitInitialCommit)
-	base := "checkout failed:\nfatal: Cannot switch branch to a non-commit"
-	if isDrone() {
-		// #thanksdrone
-		ut.AssertEqual(t, errors.New(base+"."), err)
-		run(t, tmpDir, nil, "checkout", "master")
-	} else {
-		ut.AssertEqual(t, errors.New(base+" '4b825dc642cb6eb9a060e54bf8d69288fbee4904'"), err)
-	}
+	ut.AssertEqual(t, errors.New("checkout failed:\nfatal: Cannot switch branch to a non-commit '4b825dc642cb6eb9a060e54bf8d69288fbee4904'"), err)
 
 	untracked, err := repo.Untracked()
 	ut.AssertEqual(t, nil, err)
@@ -85,13 +81,6 @@ func TestGetRepoGitSlow(t *testing.T) {
 	// Author date is specified via --date but committer date is via environment
 	// variable. Go figure.
 	run(t, tmpDir, []string{"GIT_COMMITTER_DATE=2005-04-07T22:13:13 +0000"}, "commit", "-m", "yo", "--date", "2005-04-07T22:13:13 +0000")
-	if repo.Ref() == "" {
-		// #thanksdrone
-		ut.AssertEqual(t, true, isDrone())
-		run(t, tmpDir, nil, "checkout", "master")
-	} else {
-		ut.AssertEqual(t, false, isDrone())
-	}
 	ut.AssertEqual(t, "master", repo.Ref())
 	ut.AssertEqual(t, "hi\nhello\n", read(t, tmpDir, "file1"))
 	head := repo.HEAD()
@@ -218,6 +207,8 @@ func read(t *testing.T, tmpDir, name string) string {
 }
 
 // isDrone returns true if running under https://drone.io.
+//
+// See http://docs.drone.io/env.html
 func isDrone() bool {
 	return os.Getenv("DRONE") == "true"
 }

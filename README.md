@@ -7,11 +7,23 @@ simple and *fast*. Everything is run concurrently. It also includes linting
 support and Continuous Integration service (CI) support. No check ever modify
 any file.
 
-Here's a sample of CI systems that can be used. Obviously, only use one, not 3!
+Here's a sample of CI systems that can be used. Obviously, only use one, not 3
+but none is perfect:
 
-  * Travis: [![Build Status](https://travis-ci.org/maruel/pre-commit-go.svg?branch=master)](https://travis-ci.org/maruel/pre-commit-go). Travis permits you to run tests against multiple versions of Go.
-  * CircleCI: [![Build Status](https://circleci.com/gh/maruel/pre-commit-go.svg?style=shield&circle-token=:circle-token)](https://circleci.com/gh/maruel/pre-commit-go). CircleCI lets you ssh into the bot for 30 minutes to debug a failure.
+  * Travis: [![Build Status](https://travis-ci.org/maruel/pre-commit-go.svg?branch=master)](https://travis-ci.org/maruel/pre-commit-go)
+    * Travis permits you to run tests against multiple versions of Go, even
+      against tip!
+    * Travis (free version) is the slowest of all 3.
+  * CircleCI: [![Build Status](https://circleci.com/gh/maruel/pre-commit-go.svg?style=shield&circle-token=:circle-token)](https://circleci.com/gh/maruel/pre-commit-go)
+    * CircleCI lets you ssh into the bot for 30 minutes to debug a failure.
+      Pretty awesome.
+    * Uses build output caching which can get in the way.
+    * Uses symlinks in ~/.go_project/src which can get in the way.
+    * Can't specify Go version.
   * Drone: [![Build Status](https://drone.io/github.com/maruel/pre-commit-go/status.png)](https://drone.io/github.com/maruel/pre-commit-go/latest)
+    * Uses a git template which gets in the way if you ever run git in a smoke
+      test.
+    * Can't specify Go version.
 
 Code coverage can be used via one of the systems above via Coveralls:
 [![Coverage Status](https://coveralls.io/repos/maruel/pre-commit-go/badge.svg?branch=master)](https://coveralls.io/r/maruel/pre-commit-go?branch=master)
