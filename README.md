@@ -117,8 +117,19 @@ is perfect:
     * Can't ssh in.
   * CircleCI: [![Build Status](https://circleci.com/gh/maruel/pre-commit-go.svg?style=shield&circle-token=:circle-token)](https://circleci.com/gh/maruel/pre-commit-go)
     * Lets you ssh into the bot for 30 minutes to debug a failure!
-    * Uses build output caching which can get in the way.
-    * Uses symlinks in ~/.go_project/src which can get in the way.
+    * Uses build output caching which does get in the way.
+    * Uses a multivalue `$GOPATH` and symlinks which can get in the way:
+      * `~/.go_workspace` contains dependencies.
+      * The project is directly checked out in `~/`.
+      * `~/.go_project/src/<repo/path>` contains a symlink to the project
+        checkout that is directly in `~/`.
+      * `$GOPATH` is
+        `/home/ubuntu/.go_workspace:/usr/local/go_workspace:/home/ubuntu/.go_project`
+      * This means that `readlink -f .` returns a path outside of `$GOPATH`
+        (!?!)
+      * `~/.go_project/bin` is not in `$PATH`. You have to add it manually if
+        needed. You can work around with
+        `PATH="${HOME}/.go_project/bin:${PATH}" pre-commit-go`
     * Can't specify Go version.
   * Drone: [![Build Status](https://drone.io/github.com/maruel/pre-commit-go/status.png)](https://drone.io/github.com/maruel/pre-commit-go/latest)
     * Uses a git template which gets in the way if you ever run git in a smoke
@@ -128,6 +139,8 @@ is perfect:
 
 Code coverage can be used via one of the systems above via Coveralls:
 [![Coverage Status](https://coveralls.io/repos/maruel/pre-commit-go/badge.svg?branch=master)](https://coveralls.io/r/maruel/pre-commit-go?branch=master)
+
+None of the service report the same level code coverage. Go figure.
 
 
 ### travis-ci.org
