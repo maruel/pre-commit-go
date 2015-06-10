@@ -37,6 +37,8 @@ const (
 type change struct {
 	repo        Repo
 	lock        sync.Mutex
+	files       []string
+	allFiles    []string
 	goDirsCache map[dirsType][]string
 }
 

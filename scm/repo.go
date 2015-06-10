@@ -8,15 +8,26 @@ package scm
 import (
 	"errors"
 	"fmt"
+	"log"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/maruel/pre-commit-go/internal"
 )
 
-// GitInitialCommit is the root invisible commit.
-const GitInitialCommit = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+// Commit represents a commit reference, normally a digest.
+type Commit string
+
+const (
+	// GitInitialCommit is the root invisible commit.
+	// TODO(maruel): When someone want to add mercurial support, refactor this to
+	// create a pseudo constant named InitialCommit.
+	GitInitialCommit Commit = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+	// Current is a meta-reference to the current tree.
+	Current Commit = ""
+)
 
 // ReadOnlyRepo represents a source control managemed checkout.
 //
@@ -27,15 +38,30 @@ type ReadOnlyRepo interface {
 	// HookPath returns the directory containing the commit and push hooks.
 	HookPath() (string, error)
 	// HEAD returns the HEAD commit hash.
-	HEAD() string
-	// Ref returns the HEAD branch name.
+	HEAD() Commit
+	// Ref returns the HEAD branch name if any. If a remote branch is checked
+	// out, "" is returned.
 	Ref() string
-	// Untracked returns the list of untracked files.
-	Untracked() ([]string, error)
-	// Unstaged returns the list with changes not in the staging index.
-	Unstaged() ([]string, error)
-	// All returns a change with everything in it.
-	All() Change
+	// Upstream returns the upstream commit.
+	Upstream() Commit
+
+	// Between returns a change with files touched between from and to in it.
+	// If recent is Current, it diffs against the current tree, independent of
+	// what is versioned.
+	//
+	// To get files in the staging area, use (Current, HEAD()).
+	//
+	// Untracked files are always excluded.
+	//
+	// Files with untracked change will be included if recent == Current. To
+	// exclude untracked changes to tracked files, use Stash() first or specify
+	// recent=HEAD().
+	//
+	// To get the list of all files in the tree and the index, use
+	// Between(Current, GitInitialCommit).
+	//
+	// Returns nil and no error if there's no file difference.
+	Between(recent, old Commit) (Change, error)
 }
 
 // Repo represents a source control managed checkout.
@@ -48,12 +74,28 @@ type Repo interface {
 	Stash() (bool, error)
 	// Stash restores the stash generated from Stash.
 	Restore() error
-	// Checkout checks out a commit.
-	Checkout(commit string) error
+	// Checkout checks out a commit or a branch.
+	Checkout(ref string) error
 }
 
 // GetRepo returns a valid Repo if one is found.
 func GetRepo(wd string) (Repo, error) {
+	return getRepo(wd)
+}
+
+// Private details.
+
+var reCommit = regexp.MustCompile("^[0-9a-f]{40}$")
+
+type repo interface {
+	Repo
+	// untracked returns the list of untracked files.
+	untracked() []string
+	// unstaged returns the list with changes not in the staging index.
+	unstaged() []string
+}
+
+func getRepo(wd string) (repo, error) {
 	root, err := captureAbs(wd, "git", "rev-parse", "--show-cdup")
 	if err == nil {
 		return &git{root: root}, nil
@@ -61,10 +103,6 @@ func GetRepo(wd string) (Repo, error) {
 	// TODO: Add your favorite SCM.
 	return nil, fmt.Errorf("failed to find git checkout root")
 }
-
-// Private details.
-
-var reCommit = regexp.MustCompile("^[0-9a-f]{40}$")
 
 type git struct {
 	root   string
@@ -86,9 +124,9 @@ func (g *git) HookPath() (string, error) {
 	return filepath.Join(g.gitDir, "hooks"), nil
 }
 
-func (g *git) HEAD() string {
+func (g *git) HEAD() Commit {
 	if out, code, _ := g.capture(nil, "rev-parse", "--verify", "HEAD"); code == 0 {
-		return out
+		return Commit(out)
 	}
 	return GitInitialCommit
 }
@@ -100,42 +138,65 @@ func (g *git) Ref() string {
 	return ""
 }
 
-func (g *git) Untracked() ([]string, error) {
-	out, code, err := g.capture(nil, "ls-files", "--others", "--exclude-standard")
-	if code != 0 || err != nil {
-		return nil, errors.New("failed to retrieve untracked files")
+func (g *git) Upstream() Commit {
+	if out, code, _ := g.capture(nil, "log", "-1", "--format=%H", "@{upstream}"); code == 0 {
+		return Commit(out)
 	}
-	if len(out) != 0 {
-		return strings.Split(out, "\n"), err
-	}
-	return nil, err
+	return ""
 }
 
-func (g *git) Unstaged() ([]string, error) {
-	out, code, err := g.capture(nil, "diff", "--name-only", "--no-color", "--no-ext-diff")
-	if code != 0 || err != nil {
-		return nil, errors.New("failed to retrieve unstaged files")
-	}
-	if len(out) != 0 {
-		return strings.Split(out, "\n"), err
-	}
-	return nil, err
+func (g *git) untracked() []string {
+	return g.captureList(nil, "ls-files", "--others", "--exclude-standard", "-z")
 }
 
-func (g *git) All() Change {
-	return &change{repo: g}
+func (g *git) unstaged() []string {
+	return g.captureList(nil, "diff", "--name-only", "--no-color", "--no-ext-diff", "-z")
+}
+
+func (g *git) Between(recent, old Commit) (Change, error) {
+	if old == Current {
+		return nil, errors.New("can't use Current as old commit")
+	}
+	if !g.isValid(old) {
+		return nil, errors.New("invalid old commit")
+	}
+	log.Printf("Between(%q, %q)", recent, old)
+	allFiles := g.captureList(nil, "ls-files", "-z")
+	var files []string
+	if recent == Current {
+		if old == GitInitialCommit {
+			files = allFiles
+		} else {
+			files = g.captureList(nil, "diff-tree", "--no-commit-id", "--name-only", "-z", "-r", string(old))
+			// TODO(maruel): Duplicates?
+			files = append(files, g.unstaged()...)
+		}
+	} else {
+		if !g.isValid(recent) {
+			return nil, errors.New("invalid old commit")
+		}
+		files = g.captureList(nil, "diff-tree", "--no-commit-id", "--name-only", "-z", "-r", string(recent), string(old))
+	}
+	if len(files) == 0 {
+		return nil, nil
+	}
+	sort.Strings(files)
+	// TODO(maruel): Create change{} with the list of files.
+	// TODO(maruel): Change still needs the list of all files in the checkout,
+	// for dependency analysis.
+	return &change{repo: g, allFiles: allFiles, files: files}, nil
 }
 
 func (g *git) Stash() (bool, error) {
 	// Ensure everything is either tracked or ignored. This is because git stash
 	// doesn't stash untracked files.
-	if untracked, err := g.Untracked(); err != nil {
-		return false, err
+	if untracked := g.untracked(); untracked == nil {
+		return false, errors.New("failed to get list of untracked files")
 	} else if len(untracked) != 0 {
 		return false, errors.New("can't stash if there are untracked files")
 	}
-	if unstaged, err := g.Unstaged(); err != nil {
-		return false, err
+	if unstaged := g.unstaged(); unstaged == nil {
+		return false, errors.New("failed to get list of unstaged files")
 	} else if len(unstaged) == 0 {
 		// No need to stash, there's no unstaged files.
 		return false, nil
@@ -167,11 +228,8 @@ func (g *git) Restore() error {
 	return nil
 }
 
-func (g *git) Checkout(commit string) error {
-	if !reCommit.MatchString(commit) {
-		return errors.New("only commit hash is accepted")
-	}
-	if out, e, err := g.capture(nil, "checkout", "-f", "-q", commit); e != 0 || err != nil {
+func (g *git) Checkout(ref string) error {
+	if out, e, err := g.capture(nil, "checkout", "-f", "-q", ref); e != 0 || err != nil {
 		return fmt.Errorf("checkout failed:\n%s", out)
 	}
 	return nil
@@ -180,6 +238,25 @@ func (g *git) Checkout(commit string) error {
 func (g *git) capture(env []string, args ...string) (string, int, error) {
 	out, code, err := internal.Capture(g.root, env, append([]string{"git"}, args...)...)
 	return strings.TrimRight(out, "\n\r"), code, err
+}
+
+// captureList assumes the -z argument is used. Returns nil in case of error.
+func (g *git) captureList(env []string, args ...string) []string {
+	out, code, err := g.capture(env, args...)
+	if code != 0 || err != nil {
+		return nil
+	}
+	if len(out) == 0 {
+		return []string{}
+	}
+	if out[len(out)-1] != '\x00' {
+		panic("Shouldn't happen")
+	}
+	return strings.Split(out[:len(out)-1], "\x00")
+}
+
+func (g *git) isValid(c Commit) bool {
+	return reCommit.MatchString(string(c))
 }
 
 // getGitDir returns the .git directory path.

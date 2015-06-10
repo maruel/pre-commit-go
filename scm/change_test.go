@@ -43,7 +43,9 @@ func TestGoDirs(t *testing.T) {
 	ut.AssertEqual(t, nil, err)
 	repo, err := GetRepo(scmDir)
 	ut.AssertEqualf(t, nil, err, "%s: %s", scmDir, err)
-	change := repo.All().(*change)
+	c, err := repo.Between(Current, GitInitialCommit)
+	ut.AssertEqual(t, nil, err)
+	ch := c.(*change)
 	preCommitGoDir := filepath.Dir(scmDir)
 	defer func() {
 		_ = os.Chdir(scmDir)
@@ -53,9 +55,9 @@ func TestGoDirs(t *testing.T) {
 	internalDir := filepath.Join(preCommitGoDir, "internal")
 	customCheckDir := filepath.Join(preCommitGoDir, "samples", "sample-pre-commit-go-custom-check")
 	ut.AssertEqual(t, nil, os.Chdir(preCommitGoDir))
-	ut.AssertEqual(t, []string{preCommitGoDir, checksDir, definitionsDir, internalDir, customCheckDir, scmDir}, change.goDirs(sourceDirs))
-	ut.AssertEqual(t, []string{preCommitGoDir, checksDir, scmDir}, change.goDirs(testDirs))
-	ut.AssertEqual(t, []string{checksDir, definitionsDir, internalDir, scmDir}, change.goDirs(packageDirs))
+	ut.AssertEqual(t, []string{preCommitGoDir, checksDir, definitionsDir, internalDir, customCheckDir, scmDir}, ch.goDirs(sourceDirs))
+	ut.AssertEqual(t, []string{preCommitGoDir, checksDir, scmDir}, ch.goDirs(testDirs))
+	ut.AssertEqual(t, []string{checksDir, definitionsDir, internalDir, scmDir}, ch.goDirs(packageDirs))
 }
 
 // isCircleCI returns true if running under https://circleci.com.

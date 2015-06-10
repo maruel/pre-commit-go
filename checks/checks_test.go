@@ -155,9 +155,17 @@ func setup(t *testing.T, td string, files map[string]string) (string, scm.Change
 	_, code, err := internal.Capture(fooDir, nil, "git", "init")
 	ut.AssertEqual(t, 0, code)
 	ut.AssertEqual(t, nil, err)
+	// It's important to add the files to the index, otherwise they will be
+	// ignored.
+	_, code, err = internal.Capture(fooDir, nil, "git", "add", ".")
+	ut.AssertEqual(t, 0, code)
+	ut.AssertEqual(t, nil, err)
+
 	repo, err := scm.GetRepo(fooDir)
 	ut.AssertEqual(t, nil, err)
-	return oldWd, repo.All()
+	change, err := repo.Between(scm.Current, scm.GitInitialCommit)
+	ut.AssertEqual(t, nil, err)
+	return oldWd, change
 }
 
 func getKnownChecks() []string {
