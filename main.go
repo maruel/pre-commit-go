@@ -437,7 +437,10 @@ func cmdInstall(repo scm.Repo, config *checks.Config, modes []checks.Mode) error
 func cmdRun(repo scm.Repo, config *checks.Config, modes []checks.Mode, allFiles bool) error {
 	old := scm.GitInitialCommit
 	if !allFiles {
-		old = repo.Upstream()
+		var err error
+		if old, err = repo.Upstream(); err != nil {
+			return err
+		}
 	}
 	change, err := repo.Between(scm.Current, old)
 	if err != nil {
@@ -481,15 +484,19 @@ func cmdWriteConfig(repo scm.Repo, config *checks.Config, configPath string) err
 }
 
 func mainImpl() error {
-	cmd := ""
 	if len(os.Args) == 1 {
-		cmd = "installrun"
-	} else {
-		cmd = os.Args[1]
-		copy(os.Args[1:], os.Args[2:])
-		os.Args = os.Args[:len(os.Args)-1]
+		if checks.IsContinuousIntegration() {
+			os.Args = append(os.Args, "run-hook", "continuous-integration")
+		} else {
+			os.Args = append(os.Args, "installrun")
+		}
 	}
-	verbose := flag.Bool("verbose", false, "enables verbose logging output")
+
+	cmd := os.Args[1]
+	copy(os.Args[1:], os.Args[2:])
+	os.Args = os.Args[:len(os.Args)-1]
+
+	verbose := flag.Bool("verbose", checks.IsContinuousIntegration(), "enables verbose logging output")
 	allFlag := flag.Bool("all", false, "runs checks as if all files had been modified")
 	configPath := flag.String("config", "pre-commit-go.yml", "file name of the config to load")
 	modeFlag := flag.String("mode", "", "coma separated list of modes to process; default depends on the command")
@@ -564,11 +571,7 @@ func mainImpl() error {
 		return cmdInstall(repo, config, modes)
 	case "installrun":
 		if len(modes) == 0 {
-			if checks.IsContinuousIntegration() {
-				modes = []checks.Mode{checks.ContinuousIntegration}
-			} else {
-				modes = []checks.Mode{checks.PrePush}
-			}
+			modes = []checks.Mode{checks.PrePush}
 		}
 		if err := cmdInstall(repo, config, modes); err != nil {
 			return err

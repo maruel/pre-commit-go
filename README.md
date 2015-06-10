@@ -108,6 +108,10 @@ Continous integration support
 
 ### Overview
 
+`pre-commit-go` sets itself in mode `run-hook continuous-integration`
+automatically when run without arguments and the environment variable `CI=true`
+is set. It is set on all popular hosted CI services.
+
 Here's a sample of CI systems that can be used. Obviously, use 1, not 3 but none
 is perfect:
 
@@ -115,6 +119,7 @@ is perfect:
     * Lets you to run tests against multiple versions of Go, even against tip!
     * The free version is the slowest of all 3.
     * Can't ssh in.
+    * Can't disable email notifications.
   * CircleCI: [![Build Status](https://circleci.com/gh/maruel/pre-commit-go.svg?style=shield&circle-token=:circle-token)](https://circleci.com/gh/maruel/pre-commit-go)
     * Lets you ssh into the bot for 30 minutes to debug a failure!
     * Uses build output caching which does get in the way.
@@ -131,6 +136,7 @@ is perfect:
         needed. You can work around with
         `PATH="${HOME}/.go_project/bin:${PATH}" pre-commit-go`
     * Can't specify Go version.
+    * Can't disable email notifications.
   * Drone: [![Build Status](https://drone.io/github.com/maruel/pre-commit-go/status.png)](https://drone.io/github.com/maruel/pre-commit-go/latest)
     * Uses a git template which gets in the way if you ever run git in a smoke
       test.

@@ -43,7 +43,7 @@ type ReadOnlyRepo interface {
 	// out, "" is returned.
 	Ref() string
 	// Upstream returns the upstream commit.
-	Upstream() Commit
+	Upstream() (Commit, error)
 
 	// Between returns a change with files touched between from and to in it.
 	// If recent is Current, it diffs against the current tree, independent of
@@ -138,11 +138,11 @@ func (g *git) Ref() string {
 	return ""
 }
 
-func (g *git) Upstream() Commit {
+func (g *git) Upstream() (Commit, error) {
 	if out, code, _ := g.capture(nil, "log", "-1", "--format=%H", "@{upstream}"); code == 0 {
-		return Commit(out)
+		return Commit(out), nil
 	}
-	return ""
+	return "", errors.New("no upstream")
 }
 
 func (g *git) untracked() []string {
@@ -154,13 +154,13 @@ func (g *git) unstaged() []string {
 }
 
 func (g *git) Between(recent, old Commit) (Change, error) {
+	log.Printf("Between(%q, %q)", recent, old)
 	if old == Current {
 		return nil, errors.New("can't use Current as old commit")
 	}
 	if !g.isValid(old) {
 		return nil, errors.New("invalid old commit")
 	}
-	log.Printf("Between(%q, %q)", recent, old)
 	allFiles := g.captureList(nil, "ls-files", "-z")
 	var files []string
 	if recent == Current {
