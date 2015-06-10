@@ -332,9 +332,9 @@ func (c *coverage) Run(change scm.Change) (err error) {
 		if i != 0 {
 			coverPkg += ","
 		}
-		rel, err2 := relToGOPATH(p)
-		if err2 != nil {
-			return err2
+		rel, err := relToGOPATH(p)
+		if err != nil {
+			return err
 		}
 		coverPkg += rel
 	}
@@ -344,9 +344,9 @@ func (c *coverage) Run(change scm.Change) (err error) {
 		return nil
 	}
 
-	tmpDir, err2 := ioutil.TempDir("", "pre-commit-go")
-	if err2 != nil {
-		return err2
+	tmpDir, err := ioutil.TempDir("", "pre-commit-go")
+	if err != nil {
+		return err
 	}
 	defer func() {
 		err2 := internal.RemoveAll(tmpDir)
@@ -383,90 +383,32 @@ func (c *coverage) Run(change scm.Change) (err error) {
 	// Merge the profiles. Sums all the counts.
 	// Format is "file.go:XX.YY,ZZ.II J K"
 	// J is number of statements, K is count.
-	files, err2 := filepath.Glob(filepath.Join(tmpDir, "test*.cov"))
-	if err2 != nil {
-		return err2
+	files, err := filepath.Glob(filepath.Join(tmpDir, "test*.cov"))
+	if err != nil {
+		return err
 	}
 	if len(files) == 0 {
 		select {
-		case err2 := <-errs:
-			return err2
+		case err = <-errs:
+			return err
 		default:
 			return errors.New("no coverage found")
 		}
 	}
-	counts := map[string]int{}
-	for _, file := range files {
-		f, err2 := os.Open(file)
-		if err2 != nil {
-			return err2
-		}
-		s := bufio.NewScanner(f)
-		// Strip the first line.
-		s.Scan()
-		count := 0
-		for s.Scan() {
-			items := rsplitn(s.Text(), " ", 2)
-			count, err2 = strconv.Atoi(items[1])
-			if err2 != nil {
-				break
-			}
-			counts[items[0]] += int(count)
-		}
-		f.Close()
-		if err2 != nil {
-			return err2
-		}
-	}
 	profilePath := filepath.Join(tmpDir, "profile.cov")
-	f, err2 := os.Create(profilePath)
-	if err2 != nil {
-		return err2
+	f, err := os.Create(profilePath)
+	if err != nil {
+		return err
 	}
-	stms := make([]string, 0, len(counts))
-	for k := range counts {
-		stms = append(stms, k)
-	}
-	sort.Strings(stms)
-	_, _ = io.WriteString(f, "mode: count\n")
-	for _, stm := range stms {
-		fmt.Fprintf(f, "%s %d\n", stm, counts[stm])
+	if err = mergeCoverage(files, f); err != nil {
+		f.Close()
+		return err
 	}
 	f.Close()
 
-	// Analyze the results.
-	out, _, err2 := internal.Capture("", nil, "go", "tool", "cover", "-func", profilePath)
-	coverage := ordered{}
-	partial := 0
-	var total float64
-	for i, line := range strings.Split(out, "\n") {
-		if i == 0 || len(line) == 0 {
-			// First or last line.
-			continue
-		}
-		items := strings.SplitN(line, "\t", 2)
-		loc := items[0]
-		if strings.HasSuffix(loc, ":") {
-			loc = loc[:len(loc)-1]
-		}
-		if len(items) == 1 {
-			panic(fmt.Sprintf("%#v %#v", line, items))
-		}
-		items = strings.SplitN(strings.TrimLeft(items[1], "\t"), "\t", 2)
-		name := items[0]
-		percentStr := strings.TrimLeft(items[1], "\t")
-		percent, err2 := strconv.ParseFloat(percentStr[:len(percentStr)-1], 64)
-		if err2 != nil {
-			return fmt.Errorf("malformed coverage file")
-		}
-		if loc == "total" {
-			total = percent
-		} else {
-			coverage = append(coverage, covered{percent, loc, name})
-			if percent < 100. {
-				partial++
-			}
-		}
+	coverage, total, partial, err := loadProfile(profilePath)
+	if err != nil {
+		return err
 	}
 	log.Printf("%d functions profiled", len(coverage))
 
@@ -490,13 +432,13 @@ func (c *coverage) Run(change scm.Change) (err error) {
 		}
 	}
 	if total < c.MinimumCoverage {
-		err2 = fmt.Errorf("code coverage: %3.1f%%; %d untested functions", total, partial)
+		err = fmt.Errorf("code coverage: %3.1f%%; %d untested functions", total, partial)
 	} else {
 		log.Printf("code coverage: %3.1f%%; %d untested functions", total, partial)
 	}
-	if err2 == nil {
+	if err == nil {
 		select {
-		case err2 = <-errs:
+		case err = <-errs:
 		default:
 		}
 	}
@@ -506,13 +448,100 @@ func (c *coverage) Run(change scm.Change) (err error) {
 		// TODO(maruel): Test with all of drone.io, travis-ci.org, etc. In theory
 		// goveralls tries to be smart but we need to ensure it works for all
 		// services. Please send a pull request if it doesn't work for you.
-		out, _, err3 := internal.Capture("", nil, "goveralls", "-coverprofile", profilePath)
+		out, _, err2 := internal.Capture("", nil, "goveralls", "-coverprofile", profilePath)
 		// Don't fail the build.
-		if err3 != nil {
+		if err2 != nil {
 			fmt.Printf("%s", out)
 		}
 	}
-	return err2
+	return
+}
+
+// mergeCoverage merges multiple coverage profiles into out.
+//
+// It sums all the counts of each profile.
+//
+// Format is "file.go:XX.YY,ZZ.II J K"
+// J is number of statements, K is count.
+func mergeCoverage(files []string, out io.Writer) error {
+	counts := map[string]int{}
+	for _, file := range files {
+		f, err := os.Open(file)
+		if err != nil {
+			return err
+		}
+		s := bufio.NewScanner(f)
+		// Strip the first line.
+		s.Scan()
+		count := 0
+		for s.Scan() {
+			items := rsplitn(s.Text(), " ", 2)
+			count, err = strconv.Atoi(items[1])
+			if err != nil {
+				break
+			}
+			counts[items[0]] += int(count)
+		}
+		f.Close()
+		if err != nil {
+			return err
+		}
+	}
+	stms := make([]string, 0, len(counts))
+	for k := range counts {
+		stms = append(stms, k)
+	}
+	sort.Strings(stms)
+	if _, err := io.WriteString(out, "mode: count\n"); err != nil {
+		return err
+	}
+	for _, stm := range stms {
+		if _, err := fmt.Fprintf(out, "%s %d\n", stm, counts[stm]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// loadProfile analyzes the results of a coverage profile.
+func loadProfile(p string) (ordered, float64, int, error) {
+	out, code, err := internal.Capture("", nil, "go", "tool", "cover", "-func", p)
+	if code != 0 || err != nil {
+		return nil, 0, 0, fmt.Errorf("go tool cover failed with code %d; %s", code, err)
+	}
+	coverage := ordered{}
+	partial := 0
+	var total float64
+	for i, line := range strings.Split(out, "\n") {
+		if i == 0 || len(line) == 0 {
+			// First or last line.
+			continue
+		}
+		items := strings.SplitN(line, "\t", 2)
+		loc := items[0]
+		if strings.HasSuffix(loc, ":") {
+			loc = loc[:len(loc)-1]
+		}
+		if len(items) == 1 {
+			panic(fmt.Sprintf("%#v %#v", line, items))
+		}
+		items = strings.SplitN(strings.TrimLeft(items[1], "\t"), "\t", 2)
+		name := items[0]
+		percentStr := strings.TrimLeft(items[1], "\t")
+		percent, err := strconv.ParseFloat(percentStr[:len(percentStr)-1], 64)
+		if err != nil {
+			return nil, 0, 0, fmt.Errorf("malformed coverage file")
+		}
+		if loc == "total" {
+			total = percent
+		} else {
+			coverage = append(coverage, covered{percent, loc, name})
+			if percent < 100. {
+				partial++
+			}
+		}
+	}
+	return coverage, total, partial, nil
 }
 
 // Extensibility.
