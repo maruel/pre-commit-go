@@ -467,7 +467,11 @@ func cmdRunHook(repo scm.Repo, config *checks.Config, mode string) error {
 		if err != nil {
 			return err
 		}
-		return runChecks(config, change, []checks.Mode{checks.ContinuousIntegration})
+		mode := []checks.Mode{checks.ContinuousIntegration}
+		if err = cmdInstallPrereq(repo, config, mode); err != nil {
+			return err
+		}
+		return runChecks(config, change, mode)
 
 	default:
 		return errors.New("unsupported hook type for run-hook")
