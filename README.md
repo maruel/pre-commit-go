@@ -19,10 +19,6 @@ Use built-in help to list all options and commands:
 
     pre-commit-go help
 
-Print the enabled checks:
-
-    pre-commit-go info
-
 Run from within a git checkout inside `$GOPATH`. This installs the git hooks
 within `.git/hooks` and runs the checks in mode `pre-push` by default:
 
@@ -43,7 +39,10 @@ Configuration
 -------------
 
 See [Configuration](CONFIGURATION.md) for more details if you want to tweak the
-default checks. The default checks are meant to be sensible.
+default checks. The default checks are meant to be sensible, you can list them
+with:
+
+    pre-commit-go info
 
 
 Continous integration support

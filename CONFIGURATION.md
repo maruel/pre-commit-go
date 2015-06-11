@@ -12,11 +12,11 @@ Modes
   * `lint`: are off-by-default checks.
 
 Default checks are meant to be sensible but it can be configured by adding a
-`pre-commit-go.yaml` file, see Configuration below.
+`pre-commit-go.yaml` file, see Configuration file below.
 
 
-Configuration
--------------
+Configuration file
+------------------
 
 `pre-commit-go` loads the on disk configuration or use the default configuration
 if none is found.
