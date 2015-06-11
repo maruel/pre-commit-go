@@ -358,8 +358,6 @@ func (c *coverage) Run(change scm.Change) (err error) {
 	wg.Wait()
 
 	// Merge the profiles. Sums all the counts.
-	// Format is "file.go:XX.YY,ZZ.II J K"
-	// J is number of statements, K is count.
 	files, err := filepath.Glob(filepath.Join(tmpDir, "test*.cov"))
 	if err != nil {
 		return err
@@ -403,9 +401,14 @@ func (c *coverage) Run(change scm.Change) (err error) {
 			}
 		}
 	}
+	offset := len(change.Package())
+	if offset > 0 {
+		offset++
+		maxLoc -= offset
+	}
 	for _, item := range coverage {
 		if item.percent < 100. {
-			log.Printf("%-*s %-*s %1.1f%%", maxLoc, item.loc, maxName, item.name, item.percent)
+			log.Printf("%-*s %-*s %1.1f%%", maxLoc, item.loc[offset:], maxName, item.name, item.percent)
 		}
 	}
 	if total < c.MinimumCoverage {

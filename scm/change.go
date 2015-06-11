@@ -19,6 +19,9 @@ import (
 type Change interface {
 	// Repo references back to the repository.
 	Repo() ReadOnlyRepo
+	// Package returns the package name to reference Repo().Root(). Returns an
+	// empty string if the repository is located outside of $GOPATH.
+	Package() string
 	// Changed is the directly affected files and packages.
 	Changed() Set
 	// Indirect returns the Set of everything affected indirectly, e.g. all
@@ -73,6 +76,10 @@ func newChange(repo ReadOnlyRepo, files, allFiles []string) *change {
 
 func (c *change) Repo() ReadOnlyRepo {
 	return c.repo
+}
+
+func (c *change) Package() string {
+	return c.packageName
 }
 
 func (c *change) Changed() Set {
