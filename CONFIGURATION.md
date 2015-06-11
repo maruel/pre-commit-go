@@ -6,13 +6,16 @@ Modes
 
 `pre-commit-go` runs on 4 different modes:
 
-  * `pre-commit`: it's the fast tests, e.g. running go test -short, gofmt, etc.
-  * `pre-push`: the slower checks but still bearable for interactive usage.
-  * `continuous-integration`: runs every checks, including the race detector.
-  * `lint`: are off-by-default checks.
+  - `pre-commit`: it's the fast tests, e.g. running `go test -short`, `gofmt`,
+    etc. Runs checks only on modified files.
+  - `pre-push`: the slower checks but still bearable for interactive usage. Runs
+    checks only on modified files.
+  - `continuous-integration`: runs all checks, including the race detector. It
+    runs on all files.
+  - `lint`: off-by-default checks. This mode is meant to be run manually.
 
 Default checks are meant to be sensible but it can be configured by adding a
-`pre-commit-go.yaml` file, see Configuration file below.
+`pre-commit-go.yaml` file.
 
 
 Configuration file
@@ -22,16 +25,18 @@ Configuration file
 if none is found.
 
 In decreasing order of preference:
-  - `<repo root>/.git/pre-commit-go.yml`
-  - `<repo root>/pre-commit-go.yml`
-  - POSIX: `~/.config/pre-commit-go.yml`; Windows: `~/pre-commit-go.yml`
-  - returns the default config. You can generate it with `pre-commit-go writeconfig`
+  - Not checked in: `<repo root>/.git/pre-commit-go.yml`
+  - Checked in: `<repo root>/pre-commit-go.yml`
+  - User profile:
+    - POSIX: `~/.config/pre-commit-go.yml`
+    - Windows: `~/pre-commit-go.yml`
+  - Default config. You can generate it with `pre-commit-go writeconfig`
 
 This permits to override settings of a `pre-commit-go.yml` in a repository by
 storing an unversionned one in `.git`.
 
-`pre-commit-go.yml` can be overriden on a per call basis via `-config`. If
-`-config` specifies an absolute path, it is loaded directly. If it can't be
+The `pre-commit-go.yml` name can be overriden on a per call basis via `-config`.
+If `-config` specifies an absolute path, it is loaded directly. If it can't be
 found, the default configuration is loaded.
 
 

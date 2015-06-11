@@ -1,11 +1,13 @@
 pre-commit-go
 =============
 
-`pre-commit-go` runs multiple checks on a Go project *on commit* via
-`pre-commit` git hook and *on push* via `pre-push` git hook. It's designed to be
-simple and *fast*. Everything is run concurrently. It also includes linting
-support and [Continuous Integration service (CI)](CI_SETUP.md) support. No check ever modify
-any file. [Configuration](CONFIGURATION.md) is easy and flexible.
+`pre-commit-go` runs checks on a Go project *on commit* and *on push* via git
+hooks.
+
+  - It's [designed to be simple, fast and smart](DESIGN.md). No check ever
+    modify any file.
+  - Native [Continuous Integration service (CI)](CI_SETUP.md) support.
+  - [Configuration](CONFIGURATION.md) is easy, flexible and extensible.
 
 
 Usage

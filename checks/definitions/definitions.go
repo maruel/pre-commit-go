@@ -11,10 +11,11 @@
 // The config has two root keys, 'version' and 'modes'. The valid values for
 // 'modes' are 'pre-commit', 'pre-push', 'continuous-integration' and 'lint'.
 // Each mode has two values; checks and max_duration. 'checks' is a list of
-// check, 'max_duration' is the maximum duration allowed to run all the checks,
-// otherwise the run is marked as failed because it is too slow.
+// check defined in this mode, 'max_duration' is the maximum duration allowed
+// to run all the checks. If runtime exceeds max_duration, the run is marked as
+// failed because it is too slow.
 //
-// Here's a sample pre-commit-go.yaml file:
+// Here's a sample pre-commit-go.yml file:
 //
 //    version: 2
 //    modes:
@@ -65,7 +66,6 @@
 //          - ' composite literal uses unkeyed fields'
 //          check_type: govet
 //        max_duration: 15
-
 package definitions
 
 import "github.com/maruel/pre-commit-go/internal"
