@@ -86,7 +86,7 @@ func TestChecks(t *testing.T) {
 	for _, name := range getKnownChecks() {
 		c := KnownChecks[name]
 		for _, p := range c.GetPrerequisites() {
-			ut.AssertEqual(t, true, p.IsPresent())
+			ut.AssertEqualf(t, true, p.IsPresent(), "%s; %#v", c.GetName(), p)
 		}
 		ut.AssertEqual(t, true, c.GetDescription() != "")
 	}
