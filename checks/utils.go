@@ -5,11 +5,8 @@
 package checks
 
 import (
-	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
-	"sync"
 )
 
 // IsContinuousIntegration returns true if it thinks it's running on a known CI
@@ -23,9 +20,6 @@ func IsContinuousIntegration() bool {
 }
 
 // Globals
-
-var relToGOPATHLock sync.Mutex
-var relToGOPATHCache = map[string]string{}
 
 // reverse reverses a string.
 func reverse(s string) string {
@@ -50,32 +44,4 @@ func rsplitn(s, sep string, n int) []string {
 		items[i] = reverse(items[i])
 	}
 	return items
-}
-
-// relToGOPATH returns the path relative to $GOPATH/src.
-func relToGOPATH(p string) (string, error) {
-	relToGOPATHLock.Lock()
-	defer relToGOPATHLock.Unlock()
-	if rel, ok := relToGOPATHCache[p]; ok {
-		return rel, nil
-	}
-	for _, gopath := range filepath.SplitList(os.Getenv("GOPATH")) {
-		if len(gopath) == 0 {
-			continue
-		}
-		srcRoot := filepath.Join(gopath, "src")
-		// TODO(maruel): Accept case-insensitivity on Windows/OSX, maybe call
-		// filepath.EvalSymlinks().
-		if !strings.HasPrefix(p, srcRoot) {
-			continue
-		}
-		rel, err := filepath.Rel(srcRoot, p)
-		if err != nil {
-			return "", fmt.Errorf("failed to find relative path from %s to %s", srcRoot, p)
-		}
-		relToGOPATHCache[p] = rel
-		//log.Printf("relToGOPATH(%s) = %s", p, rel)
-		return rel, err
-	}
-	return "", fmt.Errorf("failed to find GOPATH relative directory for %s", p)
 }

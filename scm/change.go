@@ -2,144 +2,150 @@
 // Use of this source code is governed under the Apache License, Version 2.0
 // that can be found in the LICENSE file.
 
-// Package scm implements repository management.
 package scm
 
 import (
 	"go/scanner"
 	"go/token"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
-	"sync"
 )
 
 // Change represents a change to test against.
+//
+// This interface is specialized for Go projects.
 type Change interface {
-	Repo() Repo
-	SourceDirs() []string
-	TestDirs() []string
-	PackageDirs() []string
+	// Repo references back to the repository.
+	Repo() ReadOnlyRepo
+	// Changed is the directly affected files and packages.
+	Changed() Set
+	// Indirect returns the Set of everything affected indirectly, e.g. all
+	// modified files plus all packages importing a package that was modified by
+	// this Change. It is useful for example to run all tests that could be
+	// indirectly impacted by a change.
+	Indirect() Set
+	// All returns all the files in the repository.
+	All() Set
+}
+
+// Set is a subset of files/directories/packages relative to the change and the
+// overall repository.
+type Set interface {
+	// GoFiles returns all the source files, including tests.
+	GoFiles() []string
+	// Packages returns all the packages included in this set, using the relative
+	// notation, e.g. with prefix "./" relative to the checkout root. So this
+	// package "scm" would be represented as "./scm".
+	Packages() []string
+	// TestPackages returns all the packages included in this set that contain
+	// tests, using the relative notation, e.g. with prefix "./".
+	//
+	// In summary, it is the same result as Packages() but without the ones with
+	// no test.
+	TestPackages() []string
 }
 
 // Private details.
 
-type dirsType int
-
-const (
-	sourceDirs  dirsType = 0 // Directories containing go source files.
-	testDirs    dirsType = 1 // Directories containing tests are returned.
-	packageDirs dirsType = 2 // Directories containing non "main" packages.
-)
+const pathSeparator = string(os.PathSeparator)
 
 type change struct {
-	repo        Repo
-	lock        sync.Mutex
-	files       []string
-	allFiles    []string
-	goDirsCache map[dirsType][]string
+	repo        ReadOnlyRepo
+	packageName string
+	direct      set
+	indirect    set
+	all         set
 }
 
-func (c *change) Repo() Repo {
+func newChange(repo ReadOnlyRepo, files, allFiles []string) *change {
+	// An error occurs when the repository is not inside GOPATH. Ignore this
+	// error here.
+	p, _ := relToGOPATH(repo.Root())
+	c := &change{repo: repo, packageName: p}
+	makeSet(&c.direct, files)
+	// TODO(maruel): Actually indirect.
+	makeSet(&c.indirect, allFiles)
+	makeSet(&c.all, allFiles)
+	return c
+}
+
+func (c *change) Repo() ReadOnlyRepo {
 	return c.repo
 }
 
-func (c *change) SourceDirs() []string {
-	return c.goDirs(sourceDirs)
+func (c *change) Changed() Set {
+	return &c.direct
 }
 
-func (c *change) TestDirs() []string {
-	return c.goDirs(testDirs)
+func (c *change) Indirect() Set {
+	return &c.indirect
 }
 
-func (c *change) PackageDirs() []string {
-	return c.goDirs(packageDirs)
+func (c *change) All() Set {
+	return &c.all
 }
 
-// goDirs returns the list of directories with '*.go' files or '*_test.go'
-// files.
-//
-// If 'tests' is true, all directories containing tests are returned.
-// If 'tests' is false, only directories containing go source files but not
-// tests are returned. This is usually 'main' packages.
-func (c *change) goDirs(d dirsType) []string {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-	if c.goDirsCache != nil {
-		return c.goDirsCache[d]
-	}
-	root, _ := os.Getwd()
-	if stat, err := os.Stat(root); err != nil || !stat.IsDir() {
-		panic("internal failure")
-	}
+type set struct {
+	files        []string
+	packages     []string
+	testPackages []string
+}
 
-	// A directory can be in all 3.
-	dirsSourceFound := map[string]bool{}
-	dirsTestsFound := map[string]bool{}
-	dirsPackageFound := map[string]bool{}
-	var recurse func(dir string)
-	recurse = func(dir string) {
-		for _, f := range readDirNames(dir) {
-			if f[0] == '.' || f[0] == '_' {
-				continue
-			}
-			p := filepath.Join(dir, f)
-			stat, err := os.Stat(p)
-			if err != nil {
-				continue
-			}
-			if stat.IsDir() {
-				recurse(p)
-			} else {
-				if strings.HasSuffix(p, "_test.go") {
-					dirsTestsFound[dir] = true
-				} else if strings.HasSuffix(p, ".go") {
-					dirsSourceFound[dir] = true
-					// Only scan the first file per directory.
-					if _, ok := dirsPackageFound[dir]; !ok {
-						if content, err := ioutil.ReadFile(p); err == nil {
-							name := getPackageName(content)
-							dirsPackageFound[dir] = name != "main" && name != ""
-						}
-					}
-				}
+func (s *set) GoFiles() []string {
+	return s.files
+}
+
+func (s *set) Packages() []string {
+	return s.packages
+}
+
+func (s *set) TestPackages() []string {
+	return s.testPackages
+}
+
+func makeSet(s *set, files []string) {
+	testDirs := map[string]bool{}
+	sourceDirs := map[string]bool{}
+	for _, f := range files {
+		if !strings.HasSuffix(f, ".go") {
+			continue
+		}
+		s.files = append(s.files, f)
+		dir := filepath.Dir(f)
+		if _, ok := sourceDirs[dir]; !ok {
+			sourceDirs[dir] = true
+			s.packages = append(s.packages, dirToPkg(dir))
+		}
+		if strings.HasSuffix(f, "_test.go") {
+			if _, ok := testDirs[dir]; !ok {
+				testDirs[dir] = true
+				s.testPackages = append(s.testPackages, dirToPkg(dir))
 			}
 		}
 	}
-	recurse(root)
-	c.goDirsCache = map[dirsType][]string{
-		sourceDirs:  make([]string, 0, len(dirsSourceFound)),
-		testDirs:    make([]string, 0, len(dirsTestsFound)),
-		packageDirs: {},
-	}
-	for d := range dirsSourceFound {
-		c.goDirsCache[sourceDirs] = append(c.goDirsCache[sourceDirs], d)
-	}
-	for d := range dirsTestsFound {
-		c.goDirsCache[testDirs] = append(c.goDirsCache[testDirs], d)
-	}
-	for d, v := range dirsPackageFound {
-		if v {
-			c.goDirsCache[packageDirs] = append(c.goDirsCache[packageDirs], d)
-		}
-	}
-	sort.Strings(c.goDirsCache[sourceDirs])
-	sort.Strings(c.goDirsCache[testDirs])
-	sort.Strings(c.goDirsCache[packageDirs])
-	return c.goDirsCache[d]
+	sort.Strings(s.files)
+	sort.Strings(s.packages)
+	sort.Strings(s.testPackages)
 }
 
-func readDirNames(dirname string) []string {
-	f, err := os.Open(dirname)
-	if err != nil {
-		return nil
+func dirToPkg(d string) string {
+	if d == "." {
+		return d
 	}
-	names, err := f.Readdirnames(-1)
-	_ = f.Close()
-	return names
+	return "./" + strings.Replace(d, pathSeparator, "/", -1)
 }
+
+/*
+	// Only scan the first file per directory.
+	if _, ok := dirsPackageFound[dir]; !ok {
+		if content, err := ioutil.ReadFile(p); err == nil {
+			name := getPackageName(content)
+			dirsPackageFound[dir] = name != "main" && name != ""
+		}
+	}
+*/
 
 func getPackageName(content []byte) string {
 	var s scanner.Scanner

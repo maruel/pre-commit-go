@@ -58,10 +58,10 @@ type ReadOnlyRepo interface {
 	// recent=HEAD().
 	//
 	// To get the list of all files in the tree and the index, use
-	// Between(Current, GitInitialCommit).
+	// Between(Current, GitInitialCommit, ...).
 	//
 	// Returns nil and no error if there's no file difference.
-	Between(recent, old Commit) (Change, error)
+	Between(recent, old Commit, ignoredPaths []string) (Change, error)
 }
 
 // Repo represents a source control managed checkout.
@@ -146,28 +146,28 @@ func (g *git) Upstream() (Commit, error) {
 }
 
 func (g *git) untracked() []string {
-	return g.captureList(nil, "ls-files", "--others", "--exclude-standard", "-z")
+	return g.captureList(nil, nil, "ls-files", "--others", "--exclude-standard", "-z")
 }
 
 func (g *git) unstaged() []string {
-	return g.captureList(nil, "diff", "--name-only", "--no-color", "--no-ext-diff", "-z")
+	return g.captureList(nil, nil, "diff", "--name-only", "--no-color", "--no-ext-diff", "-z")
 }
 
-func (g *git) Between(recent, old Commit) (Change, error) {
-	log.Printf("Between(%q, %q)", recent, old)
+func (g *git) Between(recent, old Commit, ignoredPaths []string) (Change, error) {
+	log.Printf("Between(%q, %q, %s)", recent, old, ignoredPaths)
 	if old == Current {
 		return nil, errors.New("can't use Current as old commit")
 	}
 	if !g.isValid(old) {
 		return nil, errors.New("invalid old commit")
 	}
-	allFiles := g.captureList(nil, "ls-files", "-z")
+	allFiles := g.captureList(nil, ignoredPaths, "ls-files", "-z")
 	var files []string
 	if recent == Current {
 		if old == GitInitialCommit {
 			files = allFiles
 		} else {
-			files = g.captureList(nil, "diff-tree", "--no-commit-id", "--name-only", "-z", "-r", string(old))
+			files = g.captureList(nil, ignoredPaths, "diff-tree", "--no-commit-id", "--name-only", "-z", "-r", string(old))
 			// TODO(maruel): Duplicates?
 			files = append(files, g.unstaged()...)
 		}
@@ -175,16 +175,13 @@ func (g *git) Between(recent, old Commit) (Change, error) {
 		if !g.isValid(recent) {
 			return nil, errors.New("invalid old commit")
 		}
-		files = g.captureList(nil, "diff-tree", "--no-commit-id", "--name-only", "-z", "-r", string(recent), string(old))
+		files = g.captureList(nil, ignoredPaths, "diff-tree", "--no-commit-id", "--name-only", "-z", "-r", string(recent), string(old))
 	}
 	if len(files) == 0 {
 		return nil, nil
 	}
 	sort.Strings(files)
-	// TODO(maruel): Create change{} with the list of files.
-	// TODO(maruel): Change still needs the list of all files in the checkout,
-	// for dependency analysis.
-	return &change{repo: g, allFiles: allFiles, files: files}, nil
+	return newChange(g, files, allFiles), nil
 }
 
 func (g *git) Stash() (bool, error) {
@@ -241,18 +238,41 @@ func (g *git) capture(env []string, args ...string) (string, int, error) {
 }
 
 // captureList assumes the -z argument is used. Returns nil in case of error.
-func (g *git) captureList(env []string, args ...string) []string {
+//
+// It strips any file in ignorePatterns glob that applies to any path component.
+func (g *git) captureList(env []string, ignorePatterns []string, args ...string) []string {
+	// TOOD(maruel): stream stdout instead of taking the whole output at once. It
+	// may only have an effect on larger repositories and that's not guaranteed.
+	// For example, the output of "git ls-files -z" on the chromium tree with 86k
+	// files is 4.5Mib and takes ~110ms to run. Revisit later when this becomes a
+	// bottleneck.
 	out, code, err := g.capture(env, args...)
 	if code != 0 || err != nil {
 		return nil
 	}
-	if len(out) == 0 {
-		return []string{}
+	list := []string{}
+	for {
+		i := strings.IndexByte(out, 0)
+		if i <= 0 {
+			break
+		}
+		s := out[:i]
+		chunks := strings.Split(s, pathSeparator)
+		for _, ignorePattern := range ignorePatterns {
+			for _, chunk := range chunks {
+				if matched, err := filepath.Match(ignorePattern, chunk); matched {
+					goto loop
+				} else if err != nil {
+					log.Printf("bad pattern %q", ignorePattern)
+					return nil
+				}
+			}
+		}
+		list = append(list, s)
+	loop:
+		out = out[i+1:]
 	}
-	if out[len(out)-1] != '\x00' {
-		panic("Shouldn't happen")
-	}
-	return strings.Split(out[:len(out)-1], "\x00")
+	return list
 }
 
 func (g *git) isValid(c Commit) bool {

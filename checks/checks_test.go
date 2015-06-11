@@ -163,7 +163,7 @@ func setup(t *testing.T, td string, files map[string]string) (string, scm.Change
 
 	repo, err := scm.GetRepo(fooDir)
 	ut.AssertEqual(t, nil, err)
-	change, err := repo.Between(scm.Current, scm.GitInitialCommit)
+	change, err := repo.Between(scm.Current, scm.GitInitialCommit, nil)
 	ut.AssertEqual(t, nil, err)
 	return oldWd, change
 }

@@ -53,7 +53,7 @@ type Check interface {
 type build definitions.Build
 
 func (b *build) GetDescription() string {
-	return "builds all packages that do not contain tests, usually all directories with package 'main'"
+	return "builds all packages"
 }
 
 func (b *build) GetName() string {
@@ -73,15 +73,14 @@ func (b *build) Unlock() {
 }
 
 func (b *build) Run(change scm.Change) error {
+	// go build accepts packages, not files.
 	// Cannot build concurrently since it leaves files in the tree.
 	// TODO(maruel): Build in a temporary directory to not leave junk in the tree
 	// with -o. On the other hand, ./... and -o foo are incompatible. But
 	// building would have to be done in an efficient way by looking at which
 	// package builds what, to not result in a O(n²) algorithm.
-	args := []string{"go", "build"}
-	args = append(args, b.ExtraArgs...)
-	args = append(args, "./...")
-	out, _, err := internal.Capture("", nil, args...)
+	args := append([]string{"go", "build"}, b.ExtraArgs...)
+	out, _, err := internal.Capture("", nil, append(args, change.Indirect().Packages()...)...)
 	if len(out) != 0 {
 		return fmt.Errorf("%s failed: %s", strings.Join(args, " "), out)
 	}
@@ -107,6 +106,7 @@ func (g *gofmt) GetPrerequisites() []definitions.CheckPrerequisite {
 
 func (g *gofmt) Run(change scm.Change) error {
 	// gofmt doesn't return non-zero even if some files need to be updated.
+	// gofmt accepts files, not packages.
 	out, _, err := internal.Capture("", nil, "gofmt", "-l", "-s", ".")
 	if len(out) != 0 {
 		return fmt.Errorf("these files are improperly formmatted, please run: gofmt -w -s .\n%s", out)
@@ -132,29 +132,20 @@ func (t *test) GetPrerequisites() []definitions.CheckPrerequisite {
 }
 
 func (t *test) Run(change scm.Change) error {
-	// Add tests manually instead of using './...'. The reason is that it permits
-	// running all the tests concurrently, which saves a lot of time when there's
-	// many packages.
+	// go test accepts packages, not files.
 	var wg sync.WaitGroup
-	tds := change.TestDirs()
-	errs := make(chan error, len(tds))
-	for _, td := range tds {
+	testPkgs := change.Indirect().TestPackages()
+	errs := make(chan error, len(testPkgs))
+	for _, tp := range testPkgs {
 		wg.Add(1)
-		go func(testDir string) {
+		go func(testPkg string) {
 			defer wg.Done()
-			rel, err := relToGOPATH(testDir)
-			if err != nil {
-				errs <- err
-				return
-			}
-			args := []string{"go", "test"}
-			args = append(args, t.ExtraArgs...)
-			args = append(args, rel)
-			out, exitCode, _ := internal.Capture("", nil, args...)
+			args := append([]string{"go", "test"}, t.ExtraArgs...)
+			out, exitCode, _ := internal.Capture("", nil, append(args, testPkg)...)
 			if exitCode != 0 {
 				errs <- fmt.Errorf("%s failed:\n%s", strings.Join(args, " "), out)
 			}
-		}(td)
+		}(tp)
 	}
 	wg.Wait()
 	select {
@@ -182,17 +173,9 @@ func (e *errcheck) GetPrerequisites() []definitions.CheckPrerequisite {
 }
 
 func (e *errcheck) Run(change scm.Change) error {
-	dirs := change.SourceDirs()
-	args := make([]string, 0, len(dirs)+2)
-	args = append(args, "errcheck", "-ignore", e.Ignores)
-	for _, d := range dirs {
-		rel, err := relToGOPATH(d)
-		if err != nil {
-			return err
-		}
-		args = append(args, rel)
-	}
-	out, _, err := internal.Capture("", nil, args...)
+	// errcheck accepts packages, not files.
+	args := []string{"errcheck", "-ignore", e.Ignores}
+	out, _, err := internal.Capture("", nil, append(args, change.Changed().Packages()...)...)
 	if len(out) != 0 {
 		return fmt.Errorf("%s failed:\n%s", strings.Join(args, " "), out)
 	}
@@ -219,10 +202,11 @@ func (g *goimports) GetPrerequisites() []definitions.CheckPrerequisite {
 }
 
 func (g *goimports) Run(change scm.Change) error {
+	// goimports accepts files, not packages.
 	// goimports doesn't return non-zero even if some files need to be updated.
-	out, _, err := internal.Capture("", nil, "goimports", "-l", ".")
+	out, _, err := internal.Capture("", nil, append([]string{"goimports", "-l"}, change.Changed().GoFiles()...)...)
 	if len(out) != 0 {
-		return fmt.Errorf("these files are improperly formmatted, please run: goimports -w .\n%s", out)
+		return fmt.Errorf("these files are improperly formmatted, please run: goimports -w <files>\n%s", out)
 	}
 	if err != nil {
 		return fmt.Errorf("goimports -w . failed: %s", err)
@@ -247,6 +231,7 @@ func (g *golint) GetPrerequisites() []definitions.CheckPrerequisite {
 }
 
 func (g *golint) Run(change scm.Change) error {
+	// golint accepts packages, not files.
 	// golint doesn't return non-zero ever.
 	out, _, _ := internal.Capture("", nil, "golint", "./...")
 	result := []string{}
@@ -281,6 +266,7 @@ func (g *govet) GetPrerequisites() []definitions.CheckPrerequisite {
 }
 
 func (g *govet) Run(change scm.Change) error {
+	// govet accepts files, not packages.
 	// Ignore the return code since we ignore many errors.
 	out, _, _ := internal.Capture("", nil, "go", "tool", "vet", "-all", ".")
 	result := []string{}
@@ -301,7 +287,7 @@ func (g *govet) Run(change scm.Change) error {
 type coverage definitions.Coverage
 
 func (c *coverage) GetDescription() string {
-	return "enforces minimum test coverage on all packages that are not 'main'"
+	return "enforces minimum test coverage on all packages"
 }
 
 func (c *coverage) GetName() string {
@@ -319,28 +305,19 @@ func (c *coverage) GetPrerequisites() []definitions.CheckPrerequisite {
 }
 
 func (c *coverage) Run(change scm.Change) (err error) {
-	// TODO(maruel): Kept because we may have to revert to using broader
-	// instrumentation due to OS command line argument length limit.
-	//pkgRoot, _ := os.Getwd()
-	//pkg, err2 := relToGOPATH(pkgRoot)
-	//if err2 != nil {
-	//	return err2
-	//}
-	pds := change.PackageDirs()
+	// go test accepts packages, not files.
 	coverPkg := ""
-	for i, p := range pds {
+	// TODO(maruel): Make skipping packages without tests configurable.
+	// TODO(maruel): Make skipping arbitrary packages configurable.
+	for i, p := range change.All().Packages() {
 		if i != 0 {
 			coverPkg += ","
 		}
-		rel, err := relToGOPATH(p)
-		if err != nil {
-			return err
-		}
-		coverPkg += rel
+		coverPkg += p
 	}
 
-	tds := change.TestDirs()
-	if len(tds) == 0 {
+	testPkgs := change.All().TestPackages()
+	if len(testPkgs) == 0 {
 		return nil
 	}
 
@@ -359,11 +336,10 @@ func (c *coverage) Run(change scm.Change) (err error) {
 	// -coverprofile file name, so that all the files can later be merged into a
 	// single file.
 	var wg sync.WaitGroup
-	errs := make(chan error, len(tds))
-
-	for i, td := range tds {
+	errs := make(chan error, len(testPkgs))
+	for i, tp := range testPkgs {
 		wg.Add(1)
-		go func(index int, testDir string) {
+		go func(index int, testPkg string) {
 			defer wg.Done()
 			// TODO(maruel): Maybe fallback to 'pkg + "/..."' and post process to
 			// remove uninteresting directories. The rationale is that it will
@@ -371,12 +347,13 @@ func (c *coverage) Run(change scm.Change) (err error) {
 			args := []string{
 				"go", "test", "-v", "-covermode=count", "-coverpkg", coverPkg,
 				"-coverprofile", filepath.Join(tmpDir, fmt.Sprintf("test%d.cov", index)),
+				testPkg,
 			}
-			out, exitCode, _ := internal.Capture(testDir, nil, args...)
+			out, exitCode, _ := internal.Capture("", nil, args...)
 			if exitCode != 0 {
-				errs <- fmt.Errorf("%s %s failed:\n%s", strings.Join(args, " "), testDir, out)
+				errs <- fmt.Errorf("%s %s failed:\n%s", strings.Join(args, " "), testPkg, out)
 			}
-		}(i, td)
+		}(i, tp)
 	}
 	wg.Wait()
 
@@ -410,7 +387,7 @@ func (c *coverage) Run(change scm.Change) (err error) {
 	if err != nil {
 		return err
 	}
-	log.Printf("%d functions profiled", len(coverage))
+	log.Printf("%d functions profiled in %s", len(coverage), coverPkg)
 
 	// TODO(maruel): Calculate the sorted list only when -verbose is specified.
 	maxLoc := 0
@@ -564,6 +541,8 @@ func (c *custom) GetPrerequisites() []definitions.CheckPrerequisite {
 }
 
 func (c *custom) Run(change scm.Change) error {
+	// TODO(maruel): Make what is passed to the command configurable, e.g. one of:
+	// (Changed, Indirect, All) x (GoFiles, Packages, TestPackages)
 	out, exitCode, err := internal.Capture("", nil, c.Command...)
 	if exitCode != 0 && c.CheckExitCode {
 		return fmt.Errorf("\"%s\" failed with code %d:\n%s", strings.Join(c.Command, " "), exitCode, out)

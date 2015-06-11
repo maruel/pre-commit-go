@@ -47,8 +47,16 @@ func (m *Mode) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 // Config is the serialized form of pre-commit-go.yml.
 type Config struct {
-	Version int               `yaml:"version"` // Should be incremented when it's not compatible anymore.
-	Modes   map[Mode]Settings `yaml:"modes"`   // Settings per mode. Settings includes the checks and the maximum allowed time spent to run them.
+	// Should be incremented when it's not compatible anymore.
+	Version int `yaml:"version"`
+	// Settings per mode. Settings includes the checks and the maximum allowed
+	// time spent to run them.
+	Modes map[Mode]Settings `yaml:"modes"`
+	// IgnorePatterns is all paths glob patterns that should be ignored. By
+	// default, this include any file or directory starting with "." or "_", i.e.
+	// []string{".*", "_*"}.  This is a glob that is applied to each path
+	// component of each file.
+	IgnorePatterns []string `yaml:"ignore_patterns"`
 }
 
 // EnabledChecks returns all the checks enabled.
@@ -66,8 +74,9 @@ func (c *Config) EnabledChecks(modes []Mode) ([]Check, int) {
 
 func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	data := &struct {
-		Version int               `yaml:"version"`
-		Modes   map[Mode]Settings `yaml:"modes"`
+		Version        int               `yaml:"version"`
+		Modes          map[Mode]Settings `yaml:"modes"`
+		IgnorePatterns []string          `yaml:"ignore_patterns"`
 	}{}
 	if err := unmarshal(data); err != nil {
 		return err
@@ -77,6 +86,7 @@ func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	}
 	c.Version = data.Version
 	c.Modes = data.Modes
+	c.IgnorePatterns = data.IgnorePatterns
 	return nil
 }
 
@@ -200,6 +210,7 @@ func New() *Config {
 				},
 			},
 		},
+		IgnorePatterns: []string{".*", "_*"},
 	}
 }
 
