@@ -412,9 +412,9 @@ func (c *coverage) Run(change scm.Change) (err error) {
 		}
 	}
 	if total < c.MinimumCoverage {
-		err = fmt.Errorf("code coverage: %3.1f%% < %d%%; %d untested functions", total, c.MinimumCoverage, partial)
+		err = fmt.Errorf("code coverage: %3.1f%% < %.1f%%; %d untested functions", total, c.MinimumCoverage, partial)
 	} else {
-		log.Printf("code coverage: %3.1f%% >= %d%%; %d untested functions", total, c.MinimumCoverage, partial)
+		log.Printf("code coverage: %3.1f%% >= %.1f%%; %d untested functions", total, c.MinimumCoverage, partial)
 	}
 	if err == nil {
 		select {
