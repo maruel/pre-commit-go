@@ -69,4 +69,6 @@ modes:
       - -v
       - -race
     max_duration: 15
-ignore_patterns: []
+ignore_patterns:
+- .*
+- _*

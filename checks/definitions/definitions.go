@@ -66,6 +66,9 @@
 //          - ' composite literal uses unkeyed fields'
 //          check_type: govet
 //        max_duration: 15
+//    ignore_patterns:
+//    - .*
+//    - _*
 package definitions
 
 import "github.com/maruel/pre-commit-go/internal"
