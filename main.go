@@ -17,8 +17,10 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"os/user"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -96,9 +98,9 @@ const yamlHeader = `# https://github.com/maruel/pre-commit-go configuration file
 
 // Utils.
 
-// loadConfig returns a Config with defaults set then loads the config from file
-// "pathname".
-func loadConfig(pathname string) *checks.Config {
+// loadConfigFile returns a Config with defaults set then loads the config from
+// file "pathname".
+func loadConfigFile(pathname string) *checks.Config {
 	content, err := ioutil.ReadFile(pathname)
 	if err != nil {
 		return nil
@@ -110,6 +112,44 @@ func loadConfig(pathname string) *checks.Config {
 		return nil
 	}
 	return config
+}
+
+// loadConfig loads the on disk configuration or use the default configuration
+// if none is found. See CONFIGURATION.md for the logic.
+func loadConfig(repo scm.Repo, path string) (string, *checks.Config) {
+	if filepath.IsAbs(path) {
+		if config := loadConfigFile(path); config != nil {
+			return path, config
+		}
+	} else {
+		// <repo root>/.git/<path>
+		if scmDir, err := repo.ScmDir(); err == nil {
+			file := filepath.Join(scmDir, path)
+			if config := loadConfigFile(file); config != nil {
+				return file, config
+			}
+		}
+
+		// <repo root>/<path>
+		file := filepath.Join(repo.Root(), path)
+		if config := loadConfigFile(file); config != nil {
+			return file, config
+		}
+
+		if user, err := user.Current(); err == nil && user.HomeDir != "" {
+			if runtime.GOOS == "windows" {
+				// ~/<path>
+				file = filepath.Join(user.HomeDir, path)
+			} else {
+				// ~/.config/<path>
+				file = filepath.Join(user.HomeDir, ".config", path)
+			}
+			if config := loadConfigFile(file); config != nil {
+				return file, config
+			}
+		}
+	}
+	return "<N/A>", checks.New()
 }
 
 func callRun(check checks.Check, change scm.Change) (error, time.Duration) {
@@ -536,24 +576,7 @@ func mainImpl() error {
 		return err
 	}
 
-	// Load the config.
-	var config *checks.Config
-	file := ""
-	if filepath.IsAbs(*configPath) {
-		file = *configPath
-		config = loadConfig(file)
-	} else {
-		file = filepath.Join(repo.Root(), ".git", *configPath)
-		if config = loadConfig(file); config == nil {
-			file = filepath.Join(repo.Root(), *configPath)
-			config = loadConfig(file)
-		}
-	}
-	if config == nil {
-		// Default config.
-		file = "<N/A>"
-		config = checks.New()
-	}
+	file, config := loadConfig(repo, *configPath)
 
 	switch cmd {
 	case "help", "-help", "-h":
@@ -625,6 +648,7 @@ func mainImpl() error {
 		if *allFlag != false {
 			return errors.New("-all can't be used with writeconfig")
 		}
+		// Note that in that case, file is ignored and not overritten.
 		return cmdWriteConfig(repo, config, *configPath)
 	default:
 		return errors.New("unknown command, try 'help'")

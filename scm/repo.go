@@ -35,6 +35,10 @@ const (
 type ReadOnlyRepo interface {
 	// Root returns the root directory of this repository.
 	Root() string
+	// Scmdir returns the directory containing the source control specific files,
+	// e.g. it is ".git" by default for git repositories. It can be different
+	// when GIT_DIR is specified or in the case of git submodules.
+	ScmDir() (string, error)
 	// HookPath returns the directory containing the commit and push hooks.
 	HookPath() (string, error)
 	// HEAD returns the HEAD commit hash.
@@ -113,7 +117,7 @@ func (g *git) Root() string {
 	return g.root
 }
 
-func (g *git) HookPath() (string, error) {
+func (g *git) ScmDir() (string, error) {
 	if g.gitDir == "" {
 		var err error
 		g.gitDir, err = getGitDir(g.root)
@@ -121,7 +125,15 @@ func (g *git) HookPath() (string, error) {
 			return "", fmt.Errorf("failed to find .git dir: %s", err)
 		}
 	}
-	return filepath.Join(g.gitDir, "hooks"), nil
+	return g.gitDir, nil
+}
+
+func (g *git) HookPath() (string, error) {
+	d, err := g.ScmDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(d, "hooks"), nil
 }
 
 func (g *git) HEAD() Commit {
