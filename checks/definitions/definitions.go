@@ -17,58 +17,75 @@
 //
 // Here's a sample pre-commit-go.yml file:
 //
-//    min_version: "0.4"
+//    min_version: 0.4.1
 //    modes:
-//      pre-commit:
-//        checks:
-//        - check_type: gofmt
-//        - check_type: test
-//          extra_args:
-//          - -short
-//        max_duration: 5
-//      pre-push:
-//        checks:
-//        - check_type: build
-//          extra_args: []
 //      continuous-integration:
 //        checks:
-//        - check_type: build
-//          extra_args: []
-//        - check_type: gofmt
-//        - check_type: goimports
-//        - check_type: coverage
-//          minimum_coverage: 60
-//        - check_type: test
-//          extra_args:
-//          - -v
-//          - -race
-//        - check_type: custom
-//          display_name: my-check
-//          description: runs my check
-//          command:
-//          - my-check
-//          - -all
-//          check_exit_code: true
-//          prerequisites:
-//          - help_command:
-//            - my-check -all
-//            - -help
-//            expected_exit_code: 2
-//            url: github.com/me/my-check
+//          build:
+//          - extra_args: []
+//          coverage:
+//          - min_coverage: 20
+//          custom:
+//          - display_name: sample-pre-commit-go-custom-check
+//            description: runs the check sample-pre-commit-go-custom-check on this repository
+//            command:
+//            - sample-pre-commit-go-custom-check
+//            - check
+//            check_exit_code: true
+//            prerequisites:
+//            - help_command:
+//              - sample-pre-commit-go-custom-check
+//              - -help
+//              expected_exit_code: 2
+//              url: ""
+//          gofmt:
+//          - {}
+//          goimports:
+//          - {}
+//          test:
+//          - extra_args:
+//            - -v
+//            - -race
 //        max_duration: 120
 //      lint:
 //        checks:
-//        - check_type: errcheck
-//          ignores: Close
-//        - blacklist: []
-//          check_type: golint
-//        - blacklist:
-//          - ' composite literal uses unkeyed fields'
-//          check_type: govet
+//          errcheck:
+//          - ignores: Close
+//          golint:
+//          - blacklist: []
+//          govet:
+//          - blacklist:
+//            - ' composite literal uses unkeyed fields'
+//        max_duration: 15
+//      pre-commit:
+//        checks:
+//          build:
+//          - extra_args: []
+//          gofmt:
+//          - {}
+//          test:
+//          - extra_args:
+//            - -short
+//        max_duration: 5
+//      pre-push:
+//        checks:
+//          coverage:
+//          - min_coverage: 20
+//          goimports:
+//          - {}
+//          test:
+//          - extra_args:
+//            - -v
+//            - -race
 //        max_duration: 15
 //    ignore_patterns:
 //    - .*
 //    - _*
+//
+// To generate the default `pre-commit-go.yml` file, use:
+//
+//    pre-commit-go writeconfig
+//
 package definitions
 
 import "github.com/maruel/pre-commit-go/internal"
@@ -183,11 +200,11 @@ type Govet struct {
 // results to https://coveralls.io.
 //
 // Otherwise, only a summary is printed in case code coverage is not above
-// t.MinimumCoverage.
+// t.MinCoverage.
 type Coverage struct {
-	// MinimumCoverage is the minimum test coverage to be generated or the check
-	// is considered to fail.
-	MinimumCoverage float64 `yaml:"minimum_coverage"`
+	// MinCoverage is the minimum test coverage to be generated or the check is
+	// considered to fail.
+	MinCoverage float64 `yaml:"min_coverage"`
 }
 
 // Extensibility.

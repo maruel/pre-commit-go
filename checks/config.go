@@ -7,7 +7,6 @@
 package checks
 
 import (
-	"errors"
 	"fmt"
 	"reflect"
 
@@ -65,7 +64,9 @@ func (c *Config) EnabledChecks(modes []Mode) ([]Check, int) {
 	max := 0
 	out := []Check{}
 	for _, mode := range modes {
-		out = append(out, c.Modes[mode].Checks...)
+		for _, checks := range c.Modes[mode].Checks {
+			out = append(out, checks...)
+		}
 		if c.Modes[mode].MaxDuration > max {
 			max = c.Modes[mode].MaxDuration
 		}
@@ -73,24 +74,10 @@ func (c *Config) EnabledChecks(modes []Mode) ([]Check, int) {
 	return out, max
 }
 
-func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	data := &struct {
-		MinVersion     string            `yaml:"min_version"`
-		Modes          map[Mode]Settings `yaml:"modes"`
-		IgnorePatterns []string          `yaml:"ignore_patterns"`
-	}{}
-	if err := unmarshal(data); err != nil {
-		return err
-	}
-	c.MinVersion = data.MinVersion
-	c.Modes = data.Modes
-	c.IgnorePatterns = data.IgnorePatterns
-	return nil
-}
-
 // Settings is the settings used for a mode.
 type Settings struct {
-	// Checks is the list of all checks enabled for this mode.
+	// Checks is a map of all checks enabled for this mode, with the key being
+	// the check type.
 	Checks Checks `yaml:"checks"`
 	// MaxDuration is the maximum allowed duration to run all the checks in
 	// seconds. If it takes more time than that, it is marked as failed.
@@ -98,51 +85,30 @@ type Settings struct {
 }
 
 // Checks helps with Check serialization.
-type Checks []Check
-
-func (c Checks) MarshalYAML() (interface{}, error) {
-	data, err := yaml.Marshal([]Check(c))
-	if err != nil {
-		return nil, err
-	}
-	var encoded []map[string]interface{}
-	if err = yaml.Unmarshal(data, &encoded); err != nil {
-		return nil, err
-	}
-	for i, item := range encoded {
-		item["check_type"] = c[i].GetName()
-	}
-	return encoded, nil
-}
+type Checks map[string][]Check
 
 func (c *Checks) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	var encoded []map[string]interface{}
+	var encoded map[string][]map[string]interface{}
 	if err := unmarshal(&encoded); err != nil {
 		return err
 	}
-	for _, checkData := range encoded {
-		checkTypeNameRaw, ok := checkData["check_type"]
-		if !ok {
-			return errors.New("require key check_type")
-		}
-		delete(checkData, "check_type")
-		checkTypeName, ok := checkTypeNameRaw.(string)
-		if !ok {
-			return errors.New("require key check_type to be a string")
-		}
+	*c = Checks{}
+	for checkTypeName, checks := range encoded {
 		checkType, ok := KnownChecks[checkTypeName]
 		if !ok {
 			return fmt.Errorf("unknown check \"%s\"", checkTypeName)
 		}
-		rawCheckData, err := yaml.Marshal(checkData)
-		if err != nil {
-			return err
+		for _, checkData := range checks {
+			rawCheckData, err := yaml.Marshal(checkData)
+			if err != nil {
+				return err
+			}
+			check := reflect.New(reflect.TypeOf(checkType).Elem()).Interface().(Check)
+			if err = yaml.Unmarshal(rawCheckData, check); err != nil {
+				return err
+			}
+			(*c)[checkTypeName] = append((*c)[checkTypeName], check)
 		}
-		check := reflect.New(reflect.TypeOf(checkType).Elem()).Interface().(Check)
-		if err = yaml.Unmarshal(rawCheckData, check); err != nil {
-			return err
-		}
-		*c = append(*c, check)
 	}
 	return nil
 }
@@ -155,55 +121,83 @@ func New(v string) *Config {
 			PreCommit: {
 				MaxDuration: 5,
 				Checks: Checks{
-					&build{
-						ExtraArgs: []string{},
+					"build": {
+						&build{
+							ExtraArgs: []string{},
+						},
 					},
-					&gofmt{},
-					&test{
-						ExtraArgs: []string{"-short"},
+					"gofmt": {
+						&gofmt{},
+					},
+					"test": {
+						&test{
+							ExtraArgs: []string{"-short"},
+						},
 					},
 				},
 			},
 			PrePush: {
 				MaxDuration: 15,
 				Checks: Checks{
-					&goimports{},
-					&coverage{
-						MinimumCoverage: 60,
+					"goimports": {
+						&goimports{},
 					},
-					&test{
-						ExtraArgs: []string{"-v", "-race"},
+					"coverage": {
+						&coverage{
+							MinCoverage: 60,
+						},
+					},
+					"test": {
+						&test{
+							ExtraArgs: []string{"-v", "-race"},
+						},
 					},
 				},
 			},
 			ContinuousIntegration: {
 				MaxDuration: 120,
 				Checks: Checks{
-					&build{
-						ExtraArgs: []string{},
+					"build": {
+						&build{
+							ExtraArgs: []string{},
+						},
 					},
-					&gofmt{},
-					&goimports{},
-					&coverage{
-						MinimumCoverage: 60,
+					"gofmt": {
+						&gofmt{},
 					},
-					&test{
-						ExtraArgs: []string{"-v", "-race"},
+					"goimports": {
+						&goimports{},
+					},
+					"coverage": {
+						&coverage{
+							MinCoverage: 60,
+						},
+					},
+					"test": {
+						&test{
+							ExtraArgs: []string{"-v", "-race"},
+						},
 					},
 				},
 			},
 			Lint: {
 				MaxDuration: 15,
 				Checks: Checks{
-					&errcheck{
-						// "Close|Write.*|Flush|Seek|Read.*"
-						Ignores: "Close",
+					"errcheck": {
+						&errcheck{
+							// "Close|Write.*|Flush|Seek|Read.*"
+							Ignores: "Close",
+						},
 					},
-					&golint{
-						Blacklist: []string{},
+					"golint": {
+						&golint{
+							Blacklist: []string{},
+						},
 					},
-					&govet{
-						Blacklist: []string{" composite literal uses unkeyed fields"},
+					"govet": {
+						&govet{
+							Blacklist: []string{" composite literal uses unkeyed fields"},
+						},
 					},
 				},
 			},

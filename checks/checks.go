@@ -3,6 +3,10 @@
 // that can be found in the LICENSE file.
 
 // Package checks implements pre-made checks for pre-commit-go.
+//
+// This package defines the `pre-commit-go.yml` configuration file format and
+// implements all the checks. For conciseness, all the check configuration
+// struct are defined in the package `definitions` below.
 package checks
 
 import (
@@ -411,10 +415,10 @@ func (c *coverage) Run(change scm.Change) (err error) {
 			log.Printf("%-*s %-*s %1.1f%%", maxLoc, item.loc[offset:], maxName, item.name, item.percent)
 		}
 	}
-	if total < c.MinimumCoverage {
-		err = fmt.Errorf("code coverage: %3.1f%% < %.1f%%; %d untested functions", total, c.MinimumCoverage, partial)
+	if total < c.MinCoverage {
+		err = fmt.Errorf("code coverage: %3.1f%% < %.1f%%; %d untested functions", total, c.MinCoverage, partial)
 	} else {
-		log.Printf("code coverage: %3.1f%% >= %.1f%%; %d untested functions", total, c.MinimumCoverage, partial)
+		log.Printf("code coverage: %3.1f%% >= %.1f%%; %d untested functions", total, c.MinCoverage, partial)
 	}
 	if err == nil {
 		select {

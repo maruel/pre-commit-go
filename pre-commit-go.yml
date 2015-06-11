@@ -5,69 +5,66 @@
 # See https://godoc.org/github.com/maruel/pre-commit-go/checks for more
 # information.
 
-min_version: "0.4"
+min_version: 0.4.1
 modes:
   continuous-integration:
     checks:
-    - check_type: build
-      extra_args: []
-    - check_type: gofmt
-    - check_type: goimports
-    - check_type: coverage
-      minimum_coverage: 20
-    - check_type: test
-      extra_args:
-      - -v
-      - -race
-    - check_exit_code: true
-      check_type: custom
-      command:
-      - sample-pre-commit-go-custom-check
-      - check
-      description: runs the check sample-pre-commit-go-custom-check on this repository
-      display_name: sample-pre-commit-go-custom-check
-      prerequisites:
-      - expected_exit_code: 2
-        help_command:
+      build:
+      - extra_args: []
+      coverage:
+      - min_coverage: 20
+      custom:
+      - display_name: sample-pre-commit-go-custom-check
+        description: runs the check sample-pre-commit-go-custom-check on this repository
+        command:
         - sample-pre-commit-go-custom-check
-        - -help
-        url: github.com/maruel/pre-commit-go/samples/sample-pre-commit-go-custom-check
-    - check_type: errcheck
-      ignores: Close
-    - blacklist: []
-      check_type: golint
-    - blacklist:
-      - ' composite literal uses unkeyed fields'
-      check_type: govet
+        - check
+        check_exit_code: true
+        prerequisites:
+        - help_command:
+          - sample-pre-commit-go-custom-check
+          - -help
+          expected_exit_code: 2
+          url: ""
+      gofmt:
+      - {}
+      goimports:
+      - {}
+      test:
+      - extra_args:
+        - -v
+        - -race
     max_duration: 120
   lint:
     checks:
-    - check_type: errcheck
-      ignores: Close
-    - blacklist: []
-      check_type: golint
-    - blacklist:
-      - ' composite literal uses unkeyed fields'
-      check_type: govet
+      errcheck:
+      - ignores: Close
+      golint:
+      - blacklist: []
+      govet:
+      - blacklist:
+        - ' composite literal uses unkeyed fields'
     max_duration: 15
   pre-commit:
     checks:
-    - check_type: build
-      extra_args: []
-    - check_type: gofmt
-    - check_type: test
-      extra_args:
-      - -short
+      build:
+      - extra_args: []
+      gofmt:
+      - {}
+      test:
+      - extra_args:
+        - -short
     max_duration: 5
   pre-push:
     checks:
-    - check_type: goimports
-    - check_type: coverage
-      minimum_coverage: 20
-    - check_type: test
-      extra_args:
-      - -v
-      - -race
+      coverage:
+      - min_coverage: 20
+      goimports:
+      - {}
+      test:
+      - extra_args:
+        - -v
+        - -race
     max_duration: 15
 ignore_patterns:
 - .*
