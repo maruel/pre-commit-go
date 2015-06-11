@@ -17,7 +17,7 @@
 //
 // Here's a sample pre-commit-go.yml file:
 //
-//    version: 2
+//    min_version: "0.4"
 //    modes:
 //      pre-commit:
 //        checks:

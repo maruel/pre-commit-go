@@ -5,7 +5,7 @@
 # See https://godoc.org/github.com/maruel/pre-commit-go/checks for more
 # information.
 
-version: 2
+min_version: "0.4"
 modes:
   continuous-integration:
     checks:
@@ -19,18 +19,18 @@ modes:
       extra_args:
       - -v
       - -race
-    - check_type: custom
-      display_name: sample-pre-commit-go-custom-check
-      description: runs the check sample-pre-commit-go-custom-check on this repository
+    - check_exit_code: true
+      check_type: custom
       command:
       - sample-pre-commit-go-custom-check
       - check
-      check_exit_code: true
+      description: runs the check sample-pre-commit-go-custom-check on this repository
+      display_name: sample-pre-commit-go-custom-check
       prerequisites:
-      - help_command:
+      - expected_exit_code: 2
+        help_command:
         - sample-pre-commit-go-custom-check
         - -help
-        expected_exit_code: 2
         url: github.com/maruel/pre-commit-go/samples/sample-pre-commit-go-custom-check
     - check_type: errcheck
       ignores: Close
@@ -69,3 +69,4 @@ modes:
       - -v
       - -race
     max_duration: 15
+ignore_patterns: []

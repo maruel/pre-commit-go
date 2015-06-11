@@ -5,7 +5,6 @@
 package checks
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/maruel/ut"
@@ -13,7 +12,7 @@ import (
 )
 
 func TestConfigNew(t *testing.T) {
-	config := New()
+	config := New("0.1")
 	ut.AssertEqual(t, 3, len(config.Modes[PreCommit].Checks))
 	ut.AssertEqual(t, 3, len(config.Modes[PrePush].Checks))
 	ut.AssertEqual(t, 5, len(config.Modes[ContinuousIntegration].Checks))
@@ -24,16 +23,10 @@ func TestConfigNew(t *testing.T) {
 }
 
 func TestConfigYAML(t *testing.T) {
-	config := New()
+	config := New("0.1")
 	data, err := yaml.Marshal(config)
 	ut.AssertEqual(t, nil, err)
 	actual := &Config{}
 	ut.AssertEqual(t, nil, yaml.Unmarshal(data, actual))
 	ut.AssertEqual(t, config, actual)
-}
-
-func TestConfigVersion(t *testing.T) {
-	data, err := yaml.Marshal(&Config{Version: currentVersion - 1})
-	ut.AssertEqual(t, nil, err)
-	ut.AssertEqual(t, errors.New("unexpected version 1, expected 2"), yaml.Unmarshal(data, &Config{}))
 }

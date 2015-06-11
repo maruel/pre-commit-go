@@ -47,8 +47,9 @@ func (m *Mode) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 // Config is the serialized form of pre-commit-go.yml.
 type Config struct {
-	// Should be incremented when it's not compatible anymore.
-	Version int `yaml:"version"`
+	// MinVersion is set to the current pre-commit-go version. Earlier version
+	// will refuse to load this file.
+	MinVersion string `yaml:"min_version"`
 	// Settings per mode. Settings includes the checks and the maximum allowed
 	// time spent to run them.
 	Modes map[Mode]Settings `yaml:"modes"`
@@ -74,17 +75,14 @@ func (c *Config) EnabledChecks(modes []Mode) ([]Check, int) {
 
 func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	data := &struct {
-		Version        int               `yaml:"version"`
+		MinVersion     string            `yaml:"min_version"`
 		Modes          map[Mode]Settings `yaml:"modes"`
 		IgnorePatterns []string          `yaml:"ignore_patterns"`
 	}{}
 	if err := unmarshal(data); err != nil {
 		return err
 	}
-	if data.Version != currentVersion {
-		return fmt.Errorf("unexpected version %d, expected %d", data.Version, currentVersion)
-	}
-	c.Version = data.Version
+	c.MinVersion = data.MinVersion
 	c.Modes = data.Modes
 	c.IgnorePatterns = data.IgnorePatterns
 	return nil
@@ -150,9 +148,9 @@ func (c *Checks) UnmarshalYAML(unmarshal func(interface{}) error) error {
 }
 
 // New returns a default initialized Config instance.
-func New() *Config {
+func New(v string) *Config {
 	return &Config{
-		Version: currentVersion,
+		MinVersion: v,
 		Modes: map[Mode]Settings{
 			PreCommit: {
 				MaxDuration: 5,
@@ -213,7 +211,3 @@ func New() *Config {
 		IgnorePatterns: []string{".*", "_*"},
 	}
 }
-
-// Private stuff.
-
-const currentVersion = 2
