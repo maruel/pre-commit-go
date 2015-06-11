@@ -560,28 +560,16 @@ func (c *custom) Run(change scm.Change) error {
 // Rest.
 
 // KnownChecks is the map of all known checks per check name.
-var KnownChecks map[string]Check
-
-func init() {
-	known := []Check{
-		&build{},
-		&gofmt{},
-		&test{},
-		&errcheck{},
-		&goimports{},
-		&golint{},
-		&govet{},
-		&coverage{},
-		&custom{},
-	}
-	KnownChecks = map[string]Check{}
-	for _, k := range known {
-		name := k.GetName()
-		if _, ok := KnownChecks[name]; ok {
-			panic(fmt.Sprintf("duplicate check named %s", name))
-		}
-		KnownChecks[name] = k
-	}
+var KnownChecks = map[string]func() Check{
+	(&build{}).GetName():     func() Check { return &build{} },
+	(&coverage{}).GetName():  func() Check { return &coverage{} },
+	(&custom{}).GetName():    func() Check { return &custom{} },
+	(&errcheck{}).GetName():  func() Check { return &errcheck{} },
+	(&gofmt{}).GetName():     func() Check { return &gofmt{} },
+	(&goimports{}).GetName(): func() Check { return &goimports{} },
+	(&golint{}).GetName():    func() Check { return &golint{} },
+	(&govet{}).GetName():     func() Check { return &govet{} },
+	(&test{}).GetName():      func() Check { return &test{} },
 }
 
 type ordered []covered

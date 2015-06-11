@@ -385,10 +385,11 @@ func cmdHelp(repo scm.Repo, config *checks.Config, usage string) error {
 		[]checks.Check{},
 		[]checks.Check{},
 	}
-	for name, c := range checks.KnownChecks {
+	for name, factory := range checks.KnownChecks {
 		if v := len(name); v > s.Max {
 			s.Max = v
 		}
+		c := factory()
 		if len(c.GetPrerequisites()) == 0 {
 			s.NativeChecks = append(s.NativeChecks, c)
 		} else {

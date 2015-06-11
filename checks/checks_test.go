@@ -38,7 +38,7 @@ func TestSuccess(t *testing.T) {
 	}()
 	ut.AssertEqual(t, nil, os.Setenv("GOPATH", td))
 	for _, name := range getKnownChecks() {
-		c := KnownChecks[name]
+		c := KnownChecks[name]()
 		// TODO(maruel): Fix errcheck locally.
 		if name == "custom" || name == "errcheck" {
 			continue
@@ -71,7 +71,7 @@ func TestChecksFailure(t *testing.T) {
 	}()
 	ut.AssertEqual(t, nil, os.Setenv("GOPATH", td))
 	for _, name := range getKnownChecks() {
-		c := KnownChecks[name]
+		c := KnownChecks[name]()
 		// TODO(maruel): Make golint and govet fail.
 		if name == "custom" || name == "golint" || name == "govet" {
 			continue
@@ -84,7 +84,7 @@ func TestChecksFailure(t *testing.T) {
 
 func TestChecks(t *testing.T) {
 	for _, name := range getKnownChecks() {
-		c := KnownChecks[name]
+		c := KnownChecks[name]()
 		for _, p := range c.GetPrerequisites() {
 			ut.AssertEqualf(t, true, p.IsPresent(), "%s; %#v", c.GetName(), p)
 		}

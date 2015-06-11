@@ -8,7 +8,6 @@ package checks
 
 import (
 	"fmt"
-	"reflect"
 
 	"gopkg.in/yaml.v2"
 )
@@ -94,7 +93,7 @@ func (c *Checks) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	}
 	*c = Checks{}
 	for checkTypeName, checks := range encoded {
-		checkType, ok := KnownChecks[checkTypeName]
+		checkFactory, ok := KnownChecks[checkTypeName]
 		if !ok {
 			return fmt.Errorf("unknown check \"%s\"", checkTypeName)
 		}
@@ -103,7 +102,7 @@ func (c *Checks) UnmarshalYAML(unmarshal func(interface{}) error) error {
 			if err != nil {
 				return err
 			}
-			check := reflect.New(reflect.TypeOf(checkType).Elem()).Interface().(Check)
+			check := checkFactory()
 			if err = yaml.Unmarshal(rawCheckData, check); err != nil {
 				return err
 			}
