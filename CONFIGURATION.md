@@ -46,20 +46,32 @@ Checks
 Checks documentation:
 [![GoDoc](https://godoc.org/github.com/maruel/pre-commit-go/checks/definitions?status.svg)](https://godoc.org/github.com/maruel/pre-commit-go/checks/definitions)
 
+Seriously, click the badge above for the deep down documentation.
+
 
 ### Native checks
 
-  * [go build](https://golang.org/pkg/go/build/) all directories with .go files
+#### Go native checks
+
+  - [go build](https://golang.org/pkg/go/build/) all directories with .go files
     found
-  * [go test -race](https://golang.org/pkg/testing/) by default with [race
+  - [go test](https://golang.org/pkg/testing/) with can be used along the [race
     detector](https://blog.golang.org/race-detector)
-  * [go test -cover](https://golang.org/pkg/testing/) with
+  - [gofmt](https://golang.org/cmd/gofmt/), especially for the -s flag.
+
+
+#### Go checks that require third parties
+
+  - [go test -cover](https://golang.org/pkg/testing/) with
     [coverage](https://blog.golang.org/cover)
-  * [gofmt](https://golang.org/cmd/gofmt/), especially for the -s flag.
-  * [goimports](https://golang.org/x/tools/cmd/goimports)
-  * [errcheck](https://github.com/kisielk/errcheck)
-  * [golint](https://github.com/golang/lint)
-  * [govet (go tool vet)](https://golang.org/x/tools/cmd/vet)
+  - [goimports](https://golang.org/x/tools/cmd/goimports)
+
+
+#### Lint checks
+
+  - [errcheck](https://github.com/kisielk/errcheck)
+  - [golint](https://github.com/golang/lint)
+  - [govet (go tool vet)](https://golang.org/x/tools/cmd/vet)
 
 
 ### Custom check
@@ -74,7 +86,7 @@ modes:
     checks:
     - check_type: custom
       display_name: sample-pre-commit-go-custom-check
-      description: runs the check sample-pre-commit-go-custom-check on this repository
+      description: runs sample-pre-commit-go-custom-check on this repository
       command:
       - sample-pre-commit-go-custom-check
       - check
