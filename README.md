@@ -22,7 +22,8 @@ Use built-in help to list all options and commands:
     pre-commit-go help
 
 Run from within a git checkout inside `$GOPATH`. This installs the git hooks
-within `.git/hooks` and runs the checks in mode `pre-push` by default:
+within `.git/hooks` and runs the checks in mode `pre-push`. It runs the checks
+on the diff against `@{upstream}`:
 
     pre-commit-go
 
