@@ -25,11 +25,18 @@ modes:
           - sample-pre-commit-go-custom-check
           - -help
           expected_exit_code: 2
-          url: ""
+          url: github.com/maruel/pre-commit-go/samples/sample-pre-commit-go-custom-check
+      errcheck:
+      - ignores: Close
       gofmt:
       - {}
       goimports:
       - {}
+      golint:
+      - blacklist: []
+      govet:
+      - blacklist:
+        - ' composite literal uses unkeyed fields'
       test:
       - extra_args:
         - -v

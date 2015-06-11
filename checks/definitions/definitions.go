@@ -37,7 +37,7 @@
 //              - sample-pre-commit-go-custom-check
 //              - -help
 //              expected_exit_code: 2
-//              url: ""
+//              url: "github.com/maruel/pre-commit-go/samples/sample-pre-commit-go-custom-check"
 //          gofmt:
 //          - {}
 //          goimports:
