@@ -137,7 +137,11 @@ func runChecks(config *checks.Config, change scm.Change, modes []checks.Mode) er
 			defer wg.Done()
 			log.Printf("%s...", check.GetName())
 			err, duration := callRun(check, change)
-			log.Printf("... %s in %1.2fs", check.GetName(), duration.Seconds())
+			suffix := ""
+			if err != nil {
+				suffix = " FAILED"
+			}
+			log.Printf("... %s in %1.2fs%s", check.GetName(), duration.Seconds(), suffix)
 			if err != nil {
 				errs <- err
 			}

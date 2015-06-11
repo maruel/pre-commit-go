@@ -14,7 +14,7 @@ modes:
     - check_type: gofmt
     - check_type: goimports
     - check_type: coverage
-      minimum_coverage: 60
+      minimum_coverage: 20
     - check_type: test
       extra_args:
       - -v
