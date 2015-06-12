@@ -481,14 +481,7 @@ func cmdInstallPrereq(repo scm.Repo, config *checks.Config, modes []checks.Mode)
 			fmt.Printf("  %s\n", url)
 		}
 
-		// First try without -u, then with -u. The main reason is golint, which
-		// changed its API around go1.3~1.4 time frame. -u slows things down
-		// significantly so it's worth trying out without, and people will
-		// generally do not like to have things upgraded behind them.
 		out, _, err := internal.Capture("", nil, append([]string{"go", "get"}, urls...)...)
-		if len(out) != 0 || err != nil {
-			out, _, err = internal.Capture("", nil, append([]string{"go", "get", "-u"}, urls...)...)
-		}
 		if len(out) != 0 {
 			return fmt.Errorf("prerequisites installation failed: %s", out)
 		}
