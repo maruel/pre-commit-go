@@ -7,10 +7,14 @@ package scm
 import (
 	"go/scanner"
 	"go/token"
+	"io/ioutil"
+	"log"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 )
 
 // Change represents a change to test against.
@@ -27,7 +31,9 @@ type Change interface {
 	// Indirect returns the Set of everything affected indirectly, e.g. all
 	// modified files plus all packages importing a package that was modified by
 	// this Change. It is useful for example to run all tests that could be
-	// indirectly impacted by a change.
+	// indirectly impacted by a change. Indirect().GoFiles() ==
+	// Changed().GoFiles(). Only Packages() and TestPackages() can be longer, up
+	// to values returned by All()'s.
 	Indirect() Set
 	// All returns all the files in the repository.
 	All() Set
@@ -62,15 +68,190 @@ type change struct {
 	all         set
 }
 
-func newChange(repo ReadOnlyRepo, files, allFiles []string) *change {
+func newChange(r ReadOnlyRepo, files, allFiles []string) *change {
 	// An error occurs when the repository is not inside GOPATH. Ignore this
 	// error here.
-	p, _ := relToGOPATH(repo.Root())
-	c := &change{repo: repo, packageName: p}
-	makeSet(&c.direct, files)
-	// TODO(maruel): Actually indirect.
-	makeSet(&c.indirect, allFiles)
-	makeSet(&c.all, allFiles)
+	root := r.Root()
+	pkgName, _ := relToGOPATH(root)
+	c := &change{repo: r, packageName: pkgName}
+
+	// Map of <relative directory> : <relative package>
+	testDirs := map[string]string{}
+	sourceDirs := map[string]string{}
+	for _, f := range files {
+		if !strings.HasSuffix(f, ".go") {
+			continue
+		}
+		c.direct.files = append(c.direct.files, f)
+		dir := dirName(f)
+		if _, ok := sourceDirs[dir]; !ok {
+			relPkgName := dirToPkg(dir)
+			sourceDirs[dir] = relPkgName
+			c.direct.packages = append(c.direct.packages, relPkgName)
+		}
+		if strings.HasSuffix(f, "_test.go") {
+			if _, ok := testDirs[dir]; !ok {
+				relPkgName := dirToPkg(dir)
+				testDirs[dir] = relPkgName
+				c.direct.testPackages = append(c.direct.testPackages, relPkgName)
+			}
+		}
+	}
+
+	// Map of <relative directory> : <all files in this directory>
+	allDirs := map[string][]string{}
+	// Set of <relative directory>
+	allTestDirs := map[string]bool{}
+	allSourceDirs := map[string]bool{}
+	// Map of <absolute package name> : <relative directory>
+	allPkgs := map[string]string{}
+	for _, f := range allFiles {
+		if !strings.HasSuffix(f, ".go") {
+			continue
+		}
+		c.all.files = append(c.all.files, f)
+		dir := dirName(f)
+		allDirs[dir] = append(allDirs[dir], filepath.Base(f))
+		if _, ok := allSourceDirs[dir]; !ok {
+			relPkgName := dirToPkg(dir)
+			allSourceDirs[dir] = true
+			c.all.packages = append(c.all.packages, relPkgName)
+			allPkgs[path.Join(pkgName, strings.Replace(dir, pathSeparator, "/", -1))] = dir
+		}
+		if strings.HasSuffix(f, "_test.go") {
+			if _, ok := allTestDirs[dir]; !ok {
+				relPkgName := dirToPkg(dir)
+				allTestDirs[dir] = true
+				c.all.testPackages = append(c.all.testPackages, relPkgName)
+				if _, ok = testDirs[dir]; !ok {
+					if _, ok = sourceDirs[dir]; ok {
+						// Add test packages where only non-test source files were modified.
+						testDirs[dir] = relPkgName
+						c.direct.testPackages = append(c.direct.testPackages, relPkgName)
+					}
+				}
+			}
+		}
+	}
+
+	// Still need to sort these since "." will not be at the right place.
+	var wg sync.WaitGroup
+	wg.Add(4)
+	go func() {
+		defer wg.Done()
+		sort.Strings(c.direct.packages)
+	}()
+	go func() {
+		defer wg.Done()
+		sort.Strings(c.direct.testPackages)
+	}()
+	go func() {
+		defer wg.Done()
+		sort.Strings(c.all.packages)
+	}()
+	go func() {
+		defer wg.Done()
+		sort.Strings(c.all.testPackages)
+	}()
+	wg.Wait()
+
+	c.indirect.files = c.direct.files
+	if len(c.direct.packages) == len(c.all.packages) && len(c.direct.testPackages) == len(c.all.testPackages) {
+		// Everything is affected. Skip processing files.
+		c.indirect.packages = c.direct.packages
+		c.indirect.testPackages = c.direct.testPackages
+	} else {
+		c.indirect.packages = make([]string, len(c.direct.packages))
+		copy(c.indirect.packages, c.direct.packages)
+		c.indirect.testPackages = make([]string, len(c.direct.testPackages))
+		copy(c.indirect.testPackages, c.direct.testPackages)
+		// First create a maps of what imports what. Then resolve the DAG. Go spec
+		// guarantees it's a DAG. Treat tests independently since they are not
+		// subject to the DAG restriction; tests can't be imported so they do not
+		// affect other packages indirectly.
+
+		// Map <imported relative dir> : <set of relative dirs importing this package>
+		reverseImports := map[string]map[string]bool{}
+		reverseTestImports := map[string]map[string]bool{}
+		for baseDir, files := range allDirs {
+			if _, ok := sourceDirs[baseDir]; ok {
+				// Already in indirect.
+				continue
+			}
+			// TODO(maruel): Parallelize but rate limited. The goal is to work around
+			// the os.Open() file latency, especially on Windows.
+			for _, f := range files {
+				p := filepath.Join(root, baseDir, f)
+				content, err := ioutil.ReadFile(p)
+				if err != nil {
+					log.Printf("failed to read %s: %s", p, err)
+					continue
+				}
+				_, localImports := getImports(content)
+				for _, imp := range localImports {
+					if importedDir, ok := allPkgs[imp]; ok {
+						if !strings.HasSuffix(f, "_test.go") {
+							if reverseImports[importedDir] == nil {
+								reverseImports[importedDir] = map[string]bool{}
+							}
+							reverseImports[importedDir][baseDir] = true
+						} else {
+							if reverseTestImports[importedDir] == nil {
+								reverseTestImports[importedDir] = map[string]bool{}
+							}
+							reverseTestImports[importedDir][baseDir] = true
+						}
+					}
+				}
+			}
+		}
+
+		// First resolve imports. Do it iteratively, so it's exponential runtime.
+		// Reimplement with better algo once the runtime is >5ms.
+		found := true
+		for found {
+			found = false
+			for dir := range sourceDirs {
+				for importerDir := range reverseImports[dir] {
+					if _, ok := sourceDirs[importerDir]; !ok {
+						relPkgName := dirToPkg(importerDir)
+						sourceDirs[importerDir] = relPkgName
+						c.indirect.packages = append(c.indirect.packages, relPkgName)
+						found = true
+
+						// Does it contain tests too?
+						if _, ok := allTestDirs[importerDir]; ok {
+							if _, ok = testDirs[importerDir]; !ok {
+								testDirs[importerDir] = relPkgName
+								c.indirect.testPackages = append(c.indirect.testPackages, relPkgName)
+							}
+						}
+					}
+				}
+			}
+		}
+
+		// Tests export nothing, so no need to do a multi-pass.
+		for dir := range sourceDirs {
+			for importerDir := range reverseTestImports[dir] {
+				if _, ok := testDirs[importerDir]; !ok {
+					relPkgName := dirToPkg(importerDir)
+					testDirs[importerDir] = relPkgName
+					c.indirect.testPackages = append(c.indirect.testPackages, relPkgName)
+				}
+			}
+		}
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			sort.Strings(c.indirect.packages)
+		}()
+		go func() {
+			defer wg.Done()
+			sort.Strings(c.indirect.testPackages)
+		}()
+		wg.Wait()
+	}
 	return c
 }
 
@@ -112,31 +293,6 @@ func (s *set) TestPackages() []string {
 	return s.testPackages
 }
 
-func makeSet(s *set, files []string) {
-	testDirs := map[string]bool{}
-	sourceDirs := map[string]bool{}
-	for _, f := range files {
-		if !strings.HasSuffix(f, ".go") {
-			continue
-		}
-		s.files = append(s.files, f)
-		dir := filepath.Dir(f)
-		if _, ok := sourceDirs[dir]; !ok {
-			sourceDirs[dir] = true
-			s.packages = append(s.packages, dirToPkg(dir))
-		}
-		if strings.HasSuffix(f, "_test.go") {
-			if _, ok := testDirs[dir]; !ok {
-				testDirs[dir] = true
-				s.testPackages = append(s.testPackages, dirToPkg(dir))
-			}
-		}
-	}
-	sort.Strings(s.files)
-	sort.Strings(s.packages)
-	sort.Strings(s.testPackages)
-}
-
 func dirToPkg(d string) string {
 	if d == "." {
 		return d
@@ -144,16 +300,15 @@ func dirToPkg(d string) string {
 	return "./" + strings.Replace(d, pathSeparator, "/", -1)
 }
 
-/*
-	// Only scan the first file per directory.
-	if _, ok := dirsPackageFound[dir]; !ok {
-		if content, err := ioutil.ReadFile(p); err == nil {
-			name := getPackageName(content)
-			dirsPackageFound[dir] = name != "main" && name != ""
-		}
+func dirName(p string) string {
+	if d := filepath.Dir(p); d != "" {
+		return d
 	}
-*/
+	return "."
+}
 
+// getPackageName returns the name of the package as defined as a
+// "package foo" statement.
 func getPackageName(content []byte) string {
 	var s scanner.Scanner
 	fset := token.NewFileSet()
@@ -171,4 +326,53 @@ func getPackageName(content []byte) string {
 			}
 		}
 	}
+}
+
+// getImports returns the package name and all imports of a file.
+func getImports(content []byte) (string, []string) {
+	// As per https://golang.org/ref/spec, ignoring comments, package must happen
+	// first, then import statements (potentially multiple) and only then the
+	// actual code exists. So processing cuts short after the first non-import
+	// statement.
+	var s scanner.Scanner
+	fset := token.NewFileSet()
+	file := fset.AddFile("", fset.Base(), len(content))
+	s.Init(file, content, nil, 0)
+	pkgName := ""
+	var imports []string
+outer:
+	for {
+		_, tok, _ := s.Scan()
+		switch tok {
+		case token.ILLEGAL, token.EOF:
+			// Likely a truncated file.
+			break outer
+
+		case token.COMMENT:
+
+		case token.PACKAGE:
+			_, tok, lit := s.Scan()
+			if tok == token.IDENT {
+				pkgName = lit
+			} else {
+				panic("Temporary")
+			}
+
+		case token.IMPORT:
+			// Scan all the following lines.
+			for {
+				_, tok, lit := s.Scan()
+				switch tok {
+				case token.STRING:
+					imports = append(imports, lit[1:len(lit)-1])
+				case token.LPAREN, token.IMPORT, token.RPAREN, token.SEMICOLON:
+				case token.EOF:
+					break outer
+				default:
+					break outer
+				}
+			}
+		}
+	}
+	return pkgName, imports
 }

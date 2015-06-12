@@ -586,6 +586,7 @@ func cmdWriteConfig(repo scm.ReadOnlyRepo, config *checks.Config, configPath str
 }
 
 func mainImpl() error {
+
 	if len(os.Args) == 1 {
 		if checks.IsContinuousIntegration() {
 			os.Args = append(os.Args, "run-hook", "continuous-integration")
