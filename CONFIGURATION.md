@@ -35,9 +35,9 @@ In decreasing order of preference:
 This permits to override settings of a `pre-commit-go.yml` in a repository by
 storing an unversionned one in `.git`.
 
-The `pre-commit-go.yml` name can be overriden on a per call basis via `-config`.
-If `-config` specifies an absolute path, it is loaded directly. If it can't be
-found, the default configuration is loaded.
+The `pre-commit-go.yml` name can be overriden on a per call basis via `-c`. If
+`-c` specifies an absolute path, it is loaded directly. If it can't be found,
+the default configuration is loaded.
 
 
 Checks

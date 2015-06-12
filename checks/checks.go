@@ -345,9 +345,9 @@ func (c *coverage) Run(change scm.Change) (err error) {
 		wg.Add(1)
 		go func(index int, testPkg string) {
 			defer wg.Done()
-			// TODO(maruel): Maybe fallback to 'pkg + "/..."' and post process to
-			// remove uninteresting directories. The rationale is that it will
-			// eventually blow up the OS specific command argument length.
+			// Maybe fallback to 'pkg + "/..."' and post process to remove
+			// uninteresting directories. The rationale is that it will eventually
+			// blow up the OS specific command argument length.
 			args := []string{
 				"go", "test", "-v", "-covermode=count", "-coverpkg", coverPkg,
 				"-coverprofile", filepath.Join(tmpDir, fmt.Sprintf("test%d.cov", index)),
@@ -391,7 +391,7 @@ func (c *coverage) Run(change scm.Change) (err error) {
 	}
 	log.Printf("%d functions profiled in %s", len(coverage), coverPkg)
 
-	// TODO(maruel): Calculate the sorted list only when -verbose is specified.
+	// TODO(maruel): Calculate the sorted list only when -v is specified.
 	maxLoc := 0
 	maxName := 0
 	sort.Sort(coverage)
@@ -431,9 +431,8 @@ func (c *coverage) Run(change scm.Change) (err error) {
 
 	// Sends to coveralls.io if applicable.
 	if c.UseCoveralls && IsContinuousIntegration() {
-		// TODO(maruel): Test with all of drone.io, travis-ci.org, etc. In theory
-		// goveralls tries to be smart but we need to ensure it works for all
-		// services. Please send a pull request if it doesn't work for you.
+		// Please send a pull request if the following doesn't work for you on your
+		// favorite CI system.
 		out, _, err2 := internal.Capture("", nil, "goveralls", "-coverprofile", profilePath)
 		// Don't fail the build.
 		if err2 != nil {
