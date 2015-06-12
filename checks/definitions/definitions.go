@@ -203,8 +203,16 @@ type Govet struct {
 // t.MinCoverage.
 type Coverage struct {
 	// MinCoverage is the minimum test coverage to be generated or the check is
-	// considered to fail.
+	// considered to fail. The value is in percent.
 	MinCoverage float64 `yaml:"min_coverage"`
+	// MaxCoverage is the maximum test coverage to be generated or the check is
+	// considered to fail. This is meant to create a 'band' to detect when
+	// coverage increased enough so the values are updated. It is fine to use
+	// 100. and be done with it. The value is in percent. If 0, the value is not
+	// enforced.
+	MaxCoverage float64 `yaml:"max_coverage"`
+	// UseCoveralls determines if the data should be sent to https://coveralls.io.
+	UseCoveralls bool `yaml:"use_coveralls"`
 }
 
 // Extensibility.

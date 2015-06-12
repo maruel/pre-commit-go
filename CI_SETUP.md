@@ -89,6 +89,9 @@ repository.
 automatically yet. Please send a Pull Request to fix this if this is your
 preferred setup.
 
+To use coveralls.io, you must check-in a pre-commit-go.yml that has a `coverage`
+check with `use_coveralls: true`.
+
 
 ### Fine tuning what is tested.
 

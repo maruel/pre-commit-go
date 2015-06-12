@@ -5,7 +5,7 @@
 # See https://godoc.org/github.com/maruel/pre-commit-go/checks for more
 # information.
 
-min_version: 0.4.1
+min_version: 0.4.2
 modes:
   continuous-integration:
     checks:
@@ -13,6 +13,8 @@ modes:
       - extra_args: []
       coverage:
       - min_coverage: 20
+        max_coverage: 100
+        use_coveralls: true
       custom:
       - display_name: sample-pre-commit-go-custom-check
         description: runs the check sample-pre-commit-go-custom-check on this repository
@@ -66,6 +68,8 @@ modes:
     checks:
       coverage:
       - min_coverage: 20
+        max_coverage: 100
+        use_coveralls: false
       goimports:
       - {}
       test:

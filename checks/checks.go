@@ -302,7 +302,7 @@ func (c *coverage) GetPrerequisites() []definitions.CheckPrerequisite {
 	toInstall := []definitions.CheckPrerequisite{
 		{[]string{"go", "tool", "cover", "-h"}, 1, "golang.org/x/tools/cmd/cover"},
 	}
-	if IsContinuousIntegration() {
+	if c.UseCoveralls && IsContinuousIntegration() {
 		toInstall = append(toInstall, definitions.CheckPrerequisite{[]string{"goveralls", "-h"}, 2, "github.com/mattn/goveralls"})
 	}
 	return toInstall
@@ -417,6 +417,8 @@ func (c *coverage) Run(change scm.Change) (err error) {
 	}
 	if total < c.MinCoverage {
 		err = fmt.Errorf("code coverage: %3.1f%% < %.1f%%; %d untested functions", total, c.MinCoverage, partial)
+	} else if c.MaxCoverage > 0 && total > c.MaxCoverage {
+		err = fmt.Errorf("code coverage: %3.1f%% > %.1f%%; %d untested functions; please update \"max_coverage\"", total, c.MaxCoverage, partial)
 	} else {
 		log.Printf("code coverage: %3.1f%% >= %.1f%%; %d untested functions", total, c.MinCoverage, partial)
 	}
@@ -428,7 +430,7 @@ func (c *coverage) Run(change scm.Change) (err error) {
 	}
 
 	// Sends to coveralls.io if applicable.
-	if IsContinuousIntegration() {
+	if c.UseCoveralls && IsContinuousIntegration() {
 		// TODO(maruel): Test with all of drone.io, travis-ci.org, etc. In theory
 		// goveralls tries to be smart but we need to ensure it works for all
 		// services. Please send a pull request if it doesn't work for you.

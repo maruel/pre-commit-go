@@ -143,7 +143,9 @@ func New(v string) *Config {
 					},
 					"coverage": {
 						&coverage{
-							MinCoverage: 60,
+							MinCoverage:  50,
+							MaxCoverage:  100,
+							UseCoveralls: false,
 						},
 					},
 					"test": {
@@ -169,7 +171,9 @@ func New(v string) *Config {
 					},
 					"coverage": {
 						&coverage{
-							MinCoverage: 60,
+							MinCoverage:  50,
+							MaxCoverage:  100,
+							UseCoveralls: true,
 						},
 					},
 					"test": {
