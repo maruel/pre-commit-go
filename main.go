@@ -401,9 +401,16 @@ func cmdHelp(repo scm.ReadOnlyRepo, config *checks.Config, usage string) error {
 }
 
 // cmdInfo displays the current configuration used.
-func cmdInfo(repo scm.ReadOnlyRepo, config *checks.Config, modes []checks.Mode, file string) error {
-	fmt.Printf("File: %s\n", file)
+func cmdInfo(repo scm.ReadOnlyRepo, config *checks.Config, modes []checks.Mode, configPath string) error {
+	fmt.Printf("File: %s\n", configPath)
 	fmt.Printf("Repo: %s\n", repo.Root())
+
+	fmt.Printf("MinVersion: %s\n", config.MinVersion)
+	content, err := yaml.Marshal(config.IgnorePatterns)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("IgnorePatterns:\n%s", content)
 
 	if len(modes) == 0 {
 		modes = checks.AllModes
@@ -640,7 +647,7 @@ func mainImpl() error {
 		return err
 	}
 
-	file, config := loadConfig(repo, *configPathFlag)
+	configPath, config := loadConfig(repo, *configPathFlag)
 
 	switch cmd {
 	case "help", "-help", "-h":
@@ -669,7 +676,7 @@ func mainImpl() error {
 		if *noUpdateFlag != false {
 			return fmt.Errorf("-n can't be used with %s", cmd)
 		}
-		return cmdInfo(repo, config, modes, file)
+		return cmdInfo(repo, config, modes, configPath)
 
 	case "install", "i":
 		cmd = "install"
@@ -744,7 +751,7 @@ func mainImpl() error {
 		if *allFlag != false {
 			return fmt.Errorf("-a can't be used with %s", cmd)
 		}
-		// Note that in that case, file is ignored and not overritten.
+		// Note that in that case, configPath is ignored and not overritten.
 		return cmdWriteConfig(repo, config, *configPathFlag)
 
 	default:
