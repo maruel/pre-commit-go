@@ -210,7 +210,7 @@ func callRun(check checks.Check, change scm.Change) (error, time.Duration) {
 	return err, time.Now().Sub(start)
 }
 
-func runChecks(config *checks.Config, change scm.Change, modes []checks.Mode) error {
+func runChecks(config *checks.Config, change scm.Change, modes []checks.Mode, prereqReady *sync.WaitGroup) error {
 	enabledChecks, maxDuration := config.EnabledChecks(modes)
 	log.Printf("mode: %s; %d checks; %d max seconds allowed", modes, len(enabledChecks), maxDuration)
 	var wg sync.WaitGroup
@@ -220,6 +220,11 @@ func runChecks(config *checks.Config, change scm.Change, modes []checks.Mode) er
 		wg.Add(1)
 		go func(check checks.Check) {
 			defer wg.Done()
+			if len(check.GetPrerequisites()) != 0 {
+				// If this check has prerequisites, wait for all prerequisites to be
+				// checked for presence.
+				prereqReady.Wait()
+			}
 			log.Printf("%s...", check.GetName())
 			err, duration := callRun(check, change)
 			suffix := ""
@@ -264,7 +269,7 @@ func runPreCommit(repo scm.Repo, config *checks.Config) error {
 	var change scm.Change
 	change, err = repo.Between(scm.Current, repo.HEAD(), config.IgnorePatterns)
 	if change != nil {
-		err = runChecks(config, change, []checks.Mode{checks.PreCommit})
+		err = runChecks(config, change, []checks.Mode{checks.PreCommit}, &sync.WaitGroup{})
 	}
 	// If stashed is false, everything was in the index so no stashing was needed.
 	if stashed {
@@ -336,7 +341,7 @@ func runPrePush(repo scm.Repo, config *checks.Config) (err error) {
 		if err != nil {
 			return err
 		}
-		if err = runChecks(config, change, []checks.Mode{checks.PrePush}); err != nil {
+		if err = runChecks(config, change, []checks.Mode{checks.PrePush}, &sync.WaitGroup{}); err != nil {
 			return err
 		}
 	}
@@ -508,13 +513,15 @@ func cmdInstallPrereq(repo scm.ReadOnlyRepo, config *checks.Config, modes []chec
 	return nil
 }
 
-// cmdInstall first calls cmdInstallPrereq() then install the .git/hooks/pre-commit hook.
+// cmdInstall first calls cmdInstallPrereq() then install the
+// .git/hooks/pre-commit and pre-push hooks.
 //
 // Silently ignore installing the hooks when running under a CI. In
-// particular, circleci.com doesn't seem to create the directory .git/hooks.
-func cmdInstall(repo scm.ReadOnlyRepo, config *checks.Config, modes []checks.Mode, noUpdate bool) (err error) {
-	errCh := make(chan error)
+// particular, circleci.com doesn't create the directory .git/hooks.
+func cmdInstall(repo scm.ReadOnlyRepo, config *checks.Config, modes []checks.Mode, noUpdate bool, prereqReady *sync.WaitGroup) (err error) {
+	errCh := make(chan error, 1)
 	go func() {
+		defer prereqReady.Done()
 		errCh <- cmdInstallPrereq(repo, config, modes, noUpdate)
 	}()
 
@@ -546,7 +553,7 @@ func cmdInstall(repo scm.ReadOnlyRepo, config *checks.Config, modes []checks.Mod
 }
 
 // cmdRun runs all the enabled checks.
-func cmdRun(repo scm.ReadOnlyRepo, config *checks.Config, modes []checks.Mode, allFiles bool) error {
+func cmdRun(repo scm.ReadOnlyRepo, config *checks.Config, modes []checks.Mode, allFiles bool, prereqReady *sync.WaitGroup) error {
 	old := scm.GitInitialCommit
 	if !allFiles {
 		var err error
@@ -558,7 +565,7 @@ func cmdRun(repo scm.ReadOnlyRepo, config *checks.Config, modes []checks.Mode, a
 	if err != nil {
 		return err
 	}
-	return runChecks(config, change, modes)
+	return runChecks(config, change, modes, prereqReady)
 }
 
 // cmdRunHook runs the checks in a git repository.
@@ -585,10 +592,18 @@ func cmdRunHook(repo scm.Repo, config *checks.Config, mode string, noUpdate bool
 		// case they do not want any external reference and want to enforce
 		// noUpdate, but many people may not care (yet). So default to fetching but
 		// it can be overriden.
-		if err = cmdInstallPrereq(repo, config, mode, noUpdate); err != nil {
-			return err
+		var prereqReady sync.WaitGroup
+		errCh := make(chan error, 1)
+		prereqReady.Add(1)
+		go func() {
+			defer prereqReady.Done()
+			errCh <- cmdInstallPrereq(repo, config, mode, noUpdate)
+		}()
+		err = runChecks(config, change, mode, &prereqReady)
+		if err2 := <-errCh; err2 != nil {
+			return err2
 		}
-		return runChecks(config, change, mode)
+		return err
 
 	default:
 		return errors.New("unsupported hook type for run-hook")
@@ -686,18 +701,27 @@ func mainImpl() error {
 		if len(modes) == 0 {
 			modes = checks.AllModes
 		}
-		return cmdInstall(repo, config, modes, *noUpdateFlag)
+		var prereqReady sync.WaitGroup
+		prereqReady.Add(1)
+		return cmdInstall(repo, config, modes, *noUpdateFlag, &prereqReady)
 
 	case "installrun":
 		if len(modes) == 0 {
 			modes = []checks.Mode{checks.PrePush}
 		}
-		if err := cmdInstall(repo, config, modes, *noUpdateFlag); err != nil {
-			return err
+		// Start running all checks that do not have a prerequisite before
+		// installation is completed.
+		var prereqReady sync.WaitGroup
+		prereqReady.Add(1)
+		errCh := make(chan error, 1)
+		go func() {
+			errCh <- cmdInstall(repo, config, modes, *noUpdateFlag, &prereqReady)
+		}()
+		err := cmdRun(repo, config, modes, *allFlag, &prereqReady)
+		if err2 := <-errCh; err2 != nil {
+			return err2
 		}
-		// TODO(maruel): Start running all checks that do not have a prerequisite
-		// before installation is completed.
-		return cmdRun(repo, config, modes, *allFlag)
+		return err
 
 	case "prereq", "p":
 		cmd = "prereq"
@@ -717,7 +741,7 @@ func mainImpl() error {
 		if len(modes) == 0 {
 			modes = []checks.Mode{checks.PrePush}
 		}
-		return cmdRun(repo, config, modes, *allFlag)
+		return cmdRun(repo, config, modes, *allFlag, &sync.WaitGroup{})
 
 	case "run-hook":
 		if modes != nil {

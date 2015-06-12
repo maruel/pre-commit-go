@@ -26,9 +26,11 @@ Design
   - Between hard to implement or slow, choose fast.
   - All checks are run concurrently.
   - Lookup for prerequisites presence is concurrent.
+    - Checks that are Go builtin are executed right away, without waiting for
+      prerequisities to be installed.
   - Checks are only run on the relevant code, not on the whole tree.
-  - Checks are increasingly involved based on mode; pre-commit vs pre-push vs
-    continuous-integration.
+  - Checks are increasingly involved based on mode; *pre-commit* vs *pre-push* vs
+    *continuous-integration*.
 
 
 ### Simple
