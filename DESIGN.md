@@ -10,16 +10,6 @@ Design
   - Safe
 
 
-### Fast
-
-  - Between hard to implement or slow, choose fast.
-  - All checks are run concurrently.
-  - Lookup for prerequisites presence is concurrent.
-  - Checks are only run on the relevant code, not on the whole tree.
-  - Checks are increasingly involved based on mode; pre-commit vs pre-push vs
-    continuous-integration.
-
-
 ### Correct
 
   - Evaluate the exact diff to determine what changed.
@@ -29,6 +19,16 @@ Design
     for tests.
       - For example, if package `./foo` is modified, `./bar` depends on `./foo`
         and `./tom` depends on `./bar`, all three packages will be tested.
+
+
+### Fast
+
+  - Between hard to implement or slow, choose fast.
+  - All checks are run concurrently.
+  - Lookup for prerequisites presence is concurrent.
+  - Checks are only run on the relevant code, not on the whole tree.
+  - Checks are increasingly involved based on mode; pre-commit vs pre-push vs
+    continuous-integration.
 
 
 ### Simple
