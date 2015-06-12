@@ -501,18 +501,26 @@ func cmdInstallPrereq(repo scm.ReadOnlyRepo, config *checks.Config, modes []chec
 //
 // Silently ignore installing the hooks when running under a CI. In
 // particular, circleci.com doesn't seem to create the directory .git/hooks.
-func cmdInstall(repo scm.ReadOnlyRepo, config *checks.Config, modes []checks.Mode) error {
-	if err := cmdInstallPrereq(repo, config, modes); err != nil {
-		return err
-	}
+func cmdInstall(repo scm.ReadOnlyRepo, config *checks.Config, modes []checks.Mode) (err error) {
+	errCh := make(chan error)
+	go func() {
+		errCh <- cmdInstallPrereq(repo, config, modes)
+	}()
+
+	defer func() {
+		if err2 := <-errCh; err == nil {
+			err = err2
+		}
+	}()
+
 	if checks.IsContinuousIntegration() {
 		log.Printf("Running under CI; not installing hooks")
 		return nil
 	}
 	log.Printf("Installing hooks")
-	hookDir, err := repo.HookPath()
-	if err != nil {
-		return err
+	hookDir, err2 := repo.HookPath()
+	if err2 != nil {
+		return err2
 	}
 	for _, t := range []string{"pre-commit", "pre-push"} {
 		// Always remove hook first if it exists, in case it's a symlink.

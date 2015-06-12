@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/maruel/pre-commit-go/internal"
 )
@@ -32,6 +33,8 @@ const (
 // ReadOnlyRepo represents a source control managemed checkout.
 //
 // ReadOnlyRepo exposes no function that would modify the state of the checkout.
+//
+// The implementation of this interface must be thread safe.
 type ReadOnlyRepo interface {
 	// Root returns the root directory of this repository.
 	Root() string
@@ -109,7 +112,9 @@ func getRepo(wd string) (repo, error) {
 }
 
 type git struct {
-	root   string
+	root string
+
+	lock   sync.Mutex
 	gitDir string
 }
 
@@ -118,6 +123,8 @@ func (g *git) Root() string {
 }
 
 func (g *git) ScmDir() (string, error) {
+	g.lock.Lock()
+	defer g.lock.Unlock()
 	if g.gitDir == "" {
 		var err error
 		g.gitDir, err = getGitDir(g.root)
@@ -173,44 +180,112 @@ func (g *git) Between(recent, old Commit, ignoredPaths []string) (Change, error)
 	if !g.isValid(old) {
 		return nil, errors.New("invalid old commit")
 	}
-	allFiles := g.captureList(nil, ignoredPaths, "ls-files", "-z")
+
+	// Gather list of all files concurrently.
+	allFilesCh := make(chan []string)
+	go func() {
+		allFilesCh <- g.captureList(nil, ignoredPaths, "ls-files", "-z")
+	}()
+	var allFiles []string
+
+	// Gather list of changes files.
 	var files []string
 	if recent == Current {
 		if old == GitInitialCommit {
+			// Diff against initial commit.
+			allFiles = <-allFilesCh
 			files = allFiles
 		} else {
-			files = g.captureList(nil, ignoredPaths, "diff-tree", "--no-commit-id", "--name-only", "-z", "-r", string(old))
-			// TODO(maruel): Duplicates?
-			files = append(files, g.unstaged()...)
+			// Gather list of unstaged file plus diff.
+			unstagedCh := make(chan []string)
+			go func() {
+				unstagedCh <- g.unstaged()
+			}()
+
+			// Need to remove duplicates.
+			filesSet := map[string]bool{}
+			for _, f := range g.captureList(nil, ignoredPaths, "diff-tree", "--no-commit-id", "--name-only", "-z", "-r", string(old)) {
+				filesSet[f] = true
+			}
+			for _, f := range <-unstagedCh {
+				filesSet[f] = true
+			}
+			files = make([]string, 0, len(filesSet))
+			for f := range filesSet {
+				files = append(files, f)
+			}
+			allFiles = <-allFilesCh
 		}
 	} else {
 		if !g.isValid(recent) {
 			return nil, errors.New("invalid old commit")
 		}
 		files = g.captureList(nil, ignoredPaths, "diff-tree", "--no-commit-id", "--name-only", "-z", "-r", string(recent), string(old))
+		allFiles = <-allFilesCh
 	}
 	if len(files) == 0 {
 		return nil, nil
 	}
-	sort.Strings(files)
+
+	// Sort concurrently.
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		sort.Strings(files)
+	}()
+	sort.Strings(allFiles)
+	wg.Wait()
+
 	return newChange(g, files, allFiles), nil
 }
 
 func (g *git) Stash() (bool, error) {
 	// Ensure everything is either tracked or ignored. This is because git stash
 	// doesn't stash untracked files.
-	if untracked := g.untracked(); untracked == nil {
-		return false, errors.New("failed to get list of untracked files")
-	} else if len(untracked) != 0 {
-		return false, errors.New("can't stash if there are untracked files")
+	// The 2 checks are run in parallel with the first stashing command.
+	errUntrackedCh := make(chan error)
+	go func() {
+		if untracked := g.untracked(); untracked == nil {
+			errUntrackedCh <- errors.New("failed to get list of untracked files")
+		} else if len(untracked) != 0 {
+			errUntrackedCh <- errors.New("can't stash if there are untracked files")
+		} else {
+			errUntrackedCh <- nil
+		}
+	}()
+
+	errUnstagedCh := make(chan error)
+	ignore := errors.New("ignore")
+	go func() {
+		if unstaged := g.unstaged(); unstaged == nil {
+			errUnstagedCh <- errors.New("failed to get list of unstaged files")
+		} else if len(unstaged) == 0 {
+			// No need to stash, there's no unstaged files.
+			errUnstagedCh <- ignore
+		} else {
+			errUnstagedCh <- nil
+		}
+	}()
+
+	oldStashCh := make(chan string)
+	go func() {
+		o, _, _ := g.capture(nil, "rev-parse", "-q", "--verify", "refs/stash")
+		oldStashCh <- o
+	}()
+
+	// Error handling of concurrent processes.
+	if err := <-errUntrackedCh; err != nil {
+		return false, err
 	}
-	if unstaged := g.unstaged(); unstaged == nil {
-		return false, errors.New("failed to get list of unstaged files")
-	} else if len(unstaged) == 0 {
+	if err := <-errUnstagedCh; err == ignore {
 		// No need to stash, there's no unstaged files.
 		return false, nil
+	} else if err != nil {
+		return false, err
 	}
-	oldStash, _, _ := g.capture(nil, "rev-parse", "-q", "--verify", "refs/stash")
+	oldStash := <-oldStashCh
+
 	if out, e, err := g.capture(nil, "stash", "save", "-q", "--keep-index"); e != 0 || err != nil {
 		if g.HEAD() == GitInitialCommit {
 			return false, errors.New("Can't stash until there's at least one commit")
@@ -262,7 +337,8 @@ func (g *git) captureList(env []string, ignorePatterns []string, args ...string)
 	if code != 0 || err != nil {
 		return nil
 	}
-	list := []string{}
+	// Reduce initial memory allocation churn.
+	list := make([]string, 0, 128)
 	for {
 		i := strings.IndexByte(out, 0)
 		if i <= 0 {
