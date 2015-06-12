@@ -55,7 +55,7 @@ set -e
 pre-commit-go run-hook %s
 `
 
-const nilCommit = "0000000000000000000000000000000000000000"
+const gitNilCommit = "0000000000000000000000000000000000000000"
 
 const helpModes = "Supported modes (with shortcut names):\n- pre-commit / fast / pc\n- pre-push / slow / pp  (default)\n- continous-integration / full / ci\n- lint\n- all: includes both continuous-integration and lint"
 
@@ -164,7 +164,7 @@ func loadConfigFile(pathname string) *checks.Config {
 
 // loadConfig loads the on disk configuration or use the default configuration
 // if none is found. See CONFIGURATION.md for the logic.
-func loadConfig(repo scm.Repo, path string) (string, *checks.Config) {
+func loadConfig(repo scm.ReadOnlyRepo, path string) (string, *checks.Config) {
 	if filepath.IsAbs(path) {
 		if config := loadConfigFile(path); config != nil {
 			return path, config
@@ -280,6 +280,7 @@ func runPreCommit(repo scm.Repo, config *checks.Config) error {
 
 func runPrePush(repo scm.Repo, config *checks.Config) (err error) {
 	previous := repo.HEAD()
+	// Will be "" if the current checkout was detached.
 	previousRef := repo.Ref()
 	curr := previous
 	stashed := false
@@ -302,23 +303,26 @@ func runPrePush(repo scm.Repo, config *checks.Config) (err error) {
 
 	bio := bufio.NewReader(os.Stdin)
 	line := ""
+	triedToStash := false
 	for {
 		if line, err = bio.ReadString('\n'); err != nil {
 			break
 		}
-		matches := rePrePush.FindStringSubmatch(line)
+		matches := rePrePush.FindStringSubmatch(line[:len(line)-1])
 		if len(matches) != 5 {
-			return errors.New("unexpected stdin for pre-push")
+			return fmt.Errorf("unexpected stdin for pre-push: %q", line)
 		}
-		from := scm.Commit(matches[5])
-		to := scm.Commit(matches[3])
-		// If it's not being deleted.
-		if to == nilCommit {
+		from := scm.Commit(matches[4])
+		to := scm.Commit(matches[2])
+		if to == gitNilCommit {
+			// It's being deleted.
 			continue
 		}
 		if to != curr {
 			// Stash, checkout, run tests.
-			if !stashed {
+			if !triedToStash {
+				// Only try to stash once.
+				triedToStash = true
 				if stashed, err = repo.Stash(); err != nil {
 					return
 				}
@@ -328,7 +332,7 @@ func runPrePush(repo scm.Repo, config *checks.Config) (err error) {
 				return
 			}
 		}
-		if from == nilCommit {
+		if from == gitNilCommit {
 			from = scm.GitInitialCommit
 		}
 		change, err := repo.Between(from, to, config.IgnorePatterns)
@@ -373,7 +377,7 @@ func processModes(modeFlag string) ([]checks.Mode, error) {
 
 // Commands.
 
-func cmdHelp(repo scm.Repo, config *checks.Config, usage string) error {
+func cmdHelp(repo scm.ReadOnlyRepo, config *checks.Config, usage string) error {
 	s := &struct {
 		Usage        string
 		Max          int
@@ -400,7 +404,7 @@ func cmdHelp(repo scm.Repo, config *checks.Config, usage string) error {
 }
 
 // cmdInfo displays the current configuration used.
-func cmdInfo(repo scm.Repo, config *checks.Config, modes []checks.Mode, file string) error {
+func cmdInfo(repo scm.ReadOnlyRepo, config *checks.Config, modes []checks.Mode, file string) error {
 	fmt.Printf("File: %s\n", file)
 	fmt.Printf("Repo: %s\n", repo.Root())
 
@@ -440,7 +444,7 @@ func cmdInfo(repo scm.Repo, config *checks.Config, modes []checks.Mode, file str
 }
 
 // cmdInstallPrereq installs all the packages needed to run the enabled checks.
-func cmdInstallPrereq(repo scm.Repo, config *checks.Config, modes []checks.Mode) error {
+func cmdInstallPrereq(repo scm.ReadOnlyRepo, config *checks.Config, modes []checks.Mode) error {
 	var wg sync.WaitGroup
 	enabledChecks, _ := config.EnabledChecks(modes)
 	number := 0
@@ -497,7 +501,7 @@ func cmdInstallPrereq(repo scm.Repo, config *checks.Config, modes []checks.Mode)
 //
 // Silently ignore installing the hooks when running under a CI. In
 // particular, circleci.com doesn't seem to create the directory .git/hooks.
-func cmdInstall(repo scm.Repo, config *checks.Config, modes []checks.Mode) error {
+func cmdInstall(repo scm.ReadOnlyRepo, config *checks.Config, modes []checks.Mode) error {
 	if err := cmdInstallPrereq(repo, config, modes); err != nil {
 		return err
 	}
@@ -510,8 +514,7 @@ func cmdInstall(repo scm.Repo, config *checks.Config, modes []checks.Mode) error
 	if err != nil {
 		return err
 	}
-	// TODO(maruel): Add "pre-push" once it's tested to work.
-	for _, t := range []string{"pre-commit"} {
+	for _, t := range []string{"pre-commit", "pre-push"} {
 		// Always remove hook first if it exists, in case it's a symlink.
 		p := filepath.Join(hookDir, t)
 		_ = os.Remove(p)
@@ -524,7 +527,7 @@ func cmdInstall(repo scm.Repo, config *checks.Config, modes []checks.Mode) error
 }
 
 // cmdRun runs all the enabled checks.
-func cmdRun(repo scm.Repo, config *checks.Config, modes []checks.Mode, allFiles bool) error {
+func cmdRun(repo scm.ReadOnlyRepo, config *checks.Config, modes []checks.Mode, allFiles bool) error {
 	old := scm.GitInitialCommit
 	if !allFiles {
 		var err error
@@ -568,7 +571,7 @@ func cmdRunHook(repo scm.Repo, config *checks.Config, mode string) error {
 	}
 }
 
-func cmdWriteConfig(repo scm.Repo, config *checks.Config, configPath string) error {
+func cmdWriteConfig(repo scm.ReadOnlyRepo, config *checks.Config, configPath string) error {
 	content, err := yaml.Marshal(config)
 	if err != nil {
 		return fmt.Errorf("internal error when marshaling config: %s", err)
