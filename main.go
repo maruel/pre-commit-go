@@ -441,7 +441,7 @@ func cmdInfo(repo scm.ReadOnlyRepo, config *checks.Config, modes []checks.Mode, 
 }
 
 // cmdInstallPrereq installs all the packages needed to run the enabled checks.
-func cmdInstallPrereq(repo scm.ReadOnlyRepo, config *checks.Config, modes []checks.Mode) error {
+func cmdInstallPrereq(repo scm.ReadOnlyRepo, config *checks.Config, modes []checks.Mode, noUpdate bool) error {
 	var wg sync.WaitGroup
 	enabledChecks, _ := config.EnabledChecks(modes)
 	number := 0
@@ -477,6 +477,13 @@ func cmdInstallPrereq(repo scm.ReadOnlyRepo, config *checks.Config, modes []chec
 	}
 	sort.Strings(urls)
 	if len(urls) != 0 {
+		if noUpdate {
+			out := "-n is specified but prerequites are missing:\n"
+			for _, url := range urls {
+				out += "  " + url + "\n"
+			}
+			return errors.New(out)
+		}
 		fmt.Printf("Installing:\n")
 		for _, url := range urls {
 			fmt.Printf("  %s\n", url)
@@ -498,10 +505,10 @@ func cmdInstallPrereq(repo scm.ReadOnlyRepo, config *checks.Config, modes []chec
 //
 // Silently ignore installing the hooks when running under a CI. In
 // particular, circleci.com doesn't seem to create the directory .git/hooks.
-func cmdInstall(repo scm.ReadOnlyRepo, config *checks.Config, modes []checks.Mode) (err error) {
+func cmdInstall(repo scm.ReadOnlyRepo, config *checks.Config, modes []checks.Mode, noUpdate bool) (err error) {
 	errCh := make(chan error)
 	go func() {
-		errCh <- cmdInstallPrereq(repo, config, modes)
+		errCh <- cmdInstallPrereq(repo, config, modes, noUpdate)
 	}()
 
 	defer func() {
@@ -551,7 +558,7 @@ func cmdRun(repo scm.ReadOnlyRepo, config *checks.Config, modes []checks.Mode, a
 //
 // Use a precise "stash, run checks, unstash" to ensure that the check is
 // properly run on the data in the index.
-func cmdRunHook(repo scm.Repo, config *checks.Config, mode string) error {
+func cmdRunHook(repo scm.Repo, config *checks.Config, mode string, noUpdate bool) error {
 	switch checks.Mode(mode) {
 	case checks.PreCommit:
 		return runPreCommit(repo, config)
@@ -566,7 +573,12 @@ func cmdRunHook(repo scm.Repo, config *checks.Config, mode string) error {
 			return err
 		}
 		mode := []checks.Mode{checks.ContinuousIntegration}
-		if err = cmdInstallPrereq(repo, config, mode); err != nil {
+
+		// This is a special case, some users want reproducible builds and in this
+		// case they do not want any external reference and want to enforce
+		// noUpdate, but many people may not care (yet). So default to fetching but
+		// it can be overriden.
+		if err = cmdInstallPrereq(repo, config, mode, noUpdate); err != nil {
 			return err
 		}
 		return runChecks(config, change, mode)
@@ -599,14 +611,15 @@ func mainImpl() error {
 	copy(os.Args[1:], os.Args[2:])
 	os.Args = os.Args[:len(os.Args)-1]
 
-	verbose := flag.Bool("v", checks.IsContinuousIntegration(), "enables verbose logging output")
+	verboseFlag := flag.Bool("v", checks.IsContinuousIntegration(), "enables verbose logging output")
 	allFlag := flag.Bool("a", false, "runs checks as if all files had been modified")
-	configPath := flag.String("c", "pre-commit-go.yml", "file name of the config to load")
+	noUpdateFlag := flag.Bool("n", false, "disallow using go get even if a prerequisite is missing; bail out instead")
+	configPathFlag := flag.String("c", "pre-commit-go.yml", "file name of the config to load")
 	modeFlag := flag.String("m", "", "coma separated list of modes to process; default depends on the command")
 	flag.Parse()
 
 	log.SetFlags(log.Lmicroseconds)
-	if !*verbose {
+	if !*verboseFlag {
 		log.SetOutput(ioutil.Discard)
 	}
 
@@ -627,82 +640,113 @@ func mainImpl() error {
 		return err
 	}
 
-	file, config := loadConfig(repo, *configPath)
+	file, config := loadConfig(repo, *configPathFlag)
 
 	switch cmd {
 	case "help", "-help", "-h":
+		cmd = "help"
 		if *allFlag != false {
-			return errors.New("-a can't be used with help")
+			return fmt.Errorf("-a can't be used with %s", cmd)
+		}
+		if *noUpdateFlag != false {
+			return fmt.Errorf("-n can't be used with %s", cmd)
+		}
+		if *configPathFlag != "pre-commit-go.yml" {
+			return fmt.Errorf("-m can't be used with %s", cmd)
+		}
+		if *modeFlag != "" {
+			return fmt.Errorf("-m can't be used with %s", cmd)
 		}
 		b := &bytes.Buffer{}
 		flag.CommandLine.SetOutput(b)
 		flag.CommandLine.PrintDefaults()
 		return cmdHelp(repo, config, b.String())
+
 	case "info":
 		if *allFlag != false {
-			return errors.New("-a can't be used with info")
+			return fmt.Errorf("-a can't be used with %s", cmd)
+		}
+		if *noUpdateFlag != false {
+			return fmt.Errorf("-n can't be used with %s", cmd)
 		}
 		return cmdInfo(repo, config, modes, file)
+
 	case "install", "i":
+		cmd = "install"
 		if *allFlag != false {
-			return errors.New("-a can't be used with install")
+			return fmt.Errorf("-a can't be used with %s", cmd)
 		}
 		if len(modes) == 0 {
 			modes = checks.AllModes
 		}
-		return cmdInstall(repo, config, modes)
+		return cmdInstall(repo, config, modes, *noUpdateFlag)
+
 	case "installrun":
 		if len(modes) == 0 {
 			modes = []checks.Mode{checks.PrePush}
 		}
-		if err := cmdInstall(repo, config, modes); err != nil {
+		if err := cmdInstall(repo, config, modes, *noUpdateFlag); err != nil {
 			return err
 		}
 		// TODO(maruel): Start running all checks that do not have a prerequisite
 		// before installation is completed.
 		return cmdRun(repo, config, modes, *allFlag)
+
 	case "prereq", "p":
+		cmd = "prereq"
 		if *allFlag != false {
-			return errors.New("-a can't be used with prereq")
+			return fmt.Errorf("-a can't be used with %s", cmd)
 		}
 		if len(modes) == 0 {
 			modes = checks.AllModes
 		}
-		return cmdInstallPrereq(repo, config, modes)
+		return cmdInstallPrereq(repo, config, modes, *noUpdateFlag)
+
 	case "run", "r":
+		cmd = "run"
+		if *noUpdateFlag != false {
+			return fmt.Errorf("-n can't be used with %s", cmd)
+		}
 		if len(modes) == 0 {
 			modes = []checks.Mode{checks.PrePush}
 		}
 		return cmdRun(repo, config, modes, *allFlag)
+
 	case "run-hook":
 		if modes != nil {
-			return errors.New("-m can't be used with run-hook")
+			return fmt.Errorf("-m can't be used with %s", cmd)
 		}
 		if *allFlag != false {
-			return errors.New("-a can't be used with run-hook")
+			return fmt.Errorf("-a can't be used with %s", cmd)
 		}
 		if flag.NArg() != 1 {
 			return errors.New("run-hook is only meant to be used by hooks")
 		}
-		return cmdRunHook(repo, config, flag.Arg(0))
+		return cmdRunHook(repo, config, flag.Arg(0), *noUpdateFlag)
+
 	case "version":
 		if modes != nil {
-			return errors.New("-m can't be used with version")
+			return fmt.Errorf("-m can't be used with %s", cmd)
 		}
 		if *allFlag != false {
-			return errors.New("-a can't be used with version")
+			return fmt.Errorf("-a can't be used with %s", cmd)
+		}
+		if *noUpdateFlag != false {
+			return fmt.Errorf("-n can't be used with %s", cmd)
 		}
 		fmt.Println(version)
 		return nil
+
 	case "writeconfig", "w":
 		if modes != nil {
-			return errors.New("-m can't be used with writeconfig")
+			return fmt.Errorf("-m can't be used with %s", cmd)
 		}
 		if *allFlag != false {
-			return errors.New("-a can't be used with writeconfig")
+			return fmt.Errorf("-a can't be used with %s", cmd)
 		}
 		// Note that in that case, file is ignored and not overritten.
-		return cmdWriteConfig(repo, config, *configPath)
+		return cmdWriteConfig(repo, config, *configPathFlag)
+
 	default:
 		return errors.New("unknown command, try 'help'")
 	}
