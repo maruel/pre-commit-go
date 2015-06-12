@@ -16,7 +16,7 @@ import (
 	"github.com/maruel/ut"
 )
 
-func TestGetRepoGitSlow(t *testing.T) {
+func TestGetRepoGitSlowSuccess(t *testing.T) {
 	// Make a repository and test behavior against it.
 	t.Parallel()
 	if isDrone() {
@@ -43,18 +43,18 @@ func TestGetRepoGitSlow(t *testing.T) {
 	ut.AssertEqual(t, []string{}, r.untracked())
 	ut.AssertEqual(t, []string{}, r.unstaged())
 
-	write(t, tmpDir, "file1", "hi\n")
-	check(t, r, []string{"file1"}, []string{})
+	write(t, tmpDir, "file1.go", "hi\n")
+	check(t, r, []string{"file1.go"}, []string{})
 
-	run(t, tmpDir, nil, "add", "file1")
+	run(t, tmpDir, nil, "add", "file1.go")
 	check(t, r, []string{}, []string{})
 
 	done, err := r.Stash()
 	ut.AssertEqual(t, nil, err)
 	ut.AssertEqual(t, false, done)
 
-	write(t, tmpDir, "file1", "hi\nhello\n")
-	check(t, r, []string{}, []string{"file1"})
+	write(t, tmpDir, "file1.go", "hi\nhello\n")
+	check(t, r, []string{}, []string{"file1.go"})
 
 	done, err = r.Stash()
 	ut.AssertEqual(t, errors.New("Can't stash until there's at least one commit"), err)
@@ -64,9 +64,9 @@ func TestGetRepoGitSlow(t *testing.T) {
 	// variable. Go figure.
 	run(t, tmpDir, []string{"GIT_COMMITTER_DATE=2005-04-07T22:13:13 +0000"}, "commit", "-m", "yo", "--date", "2005-04-07T22:13:13 +0000")
 	ut.AssertEqual(t, "master", r.Ref())
-	ut.AssertEqual(t, "hi\nhello\n", read(t, tmpDir, "file1"))
+	ut.AssertEqual(t, "hi\nhello\n", read(t, tmpDir, "file1.go"))
 	head := r.HEAD()
-	if head != "56e6926b12ee571cfba4515214725b35a8571570" {
+	if head != "be629989d5e896a3f823aef6a977e13c97e395c8" {
 		t.Errorf("%s", strings.Join(os.Environ(), "\n"))
 		t.Fatalf("%s", run(t, tmpDir, nil, "log", "-p", "--format=fuller"))
 	}
@@ -75,21 +75,49 @@ func TestGetRepoGitSlow(t *testing.T) {
 	done, err = r.Stash()
 	ut.AssertEqual(t, nil, err)
 	ut.AssertEqual(t, true, done)
-	ut.AssertEqual(t, "hi\n", read(t, tmpDir, "file1"))
+	ut.AssertEqual(t, "hi\n", read(t, tmpDir, "file1.go"))
 	ut.AssertEqual(t, nil, r.Restore())
-	ut.AssertEqual(t, "hi\nhello\n", read(t, tmpDir, "file1"))
+	ut.AssertEqual(t, "hi\nhello\n", read(t, tmpDir, "file1.go"))
 
 	ut.AssertEqual(t, errors.New("checkout failed:\nerror: pathspec 'invalid' did not match any file(s) known to git."), r.Checkout("invalid"))
-	ut.AssertEqual(t, "hi\nhello\n", read(t, tmpDir, "file1"))
+	ut.AssertEqual(t, "hi\nhello\n", read(t, tmpDir, "file1.go"))
 	ut.AssertEqual(t, "master", r.Ref())
 	ut.AssertEqual(t, nil, r.Checkout(string(head)))
-	ut.AssertEqual(t, "hi\n", read(t, tmpDir, "file1"))
+	ut.AssertEqual(t, "hi\n", read(t, tmpDir, "file1.go"))
 	ut.AssertEqual(t, "", r.Ref())
 	ut.AssertEqual(t, head, r.HEAD())
 	ut.AssertEqual(t, nil, r.Checkout("master"))
-	ut.AssertEqual(t, "hi\n", read(t, tmpDir, "file1"))
+	ut.AssertEqual(t, "hi\n", read(t, tmpDir, "file1.go"))
 	ut.AssertEqual(t, "master", r.Ref())
 	ut.AssertEqual(t, head, r.HEAD())
+
+	upstream, err := r.Upstream()
+	ut.AssertEqual(t, Commit(""), upstream)
+	ut.AssertEqual(t, errors.New("no upstream"), err)
+
+	c, err := r.Between(head, GitInitialCommit, nil)
+	ut.AssertEqual(t, nil, err)
+	ut.AssertEqual(t, []string{"file1.go"}, c.Changed().GoFiles())
+
+	c, err = r.Between(Current, GitInitialCommit, nil)
+	ut.AssertEqual(t, nil, err)
+	ut.AssertEqual(t, []string{"file1.go"}, c.Changed().GoFiles())
+
+	c, err = r.Between(Current, GitInitialCommit, []string{"f*"})
+	ut.AssertEqual(t, nil, err)
+	ut.AssertEqual(t, nil, c)
+
+	c, err = r.Between(Current, head, nil)
+	ut.AssertEqual(t, nil, err)
+	ut.AssertEqual(t, nil, c)
+
+	c, err = r.Between(head, Current, nil)
+	ut.AssertEqual(t, errors.New("can't use Current as old commit"), err)
+	ut.AssertEqual(t, nil, c)
+
+	c, err = r.Between(head, Commit("foo"), nil)
+	ut.AssertEqual(t, errors.New("invalid old commit"), err)
+	ut.AssertEqual(t, nil, c)
 }
 
 func TestGetRepoNoRepo(t *testing.T) {

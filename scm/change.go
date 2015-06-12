@@ -37,6 +37,8 @@ type Change interface {
 	Indirect() Set
 	// All returns all the files in the repository.
 	All() Set
+	// Content returns the content of a file.
+	Content(name string) []byte
 }
 
 // Set is a subset of files/directories/packages relative to the change and the
@@ -66,14 +68,18 @@ type change struct {
 	direct      set
 	indirect    set
 	all         set
+
+	lock    sync.Mutex
+	content map[string][]byte
 }
 
 func newChange(r ReadOnlyRepo, files, allFiles []string) *change {
+	//log.Printf("Change{%s, %s}", files, allFiles)
 	// An error occurs when the repository is not inside GOPATH. Ignore this
 	// error here.
 	root := r.Root()
 	pkgName, _ := relToGOPATH(root)
-	c := &change{repo: r, packageName: pkgName}
+	c := &change{repo: r, packageName: pkgName, content: map[string][]byte{}}
 
 	// Map of <relative directory> : <relative package>
 	testDirs := map[string]string{}
@@ -173,38 +179,53 @@ func newChange(r ReadOnlyRepo, files, allFiles []string) *change {
 		// Map <imported relative dir> : <set of relative dirs importing this package>
 		reverseImports := map[string]map[string]bool{}
 		reverseTestImports := map[string]map[string]bool{}
+		// Parallelize but rate limited. The goal is to work around the os.Open()
+		// file latency, especially on Windows.
+		parallel := make(chan bool, 16)
+		for i := 0; i < cap(parallel); i++ {
+			parallel <- true
+		}
+		var wg sync.WaitGroup
 		for baseDir, files := range allDirs {
 			if _, ok := sourceDirs[baseDir]; ok {
 				// Already in indirect.
 				continue
 			}
-			// TODO(maruel): Parallelize but rate limited. The goal is to work around
-			// the os.Open() file latency, especially on Windows.
 			for _, f := range files {
-				p := filepath.Join(root, baseDir, f)
-				content, err := ioutil.ReadFile(p)
-				if err != nil {
-					log.Printf("failed to read %s: %s", p, err)
-					continue
-				}
-				_, localImports := getImports(content)
-				for _, imp := range localImports {
-					if importedDir, ok := allPkgs[imp]; ok {
-						if !strings.HasSuffix(f, "_test.go") {
-							if reverseImports[importedDir] == nil {
-								reverseImports[importedDir] = map[string]bool{}
+				wg.Add(1)
+				go func(baseDir, f string) {
+					<-parallel
+					defer func() {
+						wg.Done()
+						parallel <- true
+					}()
+					content := c.Content(filepath.Join(baseDir, f))
+					if content == nil {
+						return
+					}
+					_, localImports := getImports(content)
+					for _, imp := range localImports {
+						if importedDir, ok := allPkgs[imp]; ok {
+							isTest := strings.HasSuffix(f, "_test.go")
+							c.lock.Lock()
+							if !isTest {
+								if reverseImports[importedDir] == nil {
+									reverseImports[importedDir] = map[string]bool{}
+								}
+								reverseImports[importedDir][baseDir] = true
+							} else {
+								if reverseTestImports[importedDir] == nil {
+									reverseTestImports[importedDir] = map[string]bool{}
+								}
+								reverseTestImports[importedDir][baseDir] = true
 							}
-							reverseImports[importedDir][baseDir] = true
-						} else {
-							if reverseTestImports[importedDir] == nil {
-								reverseTestImports[importedDir] = map[string]bool{}
-							}
-							reverseTestImports[importedDir][baseDir] = true
+							c.lock.Unlock()
 						}
 					}
-				}
+				}(baseDir, f)
 			}
 		}
+		wg.Wait()
 
 		// First resolve imports. Do it iteratively, so it's exponential runtime.
 		// Reimplement with better algo once the runtime is >5ms.
@@ -273,6 +294,23 @@ func (c *change) Indirect() Set {
 
 func (c *change) All() Set {
 	return &c.all
+}
+
+func (c *change) Content(p string) []byte {
+	c.lock.Lock()
+	content, ok := c.content[p]
+	c.lock.Unlock()
+	if !ok {
+		var err error
+		content, err = ioutil.ReadFile(filepath.Join(c.repo.Root(), p))
+		if err != nil {
+			log.Printf("failed to read %s: %s", p, err)
+		}
+		c.lock.Lock()
+		c.content[p] = content
+		c.lock.Unlock()
+	}
+	return content
 }
 
 type set struct {
