@@ -213,6 +213,11 @@ type Coverage struct {
 	MaxCoverage float64 `yaml:"max_coverage"`
 	// UseCoveralls determines if the data should be sent to https://coveralls.io.
 	UseCoveralls bool `yaml:"use_coveralls"`
+	// SkipDirs defines a list of directories to not calculate coverage against.
+	// The directories must be against the root repository. The paths must be in
+	// POSIX format, e.g. with '/' as directory element separator. The root path
+	// is ".".
+	SkipDirs []string `yaml:"skip_dirs"`
 }
 
 // Extensibility.

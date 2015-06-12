@@ -146,6 +146,7 @@ func New(v string) *Config {
 							MinCoverage:  50,
 							MaxCoverage:  100,
 							UseCoveralls: false,
+							SkipDirs:     []string{},
 						},
 					},
 					"test": {
@@ -174,6 +175,7 @@ func New(v string) *Config {
 							MinCoverage:  50,
 							MaxCoverage:  100,
 							UseCoveralls: true,
+							SkipDirs:     []string{},
 						},
 					},
 					"test": {

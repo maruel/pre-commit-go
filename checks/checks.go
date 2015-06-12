@@ -311,13 +311,21 @@ func (c *coverage) GetPrerequisites() []definitions.CheckPrerequisite {
 func (c *coverage) Run(change scm.Change) (err error) {
 	// go test accepts packages, not files.
 	coverPkg := ""
-	// TODO(maruel): Make skipping packages without tests configurable.
-	// TODO(maruel): Make skipping arbitrary packages configurable.
 	for i, p := range change.All().Packages() {
+		tmp := p
+		if tmp != "." {
+			tmp = tmp[2:]
+		}
+		for _, ignore := range c.SkipDirs {
+			if tmp == ignore {
+				goto skip
+			}
+		}
 		if i != 0 {
 			coverPkg += ","
 		}
 		coverPkg += p
+	skip:
 	}
 
 	testPkgs := change.All().TestPackages()
@@ -585,6 +593,12 @@ func (o ordered) Less(i, j int) bool {
 		return false
 	}
 	if o[i].loc < o[j].loc {
+		return true
+	}
+	if o[i].loc > o[j].loc {
+		return false
+	}
+	if o[i].name < o[j].name {
 		return true
 	}
 	return false
