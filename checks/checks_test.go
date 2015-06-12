@@ -19,6 +19,7 @@ import (
 
 func TestSuccess(t *testing.T) {
 	// Runs all checks, they should all pass.
+	t.Parallel()
 	if testing.Short() {
 		t.SkipNow()
 	}
@@ -38,6 +39,7 @@ func TestSuccess(t *testing.T) {
 		ut.ExpectEqual(t, nil, os.Setenv("GOPATH", oldGOPATH))
 	}()
 	ut.AssertEqual(t, nil, os.Setenv("GOPATH", td))
+	waitForDependencies(t)
 	for _, name := range getKnownChecks() {
 		c := KnownChecks[name]()
 		// TODO(maruel): Fix errcheck locally.
@@ -52,6 +54,7 @@ func TestSuccess(t *testing.T) {
 
 func TestChecksFailure(t *testing.T) {
 	// Runs all checks, they should all fail.
+	t.Parallel()
 	if testing.Short() {
 		t.SkipNow()
 	}
@@ -71,6 +74,7 @@ func TestChecksFailure(t *testing.T) {
 		ut.ExpectEqual(t, nil, os.Setenv("GOPATH", oldGOPATH))
 	}()
 	ut.AssertEqual(t, nil, os.Setenv("GOPATH", td))
+	waitForDependencies(t)
 	for _, name := range getKnownChecks() {
 		c := KnownChecks[name]()
 		// TODO(maruel): Make golint and govet fail.
@@ -84,6 +88,13 @@ func TestChecksFailure(t *testing.T) {
 }
 
 func TestChecks(t *testing.T) {
+	t.Parallel()
+	waitForDependencies(t)
+}
+
+// Private stuff.
+
+func waitForDependencies(t *testing.T) {
 	// That is totally cheezy. It's because this test assumes that all
 	// prerequisites have been installed, which is false. Probably worth getting
 	// rid of this check since it's a problem on the CI.
@@ -104,8 +115,6 @@ func TestChecks(t *testing.T) {
 		time.Sleep(5 * time.Millisecond)
 	}
 }
-
-// Private stuff.
 
 // This set of files passes all the tests.
 var goodFiles = map[string]string{
