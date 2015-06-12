@@ -33,9 +33,9 @@ on the diff against `@{upstream}`:
 It may become necessary to commit something known to be broken. To bypass the
 pre-commit hook, use:
 
-    git commit --no-verify
+    git commit --no-verify  (or -n)
+    git push --no-verify    (-n does something else! <3 git)
 
-or shorthand `-n`
 
 
 Configuration
