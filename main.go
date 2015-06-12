@@ -611,6 +611,7 @@ func cmdRunHook(repo scm.Repo, config *checks.Config, mode string, noUpdate bool
 }
 
 func cmdWriteConfig(repo scm.ReadOnlyRepo, config *checks.Config, configPath string) error {
+	config.MinVersion = version
 	content, err := yaml.Marshal(config)
 	if err != nil {
 		return fmt.Errorf("internal error when marshaling config: %s", err)

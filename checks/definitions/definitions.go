@@ -24,7 +24,10 @@
 //          build:
 //          - extra_args: []
 //          coverage:
-//          - min_coverage: 20
+//          - min_coverage: 50
+//            max_coverage: 100
+//            use_coveralls: false
+//            skip_dirs: []
 //          custom:
 //          - display_name: sample-pre-commit-go-custom-check
 //            description: runs the check sample-pre-commit-go-custom-check on this repository
@@ -70,7 +73,10 @@
 //      pre-push:
 //        checks:
 //          coverage:
-//          - min_coverage: 20
+//          - min_coverage: 50
+//            max_coverage: 100
+//            use_coveralls: false
+//            skip_dirs: []
 //          goimports:
 //          - {}
 //          test:
