@@ -3,9 +3,9 @@ Design
 
 ## Goals
 
-  - Fast
   - Correct
-  - Simple to use
+  - Fast
+  - Simple
   - Versatile
   - Safe
 
@@ -31,7 +31,7 @@ Design
         and `./tom` depends on `./bar`, all three packages will be tested.
 
 
-### Simple to use
+### Simple
 
   - Commit hooks are installed automatically.
   - Prerequisites are installed automatically.

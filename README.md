@@ -4,7 +4,7 @@ pre-commit-go
 `pre-commit-go` runs checks on a Go project *on commit* and *on push* via git
 hooks.
 
-  - It's [designed to be simple, correct, fast, versatile and safe](DESIGN.md). No
+  - It's [designed to be correct, fast, simple, versatile and safe](DESIGN.md). No
     check ever modify any file.
   - Native [Continuous Integration service (CI)](CI_SETUP.md) support.
   - [Configuration](CONFIGURATION.md) is easy, flexible and extensible.
