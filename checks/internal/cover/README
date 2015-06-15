@@ -1,0 +1,7 @@
+Source: https://go.googlesource.com/tools/+/master/cmd/cover/func.go
+Source: https://go.googlesource.com/tools/+/master/cover/profile.go
+Revision: ac303766f5f240c1796eeea3dc9bf34f1261aa35
+License: BSD
+
+Note that starting with 1.5, go tool cover lives in the standard repository but
+we inline it here so we can skip significant disk I/O.
