@@ -213,6 +213,10 @@ func callRun(check checks.Check, change scm.Change) (time.Duration, error) {
 func runChecks(config *checks.Config, change scm.Change, modes []checks.Mode, prereqReady *sync.WaitGroup) error {
 	enabledChecks, maxDuration := config.EnabledChecks(modes)
 	log.Printf("mode: %s; %d checks; %d max seconds allowed", modes, len(enabledChecks), maxDuration)
+	if change == nil {
+		log.Printf("no change")
+		return nil
+	}
 	var wg sync.WaitGroup
 	errs := make(chan error, len(enabledChecks))
 	start := time.Now()
