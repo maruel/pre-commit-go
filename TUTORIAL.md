@@ -68,7 +68,7 @@ Tests that shouldn't be run ever in -race mode because they are unacceptably
 slow can be migrated in a file with the [following
 statement](http://golang.org/doc/articles/race_detector.html#Excluding_Tests):
 
-    // +build: !race
+    // +build !race
 
 When a test is looping over itself, it is also possible to migrate the constant
 to a single source file so the constant can be fine tuned when using or not the
