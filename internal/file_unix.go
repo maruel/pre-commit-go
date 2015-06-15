@@ -2,12 +2,13 @@
 // Use of this source code is governed under the Apache License, Version 2.0
 // that can be found in the LICENSE file.
 
-// +build darwin dragonfly freebsd linux nacl netbsd openbsd solaris plan9
+// +build !windows
 
 package internal
 
 import "os"
 
+// Remove calls back os.Remove() on non-Windows.
 func Remove(name string) error {
 	return os.Remove(name)
 }

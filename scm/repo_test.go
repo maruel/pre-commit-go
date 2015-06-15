@@ -79,7 +79,8 @@ func TestGetRepoGitSlowSuccess(t *testing.T) {
 	ut.AssertEqual(t, nil, r.Restore())
 	ut.AssertEqual(t, "hi\nhello\n", read(t, tmpDir, "file1.go"))
 
-	ut.AssertEqual(t, errors.New("checkout failed:\nerror: pathspec 'invalid' did not match any file(s) known to git."), r.Checkout("invalid"))
+	msg := "checkout failed:\nerror: pathspec 'invalid' did not match any file(s) known to git."
+	ut.AssertEqual(t, errors.New(msg), r.Checkout("invalid"))
 	ut.AssertEqual(t, "hi\nhello\n", read(t, tmpDir, "file1.go"))
 	ut.AssertEqual(t, "master", r.Ref())
 	ut.AssertEqual(t, nil, r.Checkout(string(head)))

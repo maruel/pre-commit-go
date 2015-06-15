@@ -28,7 +28,7 @@ file then run:
 
     pre-commit-go writeconfig
 
-This command will set `min_version` to the current version.
+This command forcibly sets `min_version` to the current version.
 
 
 Build on pre-commit only

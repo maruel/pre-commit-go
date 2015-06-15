@@ -17,7 +17,7 @@ import (
 	"github.com/maruel/ut"
 )
 
-func TestSuccess(t *testing.T) {
+func TestChecksSuccess(t *testing.T) {
 	// Runs all checks, they should all pass.
 	t.Parallel()
 	if testing.Short() {
@@ -42,8 +42,7 @@ func TestSuccess(t *testing.T) {
 	waitForDependencies(t)
 	for _, name := range getKnownChecks() {
 		c := KnownChecks[name]()
-		// TODO(maruel): Fix errcheck locally.
-		if name == "custom" || name == "errcheck" {
+		if name == "custom" {
 			continue
 		}
 		if err := c.Run(change); err != nil {
@@ -77,7 +76,8 @@ func TestChecksFailure(t *testing.T) {
 	waitForDependencies(t)
 	for _, name := range getKnownChecks() {
 		c := KnownChecks[name]()
-		// TODO(maruel): Make golint and govet fail.
+		// TODO(maruel): Make golint and govet fail. They are not currently working
+		// at all.
 		if name == "custom" || name == "golint" || name == "govet" {
 			continue
 		}
@@ -145,19 +145,26 @@ func TestSuccess(t *testing.T) {
 var badFiles = map[string]string{
 	"foo.go": `// Foo
 
+// +build: incorrect
+
 package foo
 
-// Syntax error:
+import "errors"
+
+// bad description.
+func MissingDesc() {
+	// Error starts with upper case and ends with a dot.
+	return errors.New("Bad error.")
+}
+
 func main() {
+}
 `,
 	"foo_test.go": `// Foo
 
 package foo
 
 import "testing"
-
-func MissingDesc() {
-}
 
 func TestFail(t *testing.T) {
 t.Fail()

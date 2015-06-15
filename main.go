@@ -200,14 +200,14 @@ func loadConfig(repo scm.ReadOnlyRepo, path string) (string, *checks.Config) {
 	return "<N/A>", checks.New(version)
 }
 
-func callRun(check checks.Check, change scm.Change) (error, time.Duration) {
+func callRun(check checks.Check, change scm.Change) (time.Duration, error) {
 	if l, ok := check.(sync.Locker); ok {
 		l.Lock()
 		defer l.Unlock()
 	}
 	start := time.Now()
 	err := check.Run(change)
-	return err, time.Now().Sub(start)
+	return time.Now().Sub(start), err
 }
 
 func runChecks(config *checks.Config, change scm.Change, modes []checks.Mode, prereqReady *sync.WaitGroup) error {
@@ -226,7 +226,7 @@ func runChecks(config *checks.Config, change scm.Change, modes []checks.Mode, pr
 				prereqReady.Wait()
 			}
 			log.Printf("%s...", check.GetName())
-			err, duration := callRun(check, change)
+			duration, err := callRun(check, change)
 			suffix := ""
 			if err != nil {
 				suffix = " FAILED"

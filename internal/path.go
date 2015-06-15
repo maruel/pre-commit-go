@@ -21,6 +21,8 @@ import (
 	"syscall"
 )
 
+// RemoveAll is a reimplementation of os.RemoveAll() that calls our private
+// version of Remove().
 func RemoveAll(path string) error {
 	err := Remove(path)
 	if err == nil || os.IsNotExist(err) {

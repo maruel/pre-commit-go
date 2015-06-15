@@ -28,6 +28,7 @@ const (
 // AllModes are all known valid modes that can be used in pre-commit-go.yml.
 var AllModes = []Mode{PreCommit, PrePush, ContinuousIntegration, Lint}
 
+// UnmarshalYAML implements yaml.Unmarshaler.
 func (m *Mode) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	s := ""
 	if err := unmarshal(&s); err != nil {
@@ -86,6 +87,7 @@ type Settings struct {
 // Checks helps with Check serialization.
 type Checks map[string][]Check
 
+// UnmarshalYAML implements yaml.Unmarshaler.
 func (c *Checks) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	var encoded map[string][]map[string]interface{}
 	if err := unmarshal(&encoded); err != nil {
