@@ -41,7 +41,7 @@ func TestChangeEmpty(t *testing.T) {
 	r := &dummyRepo{t, "<root>"}
 	files := []string{}
 	allFiles := []string{}
-	c := newChange(r, files, allFiles)
+	c := newChange(r, files, allFiles, nil)
 	ut.AssertEqual(t, r, c.Repo())
 	ut.AssertEqual(t, "", c.Package())
 	changed := c.Changed()
@@ -56,6 +56,14 @@ func TestChangeEmpty(t *testing.T) {
 	ut.AssertEqual(t, []string(nil), all.GoFiles())
 	ut.AssertEqual(t, []string(nil), all.Packages())
 	ut.AssertEqual(t, []string(nil), all.TestPackages())
+}
+
+func TestChangIgnore(t *testing.T) {
+	t.Parallel()
+	c := newChange(&dummyRepo{t, "<root>"}, nil, nil, IgnorePatterns{"*.pb.go"})
+	ut.AssertEqual(t, false, c.IsIgnored("foo.go"))
+	ut.AssertEqual(t, true, c.IsIgnored("foo.pb.go"))
+	ut.AssertEqual(t, true, c.IsIgnored("bar/foo.pb.go"))
 }
 
 var commonTree = map[string]string{
@@ -91,7 +99,7 @@ func TestChangeIndirect(t *testing.T) {
 		})
 	defer cleanup()
 	r := &dummyRepo{t, root}
-	c := newChange(r, []string{"a/a.go"}, allFiles)
+	c := newChange(r, []string{"a/a.go"}, allFiles, nil)
 	ut.AssertEqual(t, r, c.Repo())
 	ut.AssertEqual(t, "", c.Package())
 	changed := c.Changed()
@@ -134,7 +142,7 @@ func TestChangeIndirectReverse(t *testing.T) {
 		})
 	defer cleanup()
 	r := &dummyRepo{t, root}
-	c := newChange(r, []string{"z/z.go"}, allFiles)
+	c := newChange(r, []string{"z/z.go"}, allFiles, nil)
 	ut.AssertEqual(t, r, c.Repo())
 	ut.AssertEqual(t, "", c.Package())
 	changed := c.Changed()
@@ -167,7 +175,7 @@ func TestChangeAll(t *testing.T) {
 		})
 	defer cleanup()
 	r := &dummyRepo{t, root}
-	c := newChange(r, []string{"bar/bar.go", "foo/foo.go", "main.go"}, allFiles)
+	c := newChange(r, []string{"bar/bar.go", "foo/foo.go", "main.go"}, allFiles, nil)
 	ut.AssertEqual(t, r, c.Repo())
 	ut.AssertEqual(t, "", c.Package())
 	changed := c.Changed()
@@ -264,7 +272,7 @@ func (d *dummyRepo) HookPath() (string, error) { d.t.FailNow(); return "", nil }
 func (d *dummyRepo) HEAD() Commit              { d.t.FailNow(); return "" }
 func (d *dummyRepo) Ref() string               { d.t.FailNow(); return "" }
 func (d *dummyRepo) Upstream() (Commit, error) { d.t.FailNow(); return "", nil }
-func (d *dummyRepo) Between(recent, old Commit, ignoredPaths []string) (Change, error) {
+func (d *dummyRepo) Between(recent, old Commit, ignoredPaths IgnorePatterns) (Change, error) {
 	d.t.FailNow()
 	return nil, nil
 }

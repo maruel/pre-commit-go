@@ -68,7 +68,7 @@ type ReadOnlyRepo interface {
 	// Between(Current, GitInitialCommit, ...).
 	//
 	// Returns nil and no error if there's no file difference.
-	Between(recent, old Commit, ignoredPaths []string) (Change, error)
+	Between(recent, old Commit, ignorePatterns IgnorePatterns) (Change, error)
 }
 
 // Repo represents a source control managed checkout.
@@ -88,6 +88,25 @@ type Repo interface {
 // GetRepo returns a valid Repo if one is found.
 func GetRepo(wd string) (Repo, error) {
 	return getRepo(wd)
+}
+
+// IgnorePatterns is a list of glob that when matching, means the file should
+// be ignored.
+type IgnorePatterns []string
+
+// Match returns true when the file should be ignored.
+func (i IgnorePatterns) Match(p string) bool {
+	chunks := strings.Split(p, pathSeparator)
+	for _, ignorePattern := range i {
+		for _, chunk := range chunks {
+			if matched, err := filepath.Match(ignorePattern, chunk); matched {
+				return true
+			} else if err != nil {
+				log.Printf("bad pattern %q", ignorePattern)
+			}
+		}
+	}
+	return false
 }
 
 // Private details.
@@ -172,8 +191,8 @@ func (g *git) unstaged() []string {
 	return g.captureList(nil, nil, "diff", "--name-only", "--no-color", "--no-ext-diff", "-z")
 }
 
-func (g *git) Between(recent, old Commit, ignoredPaths []string) (Change, error) {
-	log.Printf("Between(%q, %q, %s)", recent, old, ignoredPaths)
+func (g *git) Between(recent, old Commit, ignorePatterns IgnorePatterns) (Change, error) {
+	log.Printf("Between(%q, %q, %s)", recent, old, ignorePatterns)
 	if old == Current {
 		return nil, errors.New("can't use Current as old commit")
 	}
@@ -184,7 +203,7 @@ func (g *git) Between(recent, old Commit, ignoredPaths []string) (Change, error)
 	// Gather list of all files concurrently.
 	allFilesCh := make(chan []string)
 	go func() {
-		allFilesCh <- g.captureList(nil, ignoredPaths, "ls-files", "-z")
+		allFilesCh <- g.captureList(nil, ignorePatterns, "ls-files", "-z")
 	}()
 	var allFiles []string
 
@@ -204,7 +223,7 @@ func (g *git) Between(recent, old Commit, ignoredPaths []string) (Change, error)
 
 			// Need to remove duplicates.
 			filesSet := map[string]bool{}
-			for _, f := range g.captureList(nil, ignoredPaths, "diff-tree", "--no-commit-id", "--name-only", "-z", "-r", string(old)) {
+			for _, f := range g.captureList(nil, ignorePatterns, "diff-tree", "--no-commit-id", "--name-only", "-z", "-r", string(old)) {
 				filesSet[f] = true
 			}
 			for _, f := range <-unstagedCh {
@@ -220,7 +239,7 @@ func (g *git) Between(recent, old Commit, ignoredPaths []string) (Change, error)
 		if !g.isValid(recent) {
 			return nil, errors.New("invalid old commit")
 		}
-		files = g.captureList(nil, ignoredPaths, "diff-tree", "--no-commit-id", "--name-only", "-z", "-r", string(recent), string(old))
+		files = g.captureList(nil, ignorePatterns, "diff-tree", "--no-commit-id", "--name-only", "-z", "-r", string(recent), string(old))
 		allFiles = <-allFilesCh
 	}
 	if len(files) == 0 {
@@ -237,7 +256,7 @@ func (g *git) Between(recent, old Commit, ignoredPaths []string) (Change, error)
 	sort.Strings(allFiles)
 	wg.Wait()
 
-	return newChange(g, files, allFiles), nil
+	return newChange(g, files, allFiles, ignorePatterns), nil
 }
 
 func (g *git) Stash() (bool, error) {
@@ -327,7 +346,7 @@ func (g *git) capture(env []string, args ...string) (string, int, error) {
 // captureList assumes the -z argument is used. Returns nil in case of error.
 //
 // It strips any file in ignorePatterns glob that applies to any path component.
-func (g *git) captureList(env []string, ignorePatterns []string, args ...string) []string {
+func (g *git) captureList(env []string, ignorePatterns IgnorePatterns, args ...string) []string {
 	// TOOD(maruel): stream stdout instead of taking the whole output at once. It
 	// may only have an effect on larger repositories and that's not guaranteed.
 	// For example, the output of "git ls-files -z" on the chromium tree with 86k
@@ -345,19 +364,9 @@ func (g *git) captureList(env []string, ignorePatterns []string, args ...string)
 			break
 		}
 		s := out[:i]
-		chunks := strings.Split(s, pathSeparator)
-		for _, ignorePattern := range ignorePatterns {
-			for _, chunk := range chunks {
-				if matched, err := filepath.Match(ignorePattern, chunk); matched {
-					goto loop
-				} else if err != nil {
-					log.Printf("bad pattern %q", ignorePattern)
-					return nil
-				}
-			}
+		if !ignorePatterns.Match(s) {
+			list = append(list, s)
 		}
-		list = append(list, s)
-	loop:
 		out = out[i+1:]
 	}
 	return list

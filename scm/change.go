@@ -39,6 +39,11 @@ type Change interface {
 	All() Set
 	// Content returns the content of a file.
 	Content(name string) []byte
+	// IsIgnored returns true if this path is ignored. This is mostly relevant
+	// when using tools that work at the package level instead of at the file
+	// level and generated files (like proto-gen-go generated files) should be
+	// ignored.
+	IsIgnored(p string) bool
 }
 
 // Set is a subset of files/directories/packages relative to the change and the
@@ -63,23 +68,29 @@ type Set interface {
 const pathSeparator = string(os.PathSeparator)
 
 type change struct {
-	repo        ReadOnlyRepo
-	packageName string
-	direct      set
-	indirect    set
-	all         set
+	repo           ReadOnlyRepo
+	packageName    string
+	ignorePatterns IgnorePatterns
+	direct         set
+	indirect       set
+	all            set
 
 	lock    sync.Mutex
 	content map[string][]byte
 }
 
-func newChange(r ReadOnlyRepo, files, allFiles []string) *change {
+func newChange(r ReadOnlyRepo, files, allFiles, ignorePatterns IgnorePatterns) *change {
 	//log.Printf("Change{%s, %s}", files, allFiles)
+	root := r.Root()
 	// An error occurs when the repository is not inside GOPATH. Ignore this
 	// error here.
-	root := r.Root()
 	pkgName, _ := relToGOPATH(root)
-	c := &change{repo: r, packageName: pkgName, content: map[string][]byte{}}
+	c := &change{
+		repo:           r,
+		packageName:    pkgName,
+		ignorePatterns: ignorePatterns,
+		content:        map[string][]byte{},
+	}
 
 	// Map of <relative directory> : <relative package>
 	testDirs := map[string]string{}
@@ -311,6 +322,10 @@ func (c *change) Content(p string) []byte {
 		c.lock.Unlock()
 	}
 	return content
+}
+
+func (c *change) IsIgnored(p string) bool {
+	return c.ignorePatterns.Match(p)
 }
 
 type set struct {
