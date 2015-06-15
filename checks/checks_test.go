@@ -185,7 +185,8 @@ func init() {
 			for _, p := range KnownChecks[name]().GetPrerequisites() {
 				out, _, _ := internal.Capture("", nil, "go", "get", p.URL)
 				if len(out) != 0 {
-					panic(fmt.Errorf("prerequisites installation failed: %s", out))
+					// This is essentially a race condition, ignore failure but log it.
+					fmt.Printf("prerequisite %s installation failed: %s", p.URL, out)
 				}
 			}
 		}
