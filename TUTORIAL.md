@@ -23,12 +23,10 @@ Forcing update for clients
 
 `pre-commit-go` refuses to load a file if its version is less than what is
 specified by `min_version`. So to force all the contributors to upgrade to the
-current version, remove the `min_version` line from your `pre-commit-go.yml`
-file then run:
+current version, use the following command to forcibly reset `min_version` to
+the current version:
 
     pre-commit-go writeconfig
-
-This command forcibly sets `min_version` to the current version.
 
 
 Build on pre-commit only
