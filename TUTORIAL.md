@@ -4,21 +4,44 @@ Tutorial
 Also see the full [configuration](CONFIGURATION.md) page.
 
 
+Ignoring files
+--------------
+
+By default, the following pattern is used which skips files mapped in by
+[godep](https://github.com/tools/godep) (.e.g. *Godeps/_workspace*)
+automatically:
+
+    ignore_patterns:
+    - .*
+    - _*
+
+Any other glob can be added.
+
+
+Forcing update for clients
+--------------------------
+
+`pre-commit-go` refuses to load a file if its version is less than what is
+specified by `min_version`. So to force all the contributors to upgrade to the
+current version, remove the `min_version` line from your `pre-commit-go.yml`
+file then run:
+
+    pre-commit-go writeconfig
+
+This command will set `min_version` to the current version.
+
+
 Build on pre-commit only
 ------------------------
 
 A trivial configuration that would build everything on commit only would look
 like:
 
-    min_version: 0.4.4
     modes:
       pre-commit:
         check:
         - build:
           - extra_args: []
-    ignore_patterns:
-    - .*
-    - _*
 
 This is useful for small projects that do not contain tests. It ensures that at
 least the code compiles before commit.
@@ -28,9 +51,8 @@ Test with -race
 ---------------
 
 To run tests with `-race` but only short test to reduce the amount of time taken
-locally, use:
+locally, and only on push to keep commits fast, use:
 
-    min_version: 0.4.4
     modes:
       pre-push:
         check:
@@ -38,9 +60,6 @@ locally, use:
           - extra_args:
             - -race
             - -short
-    ignore_patterns:
-    - .*
-    - _*
 
 This permits to get an assurance that tests expose any race condition as found
 by the [race detector](http://blog.golang.org/race-detector). Then in mode
