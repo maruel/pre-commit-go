@@ -1,6 +1,9 @@
 Configuration
 =============
 
+Also see the [tutorial](TUTORIAL.md).
+
+
 Modes
 -----
 

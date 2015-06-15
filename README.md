@@ -8,6 +8,7 @@ hooks.
     check ever modify any file.
   - Native [Continuous Integration service (CI)](CI_SETUP.md) support.
   - [Configuration](CONFIGURATION.md) is easy, flexible and extensible.
+  - See [the tutorial for examples](TUTORIAL.md).
 
 
 Usage
