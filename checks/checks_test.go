@@ -21,7 +21,7 @@ import (
 
 func TestChecksSuccess(t *testing.T) {
 	// Runs all checks, they should all pass.
-	t.Parallel()
+	// Can't run in parallel due to os.Chdir() and os.Setenv().
 	if testing.Short() {
 		t.SkipNow()
 	}
@@ -59,7 +59,7 @@ func TestChecksSuccess(t *testing.T) {
 
 func TestChecksFailure(t *testing.T) {
 	// Runs all checks, they should all fail.
-	t.Parallel()
+	// Can't run in parallel due to os.Chdir() and os.Setenv().
 	if testing.Short() {
 		t.SkipNow()
 	}
