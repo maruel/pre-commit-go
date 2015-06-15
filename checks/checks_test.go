@@ -5,13 +5,15 @@
 package checks
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sort"
+	"sync"
 	"testing"
-	"time"
 
+	"github.com/maruel/pre-commit-go/checks/definitions"
 	"github.com/maruel/pre-commit-go/internal"
 	"github.com/maruel/pre-commit-go/scm"
 	"github.com/maruel/ut"
@@ -39,11 +41,15 @@ func TestChecksSuccess(t *testing.T) {
 		ut.ExpectEqual(t, nil, os.Setenv("GOPATH", oldGOPATH))
 	}()
 	ut.AssertEqual(t, nil, os.Setenv("GOPATH", td))
-	waitForDependencies(t)
 	for _, name := range getKnownChecks() {
 		c := KnownChecks[name]()
 		if name == "custom" {
+			// Tested separatedly.
 			continue
+		}
+		if l, ok := c.(sync.Locker); ok {
+			l.Lock()
+			l.Unlock()
 		}
 		if err := c.Run(change); err != nil {
 			t.Errorf("%s failed: %s", c.GetName(), err)
@@ -73,7 +79,6 @@ func TestChecksFailure(t *testing.T) {
 		ut.ExpectEqual(t, nil, os.Setenv("GOPATH", oldGOPATH))
 	}()
 	ut.AssertEqual(t, nil, os.Setenv("GOPATH", td))
-	waitForDependencies(t)
 	for _, name := range getKnownChecks() {
 		c := KnownChecks[name]()
 		// TODO(maruel): Make golint and govet fail. They are not currently working
@@ -87,34 +92,36 @@ func TestChecksFailure(t *testing.T) {
 	}
 }
 
-func TestChecks(t *testing.T) {
+func TestChecksDescriptions(t *testing.T) {
 	t.Parallel()
-	waitForDependencies(t)
+	for _, name := range getKnownChecks() {
+		c := KnownChecks[name]()
+		ut.AssertEqual(t, true, c.GetDescription() != "")
+		c.GetPrerequisites()
+	}
+}
+
+func TestCustom(t *testing.T) {
+	t.Parallel()
+	p := []definitions.CheckPrerequisite{
+		{
+			HelpCommand:      []string{"go", "version"},
+			ExpectedExitCode: 0,
+			URL:              "example.com.local",
+		},
+	}
+	c := &custom{
+		Description:   "foo",
+		Command:       []string{"go", "version"},
+		Prerequisites: p,
+	}
+	ut.AssertEqual(t, "foo", c.GetDescription())
+	ut.AssertEqual(t, p, c.GetPrerequisites())
+	err := c.Run(nil)
+	ut.AssertEqual(t, nil, err)
 }
 
 // Private stuff.
-
-func waitForDependencies(t *testing.T) {
-	// That is totally cheezy. It's because this test assumes that all
-	// prerequisites have been installed, which is false. Probably worth getting
-	// rid of this check since it's a problem on the CI.
-	for {
-		success := true
-		for _, name := range getKnownChecks() {
-			c := KnownChecks[name]()
-			for _, p := range c.GetPrerequisites() {
-				if !p.IsPresent() {
-					success = false
-				}
-			}
-			ut.AssertEqual(t, true, c.GetDescription() != "")
-		}
-		if !IsContinuousIntegration() || success {
-			break
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
-}
 
 // This set of files passes all the tests.
 var goodFiles = map[string]string{
@@ -170,6 +177,19 @@ func TestFail(t *testing.T) {
 t.Fail()
 }
 `,
+}
+
+func init() {
+	if IsContinuousIntegration() {
+		for _, name := range getKnownChecks() {
+			for _, p := range KnownChecks[name]().GetPrerequisites() {
+				out, _, _ := internal.Capture("", nil, "go", "get", p.URL)
+				if len(out) != 0 {
+					panic(fmt.Errorf("prerequisites installation failed: %s", out))
+				}
+			}
+		}
+	}
 }
 
 func setup(t *testing.T, td string, files map[string]string) (string, scm.Change) {

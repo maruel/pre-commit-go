@@ -5,6 +5,7 @@
 package checks
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/maruel/ut"
@@ -29,4 +30,12 @@ func TestConfigYAML(t *testing.T) {
 	actual := &Config{}
 	ut.AssertEqual(t, nil, yaml.Unmarshal(data, actual))
 	ut.AssertEqual(t, config, actual)
+}
+
+func TestConfigYAMLBadMode(t *testing.T) {
+	data, err := yaml.Marshal("foo")
+	ut.AssertEqual(t, nil, err)
+	v := PreCommit
+	ut.AssertEqual(t, errors.New("invalid mode \"foo\""), yaml.Unmarshal(data, &v))
+	ut.AssertEqual(t, PreCommit, v)
 }

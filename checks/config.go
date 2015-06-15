@@ -41,7 +41,7 @@ func (m *Mode) UnmarshalYAML(unmarshal func(interface{}) error) error {
 			return nil
 		}
 	}
-	return fmt.Errorf("invalid mode \"%s\"", *m)
+	return fmt.Errorf("invalid mode \"%s\"", val)
 }
 
 // Config is the serialized form of pre-commit-go.yml.
