@@ -209,6 +209,6 @@ func New(v string) *Config {
 				},
 			},
 		},
-		IgnorePatterns: []string{".*", "_*"},
+		IgnorePatterns: []string{".*", "_*", "*.pb.go"},
 	}
 }
