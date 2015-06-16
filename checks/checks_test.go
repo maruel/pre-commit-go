@@ -197,7 +197,9 @@ func setup(t *testing.T, td string, files map[string]string) (string, scm.Change
 	fooDir := filepath.Join(td, "src", "foo")
 	ut.AssertEqual(t, nil, os.MkdirAll(fooDir, 0700))
 	for f, c := range files {
-		ut.AssertEqual(t, nil, ioutil.WriteFile(filepath.Join(fooDir, f), []byte(c), 0600))
+		p := filepath.Join(fooDir, f)
+		ut.AssertEqual(t, nil, os.MkdirAll(filepath.Dir(p), 0700))
+		ut.AssertEqual(t, nil, ioutil.WriteFile(p, []byte(c), 0600))
 	}
 	oldWd, err := os.Getwd()
 	ut.AssertEqual(t, nil, err)
@@ -215,6 +217,7 @@ func setup(t *testing.T, td string, files map[string]string) (string, scm.Change
 	ut.AssertEqual(t, nil, err)
 	change, err := repo.Between(scm.Current, scm.GitInitialCommit, nil)
 	ut.AssertEqual(t, nil, err)
+	ut.AssertEqual(t, true, change != nil)
 	return oldWd, change
 }
 
