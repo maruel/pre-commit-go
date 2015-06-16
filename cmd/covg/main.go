@@ -46,7 +46,7 @@ func mainImpl() error {
 	if err != nil {
 		return err
 	}
-	profile, total, partial, err := c.RunProfile(change)
+	profile, err := c.RunProfile(change)
 	if err != nil {
 		return err
 	}
@@ -62,16 +62,13 @@ func mainImpl() error {
 			}
 		}
 	}
-	offset := len(change.Package())
-	if offset > 0 {
-		offset++
-		maxLoc -= offset
-	}
 	for _, item := range profile {
 		if item.Percent < 100. {
-			fmt.Printf("%-*s %-*s %1.1f%%\n", maxLoc, item.SourceRef()[offset:], maxName, item.Name, item.Percent)
+			fmt.Printf("%-*s %-*s %1.1f%%\n", maxLoc, item.SourceRef(), maxName, item.Name, item.Percent)
 		}
 	}
+	total := profile.Coverage()
+	partial := profile.PartiallyCoveredFuncs()
 	if total < c.MinCoverage {
 		return fmt.Errorf("coverage: %3.1f%% < %.1f%%; %d untested functions", total, c.MinCoverage, partial)
 	} else if c.MaxCoverage > 0 && total > c.MaxCoverage {

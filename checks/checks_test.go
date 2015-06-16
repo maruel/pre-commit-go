@@ -32,15 +32,16 @@ func TestChecksSuccess(t *testing.T) {
 			t.Fail()
 		}
 	}()
-	oldWd, change := setup(t, td, goodFiles)
-	defer func() {
-		ut.ExpectEqual(t, nil, os.Chdir(oldWd))
-	}()
 	oldGOPATH := os.Getenv("GOPATH")
 	defer func() {
 		ut.ExpectEqual(t, nil, os.Setenv("GOPATH", oldGOPATH))
 	}()
 	ut.AssertEqual(t, nil, os.Setenv("GOPATH", td))
+
+	oldWd, change := setup(t, td, goodFiles)
+	defer func() {
+		ut.ExpectEqual(t, nil, os.Chdir(oldWd))
+	}()
 	for _, name := range getKnownChecks() {
 		c := KnownChecks[name]()
 		if name == "custom" {
@@ -70,15 +71,16 @@ func TestChecksFailure(t *testing.T) {
 			t.Fail()
 		}
 	}()
-	oldWd, change := setup(t, td, badFiles)
-	defer func() {
-		ut.ExpectEqual(t, nil, os.Chdir(oldWd))
-	}()
 	oldGOPATH := os.Getenv("GOPATH")
 	defer func() {
 		ut.ExpectEqual(t, nil, os.Setenv("GOPATH", oldGOPATH))
 	}()
 	ut.AssertEqual(t, nil, os.Setenv("GOPATH", td))
+
+	oldWd, change := setup(t, td, badFiles)
+	defer func() {
+		ut.ExpectEqual(t, nil, os.Chdir(oldWd))
+	}()
 	for _, name := range getKnownChecks() {
 		c := KnownChecks[name]()
 		// TODO(maruel): Make golint and govet fail. They are not currently working
