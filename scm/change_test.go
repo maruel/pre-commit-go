@@ -200,6 +200,31 @@ func TestGetImports(t *testing.T) {
 		imports []string
 	}{
 		{
+			"",
+			"",
+			nil,
+		},
+		{
+			"package foo",
+			"foo",
+			nil,
+		},
+		{
+			"package foo\nfunc bar() {}",
+			"foo",
+			nil,
+		},
+		{
+			"package foo\nconst i = 0",
+			"foo",
+			nil,
+		},
+		{
+			"const i = 0",
+			"",
+			nil,
+		},
+		{
 			"package foo\nimport \"bar\"",
 			"foo",
 			[]string{"bar"},
@@ -249,6 +274,21 @@ func TestGetImports(t *testing.T) {
 			"package foo\nimport (\n\t\"bar\"\n\n\t// Yo\n\"baz\"\n  )",
 			"foo",
 			[]string{"bar", "baz"},
+		},
+		{
+			"package foo\nimport (\n  . \"bar\"\n)",
+			"foo",
+			[]string{"bar"},
+		},
+		{
+			"package foo\nimport (\n  _ \"bar\"\n)",
+			"foo",
+			[]string{"bar"},
+		},
+		{
+			"package foo\nimport (\n  fakename \"bar\"\n)",
+			"foo",
+			[]string{"bar"},
 		},
 	}
 

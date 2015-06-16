@@ -382,6 +382,12 @@ func getPackageName(content []byte) string {
 }
 
 // getImports returns the package name and all imports of a file.
+//
+// It is similar to go/parser.ParseFile() with mode ImportsOnly. This function
+// is an extremely simplified version which doesn't construct an ast.File tree,
+// mainly for performance.
+//
+// Switch back to ParseFile() if bugs are found.
 func getImports(content []byte) (string, []string) {
 	// As per https://golang.org/ref/spec, ignoring comments, package must happen
 	// first, then import statements (potentially multiple) and only then the
@@ -401,8 +407,6 @@ outer:
 			// Likely a truncated file.
 			break outer
 
-		case token.COMMENT:
-
 		case token.PACKAGE:
 			_, tok, lit := s.Scan()
 			if tok == token.IDENT {
@@ -418,13 +422,34 @@ outer:
 				switch tok {
 				case token.STRING:
 					imports = append(imports, lit[1:len(lit)-1])
+
 				case token.LPAREN, token.IMPORT, token.RPAREN, token.SEMICOLON:
+					// There can be multiple imports statement, they can have
+					// parenthesis, semicolon is implicitly added after each line
+
+				case token.PERIOD:
+					// '.' can be used to import everything inline.
+
+				case token.IDENT:
+					// A named package. It can be "_" or anything else.
+
 				case token.EOF:
+					// A file with only import statement but no code.
 					break outer
+
 				default:
+					// Any other statement breaks the loop.
 					break outer
 				}
 			}
+
+		case token.COMMENT:
+		case token.SEMICOLON:
+
+		default:
+			// This happens if a source file does not import anything. For example
+			// the file only defines constants or pure algorithm.
+			break
 		}
 	}
 	return pkgName, imports
