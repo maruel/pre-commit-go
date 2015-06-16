@@ -80,6 +80,6 @@ modes:
         - -race
     max_duration: 15
 ignore_patterns:
-- .*
-- _*
-- *.pb.go
+- ".*"
+- "_*"
+- "*.pb.go"

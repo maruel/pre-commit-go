@@ -85,8 +85,9 @@
 //            - -race
 //        max_duration: 15
 //    ignore_patterns:
-//    - .*
-//    - _*
+//    - ".*"
+//    - "_*"
+//    - "*.pb.go"
 //
 // To generate the default `pre-commit-go.yml` file, use:
 //

@@ -314,7 +314,7 @@ func (c *custom) Run(change scm.Change) error {
 // KnownChecks is the map of all known checks per check name.
 var KnownChecks = map[string]func() Check{
 	(&build{}).GetName():     func() Check { return &build{} },
-	(&coverage{}).GetName():  func() Check { return &coverage{} },
+	(&Coverage{}).GetName():  func() Check { return &Coverage{} },
 	(&custom{}).GetName():    func() Check { return &custom{} },
 	(&errcheck{}).GetName():  func() Check { return &errcheck{} },
 	(&gofmt{}).GetName():     func() Check { return &gofmt{} },

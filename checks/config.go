@@ -144,7 +144,7 @@ func New(v string) *Config {
 						&goimports{},
 					},
 					"coverage": {
-						&coverage{
+						&Coverage{
 							MinCoverage:  50,
 							MaxCoverage:  100,
 							UseCoveralls: false,
@@ -173,7 +173,7 @@ func New(v string) *Config {
 						&goimports{},
 					},
 					"coverage": {
-						&coverage{
+						&Coverage{
 							MinCoverage:  50,
 							MaxCoverage:  100,
 							UseCoveralls: true,

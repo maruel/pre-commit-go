@@ -668,6 +668,7 @@ func mainImpl() error {
 	}
 
 	configPath, config := loadConfig(repo, *configPathFlag)
+	log.Printf("config: %s", configPath)
 
 	switch cmd {
 	case "help", "-help", "-h":

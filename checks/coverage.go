@@ -3,6 +3,8 @@
 // that can be found in the LICENSE file.
 
 // coverage is a large check so it is in its own file.
+//
+// It is designed to be usable standalone.
 
 package checks
 
@@ -25,17 +27,18 @@ import (
 	"github.com/maruel/pre-commit-go/scm"
 )
 
-type coverage definitions.Coverage
+// Coverage is the check implementation of definitions.Coverage.
+type Coverage definitions.Coverage
 
-func (c *coverage) GetDescription() string {
+func (c *Coverage) GetDescription() string {
 	return "enforces minimum test coverage on all packages"
 }
 
-func (c *coverage) GetName() string {
+func (c *Coverage) GetName() string {
 	return "coverage"
 }
 
-func (c *coverage) GetPrerequisites() []definitions.CheckPrerequisite {
+func (c *Coverage) GetPrerequisites() []definitions.CheckPrerequisite {
 	toInstall := []definitions.CheckPrerequisite{
 		{[]string{"go", "tool", "cover", "-h"}, 1, "golang.org/x/tools/cmd/cover"},
 	}
@@ -45,7 +48,47 @@ func (c *coverage) GetPrerequisites() []definitions.CheckPrerequisite {
 	return toInstall
 }
 
-func (c *coverage) Run(change scm.Change) (err error) {
+func (c *Coverage) Run(change scm.Change) error {
+	profile, total, partial, err := c.RunProfile(change)
+	if err != nil {
+		return err
+	}
+	log.Printf("%d functions profiled in %s", len(profile), change.Package())
+
+	// TODO(maruel): Calculate the sorted list only when -v is specified.
+	maxLoc := 0
+	maxName := 0
+	for _, item := range profile {
+		if item.Percent < 100. {
+			if l := len(item.SourceRef()); l > maxLoc {
+				maxLoc = l
+			}
+			if l := len(item.Name); l > maxName {
+				maxName = l
+			}
+		}
+	}
+	offset := len(change.Package())
+	if offset > 0 {
+		offset++
+		maxLoc -= offset
+	}
+	for _, item := range profile {
+		if item.Percent < 100. {
+			log.Printf("%-*s %-*s %1.1f%%", maxLoc, item.SourceRef()[offset:], maxName, item.Name, item.Percent)
+		}
+	}
+	if total < c.MinCoverage {
+		err = fmt.Errorf("coverage: %3.1f%% < %.1f%%; %d untested functions", total, c.MinCoverage, partial)
+	} else if c.MaxCoverage > 0 && total > c.MaxCoverage {
+		err = fmt.Errorf("coverage: %3.1f%% > %.1f%%; %d untested functions; please update \"max_coverage\"", total, c.MaxCoverage, partial)
+	} else {
+		log.Printf("coverage: %3.1f%% >= %.1f%%; %d untested functions", total, c.MinCoverage, partial)
+	}
+	return err
+}
+
+func (c *Coverage) RunProfile(change scm.Change) (profile coverageProfile, total float64, partial int, err error) {
 	// go test accepts packages, not files.
 	coverPkg := ""
 	for i, p := range change.All().Packages() {
@@ -67,12 +110,12 @@ func (c *coverage) Run(change scm.Change) (err error) {
 
 	testPkgs := change.All().TestPackages()
 	if len(testPkgs) == 0 {
-		return nil
+		return nil, 0, 0, nil
 	}
 
-	tmpDir, err := ioutil.TempDir("", "pre-commit-go")
-	if err != nil {
-		return err
+	tmpDir, err2 := ioutil.TempDir("", "pre-commit-go")
+	if err2 != nil {
+		return nil, 0, 0, err2
 	}
 	defer func() {
 		err2 := internal.RemoveAll(tmpDir)
@@ -106,74 +149,35 @@ func (c *coverage) Run(change scm.Change) (err error) {
 	}
 	wg.Wait()
 
+	select {
+	case err = <-errs:
+		return
+	default:
+	}
+
 	// Merge the profiles. Sums all the counts.
-	files, err := filepath.Glob(filepath.Join(tmpDir, "test*.cov"))
-	if err != nil {
-		return err
+	files, err2 := filepath.Glob(filepath.Join(tmpDir, "test*.cov"))
+	if err2 != nil {
+		return nil, 0, 0, err2
 	}
 	if len(files) == 0 {
-		select {
-		case err = <-errs:
-			return err
-		default:
-			return errors.New("no coverage found")
-		}
+		return nil, 0, 0, errors.New("no coverage found")
 	}
 	profilePath := filepath.Join(tmpDir, "profile.cov")
-	f, err := os.Create(profilePath)
-	if err != nil {
-		return err
+	f, err2 := os.Create(profilePath)
+	if err2 != nil {
+		return nil, 0, 0, err2
 	}
-	if err = mergeCoverage(files, f); err != nil {
-		f.Close()
-		return err
-	}
+	err2 = mergeCoverage(files, f)
 	f.Close()
+	if err2 != nil {
+		return nil, 0, 0, err2
+	}
 
-	profile, total, partial, err := loadProfile(change, profilePath)
+	profile, total, partial, err = loadProfile(change, profilePath)
 	if err != nil {
-		return err
+		return nil, 0, 0, err
 	}
-	log.Printf("%d functions profiled in %s", len(profile), coverPkg)
-
-	// TODO(maruel): Calculate the sorted list only when -v is specified.
-	maxLoc := 0
-	maxName := 0
-	sort.Sort(profile)
-	for _, item := range profile {
-		if item.percent < 100. {
-			if l := len(item.sourceRef()); l > maxLoc {
-				maxLoc = l
-			}
-			if l := len(item.name); l > maxName {
-				maxName = l
-			}
-		}
-	}
-	offset := len(change.Package())
-	if offset > 0 {
-		offset++
-		maxLoc -= offset
-	}
-	for _, item := range profile {
-		if item.percent < 100. {
-			log.Printf("%-*s %-*s %1.1f%%", maxLoc, item.sourceRef()[offset:], maxName, item.name, item.percent)
-		}
-	}
-	if total < c.MinCoverage {
-		err = fmt.Errorf("code coverage: %3.1f%% < %.1f%%; %d untested functions", total, c.MinCoverage, partial)
-	} else if c.MaxCoverage > 0 && total > c.MaxCoverage {
-		err = fmt.Errorf("code coverage: %3.1f%% > %.1f%%; %d untested functions; please update \"max_coverage\"", total, c.MaxCoverage, partial)
-	} else {
-		log.Printf("code coverage: %3.1f%% >= %.1f%%; %d untested functions", total, c.MinCoverage, partial)
-	}
-	if err == nil {
-		select {
-		case err = <-errs:
-		default:
-		}
-	}
-
 	// Sends to coveralls.io if applicable.
 	if c.UseCoveralls && IsContinuousIntegration() {
 		// Please send a pull request if the following doesn't work for you on your
@@ -184,7 +188,8 @@ func (c *coverage) Run(change scm.Change) (err error) {
 			fmt.Printf("%s", out)
 		}
 	}
-	return
+	sort.Sort(profile)
+	return profile, total, partial, err
 }
 
 // mergeCoverage merges multiple coverage profiles into out.
@@ -260,7 +265,7 @@ func loadProfile(change scm.Change, p string) (coverageProfile, float64, int, er
 		percentStr := strings.TrimLeft(items[1], "\t")
 		percent, err := strconv.ParseFloat(percentStr[:len(percentStr)-1], 64)
 		if err != nil {
-			return nil, 0, 0, fmt.Errorf("malformed coverage file")
+			return nil, 0, 0, fmt.Errorf("malformed coverage file: %s", line)
 		}
 		if loc == "total" {
 			// TODO(maruel): This value must be ignored and recalculated, since some
@@ -269,7 +274,7 @@ func loadProfile(change scm.Change, p string) (coverageProfile, float64, int, er
 		} else {
 			items := rsplitn(loc, ":", 2)
 			if len(items) != 2 {
-				return nil, 0, 0, fmt.Errorf("malformed coverage file")
+				return nil, 0, 0, fmt.Errorf("malformed coverage file: %s", line)
 			}
 			if change.IsIgnored(items[0]) {
 				// This file is ignored.
@@ -277,7 +282,7 @@ func loadProfile(change scm.Change, p string) (coverageProfile, float64, int, er
 			}
 			lineNum, err := strconv.ParseInt(items[1], 10, 32)
 			if err != nil {
-				return nil, 0, 0, fmt.Errorf("malformed coverage file")
+				return nil, 0, 0, fmt.Errorf("malformed coverage file: %s", line)
 			}
 			profile = append(profile, funcCovered{percent, items[0], int(lineNum), name})
 			if percent < 100. {
@@ -293,10 +298,10 @@ type coverageProfile []funcCovered
 func (c coverageProfile) Len() int      { return len(c) }
 func (c coverageProfile) Swap(i, j int) { c[i], c[j] = c[j], c[i] }
 func (c coverageProfile) Less(i, j int) bool {
-	if c[i].percent > c[j].percent {
+	if c[i].Percent > c[j].Percent {
 		return true
 	}
-	if c[i].percent < c[j].percent {
+	if c[i].Percent < c[j].Percent {
 		return false
 	}
 
@@ -307,10 +312,10 @@ func (c coverageProfile) Less(i, j int) bool {
 		return false
 	}
 
-	if c[i].name < c[j].name {
+	if c[i].Name < c[j].Name {
 		return true
 	}
-	if c[i].name > c[j].name {
+	if c[i].Name > c[j].Name {
 		return false
 	}
 
@@ -321,12 +326,12 @@ func (c coverageProfile) Less(i, j int) bool {
 }
 
 type funcCovered struct {
-	percent float64
+	Percent float64
 	source  string
 	line    int
-	name    string
+	Name    string
 }
 
-func (f *funcCovered) sourceRef() string {
+func (f *funcCovered) SourceRef() string {
 	return fmt.Sprintf("%s:%d", f.source, f.line)
 }
