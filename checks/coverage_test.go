@@ -44,7 +44,14 @@ func TestCoverage(t *testing.T) {
 	ut.AssertEqual(t, nil, err)
 	ut.AssertEqual(t, 100., total)
 	ut.AssertEqual(t, 0, partial)
-	expected := coverageProfile{{Percent: 100, source: "foo/foo.go", line: 2, Name: "Foo"}}
+	expected := CoverageProfile{
+		{
+			Source:  "foo/foo.go",
+			Line:    2,
+			Name:    "Foo",
+			Percent: 100,
+		},
+	}
 	ut.AssertEqual(t, expected, profile)
 	ut.AssertEqual(t, "foo/foo.go:2", profile[0].SourceRef())
 	ut.AssertEqual(t, nil, c.Run(change))

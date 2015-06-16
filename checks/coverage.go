@@ -88,7 +88,7 @@ func (c *Coverage) Run(change scm.Change) error {
 	return err
 }
 
-func (c *Coverage) RunProfile(change scm.Change) (profile coverageProfile, total float64, partial int, err error) {
+func (c *Coverage) RunProfile(change scm.Change) (profile CoverageProfile, total float64, partial int, err error) {
 	// go test accepts packages, not files.
 	coverPkg := ""
 	for i, p := range change.All().Packages() {
@@ -194,10 +194,14 @@ func (c *Coverage) RunProfile(change scm.Change) (profile coverageProfile, total
 
 // mergeCoverage merges multiple coverage profiles into out.
 //
-// It sums all the counts of each profile.
+// It sums all the counts of each profile. It doesn't actually process it.
 //
 // Format is "file.go:XX.YY,ZZ.II J K"
-// J is number of statements, K is count.
+// - file.go is path against GOPATH
+// - XX.YY is the line/column start of the statement.
+// - ZZ.II is the line/column end of the statement.
+// - J is number of statements,
+// - K is count.
 func mergeCoverage(files []string, out io.Writer) error {
 	counts := map[string]int{}
 	for _, file := range files {
@@ -239,12 +243,12 @@ func mergeCoverage(files []string, out io.Writer) error {
 }
 
 // loadProfile analyzes the results of a coverage profile.
-func loadProfile(change scm.Change, p string) (coverageProfile, float64, int, error) {
+func loadProfile(change scm.Change, p string) (CoverageProfile, float64, int, error) {
 	out, code, err := internal.Capture("", nil, "go", "tool", "cover", "-func", p)
 	if code != 0 || err != nil {
 		return nil, 0, 0, fmt.Errorf("go tool cover failed with code %d; %s", code, err)
 	}
-	profile := coverageProfile{}
+	profile := CoverageProfile{}
 	partial := 0
 	var total float64
 	for i, line := range strings.Split(out, "\n") {
@@ -284,7 +288,12 @@ func loadProfile(change scm.Change, p string) (coverageProfile, float64, int, er
 			if err != nil {
 				return nil, 0, 0, fmt.Errorf("malformed coverage file: %s", line)
 			}
-			profile = append(profile, funcCovered{percent, items[0], int(lineNum), name})
+			profile = append(profile, FuncCovered{
+				Source:  items[0],
+				Line:    int(lineNum),
+				Name:    name,
+				Percent: percent,
+			})
 			if percent < 100. {
 				partial++
 			}
@@ -293,11 +302,11 @@ func loadProfile(change scm.Change, p string) (coverageProfile, float64, int, er
 	return profile, total, partial, nil
 }
 
-type coverageProfile []funcCovered
+type CoverageProfile []FuncCovered
 
-func (c coverageProfile) Len() int      { return len(c) }
-func (c coverageProfile) Swap(i, j int) { c[i], c[j] = c[j], c[i] }
-func (c coverageProfile) Less(i, j int) bool {
+func (c CoverageProfile) Len() int      { return len(c) }
+func (c CoverageProfile) Swap(i, j int) { c[i], c[j] = c[j], c[i] }
+func (c CoverageProfile) Less(i, j int) bool {
 	if c[i].Percent > c[j].Percent {
 		return true
 	}
@@ -305,10 +314,10 @@ func (c coverageProfile) Less(i, j int) bool {
 		return false
 	}
 
-	if c[i].source < c[j].source {
+	if c[i].Source < c[j].Source {
 		return true
 	}
-	if c[i].source > c[j].source {
+	if c[i].Source > c[j].Source {
 		return false
 	}
 
@@ -319,19 +328,58 @@ func (c coverageProfile) Less(i, j int) bool {
 		return false
 	}
 
-	if c[i].line < c[j].line {
+	if c[i].Line < c[j].Line {
 		return true
 	}
 	return false
 }
 
-type funcCovered struct {
-	Percent float64
-	source  string
-	line    int
-	Name    string
+// Coverage returns the coverage in % for this profile.
+func (c CoverageProfile) Coverage() float64 {
+	if total := c.TotalLines(); total != 0 {
+		return float64(c.TotalCoveredLines()) / float64(total)
+	}
+	return 0
 }
 
-func (f *funcCovered) SourceRef() string {
-	return fmt.Sprintf("%s:%d", f.source, f.line)
+// TotalCoveredLines returns the number of lines that were covered.
+func (c CoverageProfile) TotalCoveredLines() int64 {
+	total := int64(0)
+	for _, f := range c {
+		total += f.Count
+	}
+	return total
+}
+
+// TotalLines returns the total number of source lines found.
+func (c CoverageProfile) TotalLines() int64 {
+	total := int64(0)
+	for _, f := range c {
+		total += f.Total
+	}
+	return total
+}
+
+// PartiallyCoveredFunc returns the number of functions not completely covered.
+func (c CoverageProfile) PartiallyCoveredFunc() int {
+	total := 0
+	for _, f := range c {
+		if f.Total != f.Count {
+			total++
+		}
+	}
+	return total
+}
+
+type FuncCovered struct {
+	Source  string
+	Line    int
+	Name    string
+	Count   int64
+	Total   int64
+	Percent float64
+}
+
+func (f *FuncCovered) SourceRef() string {
+	return fmt.Sprintf("%s:%d", f.Source, f.Line)
 }

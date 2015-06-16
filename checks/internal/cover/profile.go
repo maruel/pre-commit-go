@@ -101,8 +101,13 @@ func ParseProfiles(ignore IsIgnored, r io.Reader) ([]*Profile, error) {
 	if err := s.Err(); err != nil {
 		return nil, err
 	}
-	for _, p := range files {
-		sort.Sort(blocksByStart(p.Blocks))
+	// Trim off all nil items.
+	for k, p := range files {
+		if p == nil {
+			delete(files, k)
+		} else {
+			sort.Sort(blocksByStart(p.Blocks))
+		}
 	}
 	// Generate a sorted slice.
 	profiles := make([]*Profile, 0, len(files))
