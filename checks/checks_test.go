@@ -28,7 +28,7 @@ func TestChecksSuccess(t *testing.T) {
 	td, err := ioutil.TempDir("", "pre-commit-go")
 	ut.AssertEqual(t, nil, err)
 	defer func() {
-		if err := os.RemoveAll(td); err != nil {
+		if err := internal.RemoveAll(td); err != nil {
 			t.Fail()
 		}
 	}()
@@ -66,7 +66,7 @@ func TestChecksFailure(t *testing.T) {
 	td, err := ioutil.TempDir("", "pre-commit-go")
 	ut.AssertEqual(t, nil, err)
 	defer func() {
-		if err := os.RemoveAll(td); err != nil {
+		if err := internal.RemoveAll(td); err != nil {
 			t.Fail()
 		}
 	}()

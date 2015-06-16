@@ -11,6 +11,7 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/maruel/pre-commit-go/internal"
 	"github.com/maruel/ut"
 )
 
@@ -324,7 +325,7 @@ func makeTree(t *testing.T, files map[string]string) (string, []string, func()) 
 	td, err := ioutil.TempDir("", "pre-commit-go")
 	ut.AssertEqual(t, nil, err)
 	cleanup := func() {
-		if err := os.RemoveAll(td); err != nil {
+		if err := internal.RemoveAll(td); err != nil {
 			t.Fail()
 		}
 	}
