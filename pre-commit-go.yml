@@ -5,17 +5,21 @@
 # See https://godoc.org/github.com/maruel/pre-commit-go/checks for more
 # information.
 
-min_version: 0.4.4
+min_version: 0.4.5
 modes:
   continuous-integration:
     checks:
       build:
       - extra_args: []
       coverage:
-      - min_coverage: 20
-        max_coverage: 100
-        use_coveralls: true
-        skip_dirs: []
+      - use_coveralls: true
+        global:
+          min_coverage: 55
+          max_coverage: 60
+        per_dir_default:
+          min_coverage: 0
+          max_coverage: 0
+        per_dir: {}
       custom:
       - display_name: sample-pre-commit-go-custom-check
         description: runs the check sample-pre-commit-go-custom-check on this repository
@@ -68,10 +72,14 @@ modes:
   pre-push:
     checks:
       coverage:
-      - min_coverage: 20
-        max_coverage: 100
-        use_coveralls: false
-        skip_dirs: []
+      - use_coveralls: true
+        global:
+          min_coverage: 55
+          max_coverage: 60
+        per_dir_default:
+          min_coverage: 0
+          max_coverage: 0
+        per_dir: {}
       goimports:
       - {}
       test:
@@ -80,6 +88,6 @@ modes:
         - -race
     max_duration: 15
 ignore_patterns:
-- ".*"
-- "_*"
-- "*.pb.go"
+- .*
+- _*
+- '*.pb.go'

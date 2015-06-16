@@ -13,6 +13,7 @@ import (
 	"os"
 
 	"github.com/maruel/pre-commit-go/checks"
+	"github.com/maruel/pre-commit-go/checks/definitions"
 	"github.com/maruel/pre-commit-go/scm"
 )
 
@@ -38,8 +39,10 @@ func mainImpl() error {
 	}
 
 	c := checks.Coverage{
-		MinCoverage: *minFlag,
-		MaxCoverage: *maxFlag,
+		Global: definitions.CoverageSettings{
+			MinCoverage: *minFlag,
+			MaxCoverage: *maxFlag,
+		},
 	}
 	// TODO(maruel): Run tests ala pre-commit-go.
 	change, err := repo.Between(scm.Current, scm.GitInitialCommit, nil)
@@ -69,12 +72,12 @@ func mainImpl() error {
 	}
 	total := profile.Coverage()
 	partial := profile.PartiallyCoveredFuncs()
-	if total < c.MinCoverage {
-		return fmt.Errorf("coverage: %3.1f%% < %.1f%%; %d untested functions", total, c.MinCoverage, partial)
-	} else if c.MaxCoverage > 0 && total > c.MaxCoverage {
-		return fmt.Errorf("coverage: %3.1f%% > %.1f%%; %d untested functions; please update \"max_coverage\"", total, c.MaxCoverage, partial)
+	if total < c.Global.MinCoverage {
+		return fmt.Errorf("coverage: %3.1f%% < %.1f%%; %d untested functions", total, c.Global.MinCoverage, partial)
+	} else if c.Global.MaxCoverage > 0 && total > c.Global.MaxCoverage {
+		return fmt.Errorf("coverage: %3.1f%% > %.1f%%; %d untested functions; please update \"max_coverage\"", total, c.Global.MaxCoverage, partial)
 	}
-	fmt.Printf("coverage: %3.1f%% >= %.1f%%; %d untested functions\n", total, c.MinCoverage, partial)
+	fmt.Printf("coverage: %3.1f%% >= %.1f%%; %d untested functions\n", total, c.Global.MinCoverage, partial)
 	return nil
 }
 

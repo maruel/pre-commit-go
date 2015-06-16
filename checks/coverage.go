@@ -54,6 +54,8 @@ func (c *Coverage) Run(change scm.Change) error {
 	}
 	log.Printf("%d functions profiled in %s", len(profile), change.Package())
 
+	// TODO(maruel): Calculate the per package coverage and make it fail if a
+	// package specific coverage level is specified and it's not high enough.
 	// TODO(maruel): Calculate the sorted list only when -v is specified.
 	maxLoc := 0
 	maxName := 0
@@ -74,12 +76,12 @@ func (c *Coverage) Run(change scm.Change) error {
 	}
 	total := profile.Coverage()
 	partial := profile.PartiallyCoveredFuncs()
-	if total < c.MinCoverage {
-		err = fmt.Errorf("coverage: %3.1f%% < %.1f%%; %d untested functions", total, c.MinCoverage, partial)
-	} else if c.MaxCoverage > 0 && total > c.MaxCoverage {
-		err = fmt.Errorf("coverage: %3.1f%% > %.1f%%; %d untested functions; please update \"max_coverage\"", total, c.MaxCoverage, partial)
+	if total < c.Global.MinCoverage {
+		err = fmt.Errorf("coverage: %3.1f%% < %.1f%%; %d untested functions", total, c.Global.MinCoverage, partial)
+	} else if c.Global.MaxCoverage > 0 && total > c.Global.MaxCoverage {
+		err = fmt.Errorf("coverage: %3.1f%% > %.1f%%; %d untested functions; please update \"max_coverage\"", total, c.Global.MaxCoverage, partial)
 	} else {
-		log.Printf("coverage: %3.1f%% >= %.1f%%; %d untested functions", total, c.MinCoverage, partial)
+		log.Printf("coverage: %3.1f%% >= %.1f%%; %d untested functions", total, c.Global.MinCoverage, partial)
 	}
 	return err
 }
@@ -88,17 +90,12 @@ func (c *Coverage) RunProfile(change scm.Change) (profile CoverageProfile, err e
 	// go test accepts packages, not files.
 	coverPkg := ""
 	for i, p := range change.All().Packages() {
-		d := pkgToDir(p)
-		for _, ignore := range c.SkipDirs {
-			if d == ignore {
-				goto skip
+		if s := c.SettingsForPkg(p); s != nil && s.MinCoverage != 0 {
+			if i != 0 {
+				coverPkg += ","
 			}
+			coverPkg += p
 		}
-		if i != 0 {
-			coverPkg += ","
-		}
-		coverPkg += p
-	skip:
 	}
 
 	testPkgs := change.All().TestPackages()
@@ -187,6 +184,17 @@ func (c *Coverage) RunProfile(change scm.Change) (profile CoverageProfile, err e
 		}
 	}
 	return profile, err
+}
+
+func (c *Coverage) SettingsForPkg(testPkg string) *definitions.CoverageSettings {
+	testDir := pkgToDir(testPkg)
+	if settings, ok := c.PerDir[testDir]; ok {
+		if settings == nil {
+			settings = &definitions.CoverageSettings{}
+		}
+		return settings
+	}
+	return nil
 }
 
 // mergeCoverage merges multiple coverage profiles into out.

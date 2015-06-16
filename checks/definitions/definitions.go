@@ -17,17 +17,21 @@
 //
 // Here's a sample pre-commit-go.yml file:
 //
-//    min_version: 0.4.1
+//    min_version: 0.4.5
 //    modes:
 //      continuous-integration:
 //        checks:
 //          build:
 //          - extra_args: []
 //          coverage:
-//          - min_coverage: 50
-//            max_coverage: 100
-//            use_coveralls: false
-//            skip_dirs: []
+//          - use_coveralls: false
+//            global:
+//              min_coverage: 50
+//              max_coverage: 100
+//            per_dir_default:
+//              min_coverage: 0
+//              max_coverage: 0
+//            per_dir: {}
 //          custom:
 //          - display_name: sample-pre-commit-go-custom-check
 //            description: runs the check sample-pre-commit-go-custom-check on this repository
@@ -73,10 +77,14 @@
 //      pre-push:
 //        checks:
 //          coverage:
-//          - min_coverage: 50
-//            max_coverage: 100
-//            use_coveralls: false
-//            skip_dirs: []
+//          - use_coveralls: false
+//            global:
+//              min_coverage: 50
+//              max_coverage: 100
+//            per_dir_default:
+//              min_coverage: 0
+//              max_coverage: 0
+//            per_dir: {}
 //          goimports:
 //          - {}
 //          test:
@@ -197,6 +205,20 @@ type Govet struct {
 	Blacklist []string `yaml:"blacklist"`
 }
 
+// CoverageSettings permits specifying different coverage values than the
+// default values for a specific directory.
+type CoverageSettings struct {
+	// MinCoverage is the minimum test coverage to be generated or the check is
+	// considered to fail. The value is in percent.
+	MinCoverage float64 `yaml:"min_coverage"`
+	// MaxCoverage is the maximum test coverage to be generated or the check is
+	// considered to fail. This is meant to create a 'band' to detect when
+	// coverage increased enough so the values are updated. It is fine to use
+	// 100. and be done with it. The value is in percent. If 0, the value is not
+	// enforced.
+	MaxCoverage float64 `yaml:"max_coverage"`
+}
+
 // Coverage runs all tests with coverage.
 //
 // Each testable package is run with 'go test -cover' then all coverage
@@ -209,22 +231,22 @@ type Govet struct {
 // Otherwise, only a summary is printed in case code coverage is not above
 // t.MinCoverage.
 type Coverage struct {
-	// MinCoverage is the minimum test coverage to be generated or the check is
-	// considered to fail. The value is in percent.
-	MinCoverage float64 `yaml:"min_coverage"`
-	// MaxCoverage is the maximum test coverage to be generated or the check is
-	// considered to fail. This is meant to create a 'band' to detect when
-	// coverage increased enough so the values are updated. It is fine to use
-	// 100. and be done with it. The value is in percent. If 0, the value is not
-	// enforced.
-	MaxCoverage float64 `yaml:"max_coverage"`
 	// UseCoveralls determines if the data should be sent to https://coveralls.io.
 	UseCoveralls bool `yaml:"use_coveralls"`
-	// SkipDirs defines a list of directories to not calculate coverage against.
-	// The directories must be against the root repository. The paths must be in
+	// Global coverage parameters. The whole coverage must fit these values. This
+	// gives a broad range that the code must maintain.
+	Global CoverageSettings `yaml:"global"`
+	// PerDirDefault is the default coverage settings per package. It can be
+	// overriden by PerDir. This gives a tight range each package should adhere
+	// to.
+	PerDirDefault CoverageSettings `yaml:"per_dir_default"`
+	// PerDir defines a list of directories to use different coverage value.  The
+	// directories must be against the root repository. The paths must be in
 	// POSIX format, e.g. with '/' as directory element separator. The root path
 	// is ".".
-	SkipDirs []string `yaml:"skip_dirs"`
+	//
+	// You can disable coverage for a specific directory by specifying coverage:0.
+	PerDir map[string]*CoverageSettings `yaml:"per_dir"`
 }
 
 // Extensibility.

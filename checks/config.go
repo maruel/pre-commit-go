@@ -9,6 +9,8 @@ package checks
 import (
 	"fmt"
 
+	"github.com/maruel/pre-commit-go/checks/definitions"
+
 	"gopkg.in/yaml.v2"
 )
 
@@ -145,10 +147,16 @@ func New(v string) *Config {
 					},
 					"coverage": {
 						&Coverage{
-							MinCoverage:  50,
-							MaxCoverage:  100,
 							UseCoveralls: false,
-							SkipDirs:     []string{},
+							Global: definitions.CoverageSettings{
+								MinCoverage: 50,
+								MaxCoverage: 100,
+							},
+							PerDirDefault: definitions.CoverageSettings{
+								MinCoverage: 0,
+								MaxCoverage: 0,
+							},
+							PerDir: map[string]*definitions.CoverageSettings{},
 						},
 					},
 					"test": {
@@ -174,10 +182,16 @@ func New(v string) *Config {
 					},
 					"coverage": {
 						&Coverage{
-							MinCoverage:  50,
-							MaxCoverage:  100,
 							UseCoveralls: true,
-							SkipDirs:     []string{},
+							Global: definitions.CoverageSettings{
+								MinCoverage: 50,
+								MaxCoverage: 100,
+							},
+							PerDirDefault: definitions.CoverageSettings{
+								MinCoverage: 0,
+								MaxCoverage: 0,
+							},
+							PerDir: map[string]*definitions.CoverageSettings{},
 						},
 					},
 					"test": {
