@@ -47,7 +47,7 @@ func printProfile(settings *definitions.CoverageSettings, profile checks.Coverag
 
 func mainImpl() error {
 	// TODO(maruel): Add support to use the same diff as pre-commit-go.
-	minFlag := flag.Float64("min", 0, "minimum expected coverage in %")
+	minFlag := flag.Float64("min", 1, "minimum expected coverage in %")
 	maxFlag := flag.Float64("max", 100, "maximum expected coverage in %")
 	globalFlag := flag.Bool("g", false, "use global coverage")
 	verboseFlag := flag.Bool("v", false, "enable logging")

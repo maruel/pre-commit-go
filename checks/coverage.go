@@ -102,7 +102,7 @@ func (c *Coverage) RunProfile(change scm.Change) (profile CoverageProfile, err e
 func (c *Coverage) RunGlobal(change scm.Change, tmpDir string) (CoverageProfile, error) {
 	coverPkg := ""
 	for i, p := range change.All().Packages() {
-		if s := c.SettingsForPkg(p); s != nil && s.MinCoverage != 0 {
+		if s := c.SettingsForPkg(p); s.MinCoverage != 0 {
 			if i != 0 {
 				coverPkg += ","
 			}
@@ -141,9 +141,8 @@ func (c *Coverage) RunGlobal(change scm.Change, tmpDir string) (CoverageProfile,
 	// Sends to coveralls.io if applicable. Do not write to disk unless needed.
 	var f readWriteSeekCloser
 	var err error
-	profilePath := filepath.Join(tmpDir, "profile.cov")
 	if c.isGoverallsEnabled() {
-		if f, err = os.Create(profilePath); err != nil {
+		if f, err = os.Create(filepath.Join(tmpDir, "profile.cov")); err != nil {
 			return nil, err
 		}
 	} else {
@@ -174,6 +173,9 @@ func (c *Coverage) RunGlobal(change scm.Change, tmpDir string) (CoverageProfile,
 }
 
 // SettingsForPkg returns the settings for a particular package.
+//
+// If the PerDir value is set to a null pointer, returns empty coverage.
+// Otherwise returns PerDirDefault.
 func (c *Coverage) SettingsForPkg(testPkg string) *definitions.CoverageSettings {
 	testDir := pkgToDir(testPkg)
 	if settings, ok := c.PerDir[testDir]; ok {
@@ -182,7 +184,7 @@ func (c *Coverage) SettingsForPkg(testPkg string) *definitions.CoverageSettings 
 		}
 		return settings
 	}
-	return nil
+	return &c.PerDirDefault
 }
 
 func (c *Coverage) isGoverallsEnabled() bool {
