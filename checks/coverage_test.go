@@ -41,8 +41,8 @@ func TestCoverage(t *testing.T) {
 	}
 	profile, err := c.RunProfile(change)
 	ut.AssertEqual(t, nil, err)
-	ut.AssertEqual(t, 75., profile.Coverage())
-	ut.AssertEqual(t, 1, profile.PartiallyCoveredFuncs())
+	ut.AssertEqual(t, 55.555555555555555, profile.CoveragePercent())
+	ut.AssertEqual(t, 2, profile.PartiallyCoveredFuncs())
 	expected := CoverageProfile{
 		{
 			Source:  "foo.go",
@@ -57,13 +57,42 @@ func TestCoverage(t *testing.T) {
 			Line:    2,
 			Name:    "Bar",
 			Count:   2,
-			Total:   3,
-			Percent: 66.666666666666666,
+			Total:   4,
+			Percent: 50,
+		},
+		{
+			Source:  "bar/bar.go",
+			Line:    10,
+			Name:    "Baz",
+			Count:   2,
+			Total:   4,
+			Percent: 50,
 		},
 	}
 	ut.AssertEqual(t, expected, profile)
 	ut.AssertEqual(t, "foo.go:2", profile[0].SourceRef())
 	ut.AssertEqual(t, "bar/bar.go:2", profile[1].SourceRef())
+
+	expected = CoverageProfile{
+		{
+			Source:  "bar.go",
+			Line:    2,
+			Name:    "Bar",
+			Count:   2,
+			Total:   4,
+			Percent: 50,
+		},
+		{
+			Source:  "bar.go",
+			Line:    10,
+			Name:    "Baz",
+			Count:   2,
+			Total:   4,
+			Percent: 50,
+		},
+	}
+	ut.AssertEqual(t, expected, profile.Subset("bar"))
+
 	ut.AssertEqual(t, nil, c.Run(change))
 }
 
@@ -86,13 +115,25 @@ func Bar(i int) int {
 	if i == 2 {
 		return 2
 	}
-	return 3
+	i++
+	return i
+}
+
+func Baz(i int) int {
+	if i == 2 {
+		return 2
+	}
+	i++
+	return i
 }
 `,
 	"bar/bar_test.go": `package bar
 import "testing"
 func TestSuccess(t *testing.T) {
   if Bar(2) != 2 {
+    t.Fail()
+  }
+  if Baz(2) != 2 {
     t.Fail()
   }
 }

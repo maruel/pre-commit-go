@@ -52,8 +52,6 @@ func (c *Coverage) Run(change scm.Change) error {
 	if err != nil {
 		return err
 	}
-	log.Printf("%d functions profiled in %s", len(profile), change.Package())
-
 	// TODO(maruel): Calculate the per package coverage and make it fail if a
 	// package specific coverage level is specified and it's not high enough.
 	// TODO(maruel): Calculate the sorted list only when -v is specified.
@@ -71,13 +69,14 @@ func (c *Coverage) Run(change scm.Change) error {
 	}
 	for _, item := range profile {
 		if item.Percent < 100. {
-			log.Printf("%-*s %-*s %1.1f%%", maxLoc, item.SourceRef(), maxName, item.Name, item.Percent)
+			log.Printf("%-*s %-*s %4.1f%% (%d/%d)", maxLoc, item.SourceRef(), maxName, item.Name, item.Percent, item.Count, item.Total)
 		}
 	}
 	if err = profile.Passes(&c.Global); err != nil {
 		err = fmt.Errorf("coverage: %s", err)
 	} else {
-		log.Printf("coverage: %3.1f%% >= %.1f%%; %d untested functions", profile.Coverage(), c.Global.MinCoverage, profile.PartiallyCoveredFuncs())
+		log.Printf("coverage: %3.1f%% (%d/%d) >= %.1f%%; Functions: %d untested / %d partially / %d completely\n",
+			profile.CoveragePercent(), profile.TotalCoveredLines(), profile.TotalLines(), c.Global.MinCoverage, profile.NonCoveredFuncs(), profile.PartiallyCoveredFuncs(), profile.CoveredFuncs())
 	}
 	return err
 }
@@ -322,21 +321,40 @@ func (c CoverageProfile) Less(i, j int) bool {
 	return false
 }
 
+// Subset returns a new CoverageProfile that only covers the specified
+// directory.
+func (c CoverageProfile) Subset(p string) CoverageProfile {
+	p += "/"
+	out := CoverageProfile{}
+	for _, i := range c {
+		if strings.HasPrefix(i.Source, p) {
+			rest := i.Source[len(p):]
+			if !strings.Contains(rest, "/") {
+				j := *i
+				j.Source = rest
+				out = append(out, &j)
+			}
+		}
+	}
+	return out
+}
+
 // Passes returns nil if it passes the settings otherwise returns an error.
 func (c CoverageProfile) Passes(s *definitions.CoverageSettings) error {
-	total := c.Coverage()
-	partial := c.PartiallyCoveredFuncs()
+	total := c.CoveragePercent()
 	if total < s.MinCoverage {
-		return fmt.Errorf("%3.1f%% < %.1f%%; %d untested functions", total, s.MinCoverage, partial)
+		return fmt.Errorf("%3.1f%% (%d/%d) < %.1f%%; Functions: %d untested / %d partially / %d completely",
+			total, c.TotalCoveredLines(), c.TotalLines(), s.MinCoverage, c.NonCoveredFuncs(), c.PartiallyCoveredFuncs(), c.CoveredFuncs())
 	}
 	if s.MaxCoverage > 0 && total > s.MaxCoverage {
-		return fmt.Errorf("%3.1f%% > %.1f%%; %d untested functions", total, s.MaxCoverage, partial)
+		return fmt.Errorf("%3.1f%% (%d/%d) > %.1f%%; Functions: %d untested / %d partially / %d completely",
+			total, c.TotalCoveredLines(), c.TotalLines(), s.MaxCoverage, c.NonCoveredFuncs(), c.PartiallyCoveredFuncs(), c.CoveredFuncs())
 	}
 	return nil
 }
 
 // Coverage returns the coverage in % for this profile.
-func (c CoverageProfile) Coverage() float64 {
+func (c CoverageProfile) CoveragePercent() float64 {
 	if total := c.TotalLines(); total != 0 {
 		return 100. * float64(c.TotalCoveredLines()) / float64(total)
 	}
@@ -361,11 +379,33 @@ func (c CoverageProfile) TotalLines() int64 {
 	return total
 }
 
-// PartiallyCoveredFuncs returns the number of functions not completely covered.
+// NonCoveredFuncs returns the number of functions not covered.
+func (c CoverageProfile) NonCoveredFuncs() int {
+	total := 0
+	for _, f := range c {
+		if f.Count == 0 {
+			total++
+		}
+	}
+	return total
+}
+
+// PartiallyCoveredFuncs returns the number of functions partially covered.
 func (c CoverageProfile) PartiallyCoveredFuncs() int {
 	total := 0
 	for _, f := range c {
-		if f.Total != f.Count {
+		if f.Count != 0 && f.Total != f.Count {
+			total++
+		}
+	}
+	return total
+}
+
+// CoveredFuncs returns the number of functions completely covered.
+func (c CoverageProfile) CoveredFuncs() int {
+	total := 0
+	for _, f := range c {
+		if f.Total == f.Count {
 			total++
 		}
 	}
