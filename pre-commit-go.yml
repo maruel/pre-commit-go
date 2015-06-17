@@ -15,7 +15,7 @@ modes:
       - use_coveralls: true
         global:
           min_coverage: 50
-          max_coverage: 60
+          max_coverage: 90
         per_dir_default:
           min_coverage: 0
           max_coverage: 0
@@ -75,7 +75,7 @@ modes:
       - use_coveralls: true
         global:
           min_coverage: 50
-          max_coverage: 60
+          max_coverage: 90
         per_dir_default:
           min_coverage: 0
           max_coverage: 0
