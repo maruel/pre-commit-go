@@ -68,6 +68,7 @@ func mainImpl() error {
 	}
 
 	c := checks.Coverage{
+		UseGlobalInference: *globalFlag,
 		Global: definitions.CoverageSettings{
 			MinCoverage: *minFlag,
 			MaxCoverage: *maxFlag,

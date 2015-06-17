@@ -17,14 +17,15 @@
 //
 // Here's a sample pre-commit-go.yml file:
 //
-//    min_version: 0.4.5
+//    min_version: 0.4.6
 //    modes:
 //      continuous-integration:
 //        checks:
 //          build:
 //          - extra_args: []
 //          coverage:
-//          - use_coveralls: false
+//          - use_global_inference: false
+//            use_coveralls: false
 //            global:
 //              min_coverage: 50
 //              max_coverage: 100
@@ -77,7 +78,8 @@
 //      pre-push:
 //        checks:
 //          coverage:
-//          - use_coveralls: false
+//          - use_global_inference: false
+//            use_coveralls: false
 //            global:
 //              min_coverage: 50
 //              max_coverage: 100
@@ -231,6 +233,12 @@ type CoverageSettings struct {
 // Otherwise, only a summary is printed in case code coverage is not above
 // t.MinCoverage.
 type Coverage struct {
+	// UseGlobalInference determines if coverage from any unit test should be
+	// considered for coverage calculation for all package. If false, only the
+	// package's unit test is used for coverage calculation.
+	//
+	// When set to false, directories with no tests will not be accounted for.
+	UseGlobalInference bool `yaml:"use_global_inference"`
 	// UseCoveralls determines if the data should be sent to https://coveralls.io.
 	UseCoveralls bool `yaml:"use_coveralls"`
 	// Global coverage parameters. The whole coverage must fit these values. This

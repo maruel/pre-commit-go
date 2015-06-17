@@ -52,6 +52,13 @@ func TestChecksSuccess(t *testing.T) {
 			l.Lock()
 			l.Unlock()
 		}
+		if name == "coverage" {
+			cov := c.(*Coverage)
+			cov.Global.MinCoverage = 100
+			cov.Global.MaxCoverage = 100
+			cov.PerDirDefault.MinCoverage = 100
+			cov.PerDirDefault.MaxCoverage = 100
+		}
 		if err := c.Run(change); err != nil {
 			t.Errorf("%s failed: %s", c.GetName(), err)
 		}
@@ -78,6 +85,13 @@ func TestChecksFailure(t *testing.T) {
 		// at all.
 		if name == "custom" || name == "golint" || name == "govet" {
 			continue
+		}
+		if name == "coverage" {
+			cov := c.(*Coverage)
+			cov.Global.MinCoverage = 100
+			cov.Global.MaxCoverage = 100
+			cov.PerDirDefault.MinCoverage = 100
+			cov.PerDirDefault.MaxCoverage = 100
 		}
 		if err := c.Run(change); err == nil {
 			t.Errorf("%s didn't fail but was expected to", c.GetName())

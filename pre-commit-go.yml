@@ -12,7 +12,8 @@ modes:
       build:
       - extra_args: []
       coverage:
-      - use_coveralls: true
+      - use_global_inference: false
+        use_coveralls: true
         global:
           min_coverage: 50
           max_coverage: 90
@@ -72,7 +73,8 @@ modes:
   pre-push:
     checks:
       coverage:
-      - use_coveralls: true
+      - use_global_inference: false
+        use_coveralls: true
         global:
           min_coverage: 50
           max_coverage: 90

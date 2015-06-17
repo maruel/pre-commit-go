@@ -50,10 +50,30 @@ func (c *Coverage) Run(change scm.Change) error {
 	if err != nil {
 		return err
 	}
-	out, err := ProcessProfile(profile, &c.Global)
-	log.Printf("Results:\n%s", out)
-	if err != nil {
-		return fmt.Errorf("coverage: %s", err)
+
+	if c.UseGlobalInference {
+		out, err := ProcessProfile(profile, &c.Global)
+		if out != "" {
+			log.Printf("Results:\n%s", out)
+		}
+		if err != nil {
+			return fmt.Errorf("coverage: %s", err)
+		}
+	} else {
+		for _, testPkg := range change.Indirect().TestPackages() {
+			p := profile.Subset(pkgToDir(testPkg))
+			settings := c.SettingsForPkg(testPkg)
+			if settings.MinCoverage == 0 {
+				continue
+			}
+			out, err := ProcessProfile(p, settings)
+			if out != "" {
+				log.Printf("Results:\n%s", out)
+			}
+			if err != nil {
+				return fmt.Errorf("coverage: %s", err)
+			}
+		}
 	}
 	return nil
 }
@@ -61,7 +81,12 @@ func (c *Coverage) Run(change scm.Change) error {
 // RunProfile runs a coverage run according to the settings and return results.
 func (c *Coverage) RunProfile(change scm.Change) (profile CoverageProfile, err error) {
 	// go test accepts packages, not files.
-	testPkgs := change.All().TestPackages()
+	var testPkgs []string
+	if c.UseGlobalInference {
+		testPkgs = change.All().TestPackages()
+	} else {
+		testPkgs = change.Indirect().TestPackages()
+	}
 	if len(testPkgs) == 0 {
 		// Sir, there's no test.
 		return nil, nil
@@ -78,7 +103,11 @@ func (c *Coverage) RunProfile(change scm.Change) (profile CoverageProfile, err e
 		}
 	}()
 
-	profile, err = c.RunGlobal(change, tmpDir)
+	if c.UseGlobalInference {
+		profile, err = c.RunGlobal(change, tmpDir)
+	} else {
+		profile, err = c.RunLocal(change, tmpDir)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -154,6 +183,76 @@ func (c *Coverage) RunGlobal(change scm.Change, tmpDir string) (CoverageProfile,
 	for i := 0; i < len(testPkgs); i++ {
 		result := <-results
 		if err != nil {
+			continue
+		}
+		if result.err != nil {
+			err = result.err
+			continue
+		}
+		if err2 := loadRawCoverage(result.file, counts); err == nil {
+			// Wait for all tests to complete before returning.
+			err = err2
+		}
+	}
+	if err != nil {
+		f.Close()
+		return nil, err
+	}
+	return loadMergeAndClose(f, counts, change)
+}
+
+// RunLocal runs all tests and reports the merged coverage of each individual
+// covered package.
+func (c *Coverage) RunLocal(change scm.Change, tmpDir string) (CoverageProfile, error) {
+	testPkgs := change.Indirect().TestPackages()
+	type result struct {
+		file string
+		err  error
+	}
+	results := make(chan *result)
+	for i, tp := range testPkgs {
+		go func(index int, testPkg string) {
+			settings := c.SettingsForPkg(testPkg)
+			// Skip coverage if disabled for this directory.
+			if settings.MinCoverage == 0 {
+				results <- nil
+				return
+			}
+
+			p := filepath.Join(tmpDir, fmt.Sprintf("test%d.cov", index))
+			args := []string{
+				"go", "test", "-v", "-covermode=count",
+				"-coverprofile", p,
+				testPkg,
+			}
+			out, exitCode, _ := capture(change.Repo(), args...)
+			if exitCode != 0 {
+				results <- &result{err: fmt.Errorf("%s %s failed:\n%s", strings.Join(args, " "), testPkg, out)}
+				return
+			}
+			results <- &result{file: p}
+		}(i, tp)
+	}
+
+	// Sends to coveralls.io if applicable. Do not write to disk unless needed.
+	var f readWriteSeekCloser
+	var err error
+	if c.isGoverallsEnabled() {
+		if f, err = os.Create(filepath.Join(tmpDir, "profile.cov")); err != nil {
+			return nil, err
+		}
+	} else {
+		f = &buffer{}
+	}
+
+	// Aggregate all results.
+	counts := map[string]int{}
+	for i := 0; i < len(testPkgs); i++ {
+		result := <-results
+		if err != nil {
+			continue
+		}
+		if result == nil {
 			continue
 		}
 		if result.err != nil {
@@ -256,7 +355,11 @@ func (c CoverageProfile) Less(i, j int) bool {
 // Subset returns a new CoverageProfile that only covers the specified
 // directory.
 func (c CoverageProfile) Subset(p string) CoverageProfile {
-	p += "/"
+	if p == "." {
+		p = ""
+	} else {
+		p += "/"
+	}
 	out := CoverageProfile{}
 	for _, i := range c {
 		if strings.HasPrefix(i.Source, p) {
@@ -462,7 +565,7 @@ func loadRawCoverage(file string, counts map[string]int) error {
 // loadProfile loads the raw results of a coverage profile.
 //
 // It is already pre-sorted.
-func loadProfile(change scm.Change, r io.Reader) (CoverageProfile, error) {
+func loadProfile(change limitedChange, r io.Reader) (CoverageProfile, error) {
 	rawProfile, err := cover.ParseProfiles(change, r)
 	if err != nil {
 		return nil, err
@@ -507,4 +610,31 @@ func loadProfile(change scm.Change, r io.Reader) (CoverageProfile, error) {
 	}
 	sort.Sort(out)
 	return out, nil
+}
+
+// limitedChange is a subset of scm.Change
+type limitedChange interface {
+	IsIgnored(p string) bool
+	Package() string
+	Content(p string) []byte
+}
+
+type filterPkg struct {
+	change scm.Change
+	pkg    string
+}
+
+func (f *filterPkg) IsIgnored(p string) bool {
+	if !strings.HasPrefix(p, f.pkg) {
+		return true
+	}
+	return f.change.IsIgnored(p)
+}
+
+func (f *filterPkg) Package() string {
+	return f.pkg
+}
+
+func (f *filterPkg) Content(p string) []byte {
+	return f.change.Content(p)
 }

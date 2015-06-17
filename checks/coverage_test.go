@@ -6,6 +6,7 @@ package checks
 
 import (
 	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/maruel/pre-commit-go/checks/definitions"
@@ -13,7 +14,7 @@ import (
 	"github.com/maruel/ut"
 )
 
-func TestCoverage(t *testing.T) {
+func TestCoverageGlobal(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.SkipNow()
@@ -28,16 +29,115 @@ func TestCoverage(t *testing.T) {
 	change := setup(t, td, coverageFiles)
 
 	c := &Coverage{
+		UseGlobalInference: true,
+		UseCoveralls:       false,
 		Global: definitions.CoverageSettings{
 			MinCoverage: 50,
 			MaxCoverage: 100,
 		},
 		PerDirDefault: definitions.CoverageSettings{
-			MinCoverage: 0,
-			MaxCoverage: 0,
+			MinCoverage: 50,
+			MaxCoverage: 100,
 		},
-		UseCoveralls: false,
-		PerDir:       map[string]*definitions.CoverageSettings{},
+		PerDir: map[string]*definitions.CoverageSettings{},
+	}
+	profile, err := c.RunProfile(change)
+	ut.AssertEqual(t, nil, err)
+	ut.AssertEqual(t, 55.555555555555555, profile.CoveragePercent())
+	ut.AssertEqual(t, 2, profile.PartiallyCoveredFuncs())
+	expected := CoverageProfile{
+		{
+			Source:    "foo.go",
+			Line:      2,
+			SourceRef: "foo.go:2",
+			Name:      "Foo",
+			Count:     1,
+			Total:     1,
+			Percent:   100,
+		},
+		{
+			Source:    "bar/bar.go",
+			Line:      2,
+			SourceRef: "bar/bar.go:2",
+			Name:      "Bar",
+			Count:     2,
+			Total:     4,
+			Percent:   50,
+		},
+		{
+			Source:    "bar/bar.go",
+			Line:      10,
+			SourceRef: "bar/bar.go:10",
+			Name:      "Baz",
+			Count:     2,
+			Total:     4,
+			Percent:   50,
+		},
+	}
+	ut.AssertEqual(t, expected, profile)
+
+	expected = CoverageProfile{
+		{
+			Source:    "bar.go",
+			Line:      2,
+			SourceRef: "bar/bar.go:2",
+			Name:      "Bar",
+			Count:     2,
+			Total:     4,
+			Percent:   50,
+		},
+		{
+			Source:    "bar.go",
+			Line:      10,
+			SourceRef: "bar/bar.go:10",
+			Name:      "Baz",
+			Count:     2,
+			Total:     4,
+			Percent:   50,
+		},
+	}
+	ut.AssertEqual(t, expected, profile.Subset("bar"))
+
+	expected = CoverageProfile{
+		{
+			Source:    "foo.go",
+			Line:      2,
+			SourceRef: "foo.go:2",
+			Name:      "Foo",
+			Count:     1,
+			Total:     1,
+			Percent:   100,
+		},
+	}
+	ut.AssertEqual(t, expected, profile.Subset("."))
+}
+
+func TestCoverageLocal(t *testing.T) {
+	t.Parallel()
+	if testing.Short() {
+		t.SkipNow()
+	}
+	td, err := ioutil.TempDir("", "pre-commit-go")
+	ut.AssertEqual(t, nil, err)
+	defer func() {
+		if err := internal.RemoveAll(td); err != nil {
+			t.Fail()
+		}
+	}()
+	change := setup(t, td, coverageFiles)
+
+	c := &Coverage{
+		UseGlobalInference: false,
+		UseCoveralls:       false,
+		Global: definitions.CoverageSettings{
+			MinCoverage: 50,
+			MaxCoverage: 100,
+		},
+		PerDirDefault: definitions.CoverageSettings{
+			MinCoverage: 50,
+			MaxCoverage: 100,
+		},
+		PerDir: map[string]*definitions.CoverageSettings{},
 	}
 	profile, err := c.RunProfile(change)
 	ut.AssertEqual(t, nil, err)
@@ -97,6 +197,25 @@ func TestCoverage(t *testing.T) {
 	ut.AssertEqual(t, expected, profile.Subset("bar"))
 
 	ut.AssertEqual(t, nil, c.Run(change))
+}
+
+func TestCoveragePrerequisites(t *testing.T) {
+	// This test can't be parallel.
+	if !IsContinuousIntegration() {
+		old := os.Getenv("CI")
+		defer os.Setenv("CI", old)
+		os.Setenv("CI", "true")
+		ut.AssertEqual(t, true, IsContinuousIntegration())
+	}
+	c := Coverage{UseCoveralls: true}
+	ut.AssertEqual(t, 1, len(c.GetPrerequisites()))
+}
+
+func TestCoverageEmpty(t *testing.T) {
+	t.Parallel()
+	ut.AssertEqual(t, 0., CoverageProfile{}.CoveragePercent())
+	c := Coverage{PerDir: map[string]*definitions.CoverageSettings{"foo": nil}}
+	ut.AssertEqual(t, &definitions.CoverageSettings{}, c.SettingsForPkg("foo"))
 }
 
 var coverageFiles = map[string]string{
