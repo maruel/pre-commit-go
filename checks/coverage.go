@@ -88,7 +88,7 @@ func (c *Coverage) RunProfile(change scm.Change) (profile CoverageProfile, err e
 	if c.isGoverallsEnabled() {
 		// Please send a pull request if the following doesn't work for you on your
 		// favorite CI system.
-		out, _, err2 := capture(change.Repo(), "goveralls", "-coverprofile", filepath.Join(tmpDir, "test*.cov"))
+		out, _, err2 := capture(change.Repo(), "goveralls", "-coverprofile", filepath.Join(tmpDir, "profile.cov"))
 		// Don't fail the build.
 		if err2 != nil {
 			fmt.Printf("%s", out)
