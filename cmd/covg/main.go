@@ -19,8 +19,11 @@ import (
 	"github.com/maruel/pre-commit-go/scm"
 )
 
+// silentError means that the process exit code must be 1.
 var silentError = errors.New("silent error")
 
+// printProfile prints the results to stdout and returns false if the process
+// exit code must be 1.
 func printProfile(settings *definitions.CoverageSettings, profile checks.CoverageProfile, indent string) bool {
 	out, err := checks.ProcessProfile(profile, settings)
 	if indent != "" {
@@ -47,9 +50,13 @@ func mainImpl() error {
 	minFlag := flag.Float64("min", 0, "minimum expected coverage in %")
 	maxFlag := flag.Float64("max", 100, "maximum expected coverage in %")
 	globalFlag := flag.Bool("g", false, "use global coverage")
+	verboseFlag := flag.Bool("v", false, "enable logging")
 	flag.Parse()
 
-	log.SetOutput(ioutil.Discard)
+	log.SetFlags(log.Lmicroseconds)
+	if !*verboseFlag {
+		log.SetOutput(ioutil.Discard)
+	}
 
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -59,22 +66,26 @@ func mainImpl() error {
 	if err != nil {
 		return err
 	}
-	// TODO(maruel): Run only tests down the current directory.
-	if err := os.Chdir(repo.Root()); err != nil {
-		return err
-	}
 
 	c := checks.Coverage{
 		Global: definitions.CoverageSettings{
 			MinCoverage: *minFlag,
 			MaxCoverage: *maxFlag,
 		},
+		PerDirDefault: definitions.CoverageSettings{
+			MinCoverage: *minFlag,
+			MaxCoverage: *maxFlag,
+		},
 	}
+
 	// TODO(maruel): Run tests ala pre-commit-go; e.g. determine what diff to use.
+	// TODO(maruel): Run only tests down the current directory when
+	// *globalFlag == false.
 	change, err := repo.Between(scm.Current, scm.GitInitialCommit, nil)
 	if err != nil {
 		return err
 	}
+	log.Printf("Packages: %s\n", change.All().TestPackages())
 	profile, err := c.RunProfile(change)
 	if err != nil {
 		return err
@@ -85,7 +96,7 @@ func mainImpl() error {
 			return silentError
 		}
 	} else {
-		for _, pkg := range change.All().Packages() {
+		for _, pkg := range change.All().TestPackages() {
 			d := pkgToDir(pkg)
 			subset := profile.Subset(d)
 			if len(subset) != 0 {
@@ -93,6 +104,8 @@ func mainImpl() error {
 				if !printProfile(&c.Global, subset, "  ") {
 					err = silentError
 				}
+			} else {
+				log.Printf("%s is empty", pkg)
 			}
 		}
 	}
