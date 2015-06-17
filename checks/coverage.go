@@ -80,7 +80,21 @@ func (c *Coverage) RunProfile(change scm.Change) (profile CoverageProfile, err e
 		}
 	}()
 
-	return c.RunGlobal(change, tmpDir)
+	profile, err = c.RunGlobal(change, tmpDir)
+	if err != nil {
+		return nil, err
+	}
+
+	if c.isGoverallsEnabled() {
+		// Please send a pull request if the following doesn't work for you on your
+		// favorite CI system.
+		out, _, err2 := capture(change.Repo(), "goveralls", "-coverprofile", filepath.Join(tmpDir, "test*.cov"))
+		// Don't fail the build.
+		if err2 != nil {
+			fmt.Printf("%s", out)
+		}
+	}
+	return profile, nil
 }
 
 // RunGlobal runs the tests under coverage with global inference.
@@ -150,21 +164,7 @@ func (c *Coverage) RunGlobal(change scm.Change, tmpDir string) (CoverageProfile,
 		f = &buffer{}
 	}
 
-	profile, err2 := loadMergeAndClose(f, files, change)
-	if err2 != nil {
-		return nil, err2
-	}
-
-	if c.isGoverallsEnabled() {
-		// Please send a pull request if the following doesn't work for you on your
-		// favorite CI system.
-		out, _, err2 := capture(change.Repo(), "goveralls", "-coverprofile", profilePath)
-		// Don't fail the build.
-		if err2 != nil {
-			fmt.Printf("%s", out)
-		}
-	}
-	return profile, nil
+	return loadMergeAndClose(f, files, change)
 }
 
 // SettingsForPkg returns the settings for a particular package.
