@@ -11,7 +11,6 @@ package checks
 import (
 	"bufio"
 	"bytes"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -21,7 +20,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/maruel/pre-commit-go/checks/definitions"
 	"github.com/maruel/pre-commit-go/checks/internal/cover"
@@ -115,56 +113,64 @@ func (c *Coverage) RunGlobal(change scm.Change, tmpDir string) (CoverageProfile,
 	// This part is similar to Test.Run() except that it passes a unique
 	// -coverprofile file name, so that all the files can later be merged into a
 	// single file.
-	var wg sync.WaitGroup
 	testPkgs := change.All().TestPackages()
-	errs := make(chan error, len(testPkgs))
-	for i, tp := range testPkgs {
-		wg.Add(1)
-		go func(index int, testPkg string) {
-			defer wg.Done()
+	type result struct {
+		file string
+		err  error
+	}
+	results := make(chan *result)
+	for index, tp := range testPkgs {
+		f := filepath.Join(tmpDir, fmt.Sprintf("test%d.cov", index))
+		go func(f string, testPkg string) {
 			// Maybe fallback to 'pkg + "/..."' and post process to remove
 			// uninteresting directories. The rationale is that it will eventually
 			// blow up the OS specific command argument length.
 			args := []string{
 				"go", "test", "-v", "-covermode=count", "-coverpkg", coverPkg,
-				"-coverprofile", filepath.Join(tmpDir, fmt.Sprintf("test%d.cov", index)),
+				"-coverprofile", f,
 				testPkg,
 			}
-			out, exitCode, _ := capture(change.Repo(), args...)
+			out, exitCode, err := capture(change.Repo(), args...)
 			if exitCode != 0 {
-				errs <- fmt.Errorf("%s %s failed:\n%s", strings.Join(args, " "), testPkg, out)
+				err = fmt.Errorf("%s %s failed:\n%s", strings.Join(args, " "), testPkg, out)
 			}
-		}(i, tp)
-	}
-	wg.Wait()
-
-	select {
-	case err := <-errs:
-		return nil, err
-	default:
-	}
-
-	// Merge the profiles. Sums all the counts.
-	files, err2 := filepath.Glob(filepath.Join(tmpDir, "test*.cov"))
-	if err2 != nil {
-		return nil, err2
-	}
-	if len(files) == 0 {
-		return nil, errors.New("no coverage found")
+			results <- &result{f, err}
+		}(f, tp)
 	}
 
 	// Sends to coveralls.io if applicable. Do not write to disk unless needed.
 	var f readWriteSeekCloser
+	var err error
 	profilePath := filepath.Join(tmpDir, "profile.cov")
 	if c.isGoverallsEnabled() {
-		if f, err2 = os.Create(profilePath); err2 != nil {
-			return nil, err2
+		if f, err = os.Create(profilePath); err != nil {
+			return nil, err
 		}
 	} else {
 		f = &buffer{}
 	}
 
-	return loadMergeAndClose(f, files, change)
+	// Aggregate all results.
+	counts := map[string]int{}
+	for i := 0; i < len(testPkgs); i++ {
+		result := <-results
+		if err != nil {
+			continue
+		}
+		if result.err != nil {
+			err = result.err
+			continue
+		}
+		if err2 := loadRawCoverage(result.file, counts); err == nil {
+			// Wait for all tests to complete before returning.
+			err = err2
+		}
+	}
+	if err != nil {
+		f.Close()
+		return nil, err
+	}
+	return loadMergeAndClose(f, counts, change)
 }
 
 // SettingsForPkg returns the settings for a particular package.
@@ -380,9 +386,9 @@ func (b *buffer) Seek(i int64, j int) (int64, error) {
 }
 
 // loadMergeAndClose calls mergeCoverage() then loadProfile().
-func loadMergeAndClose(f readWriteSeekCloser, files []string, change scm.Change) (CoverageProfile, error) {
+func loadMergeAndClose(f readWriteSeekCloser, counts map[string]int, change scm.Change) (CoverageProfile, error) {
 	defer f.Close()
-	err := mergeCoverage(files, f)
+	err := mergeCoverage(counts, f)
 	if err != nil {
 		return nil, err
 	}
@@ -402,30 +408,7 @@ func loadMergeAndClose(f readWriteSeekCloser, files []string, change scm.Change)
 // - ZZ.II is the line/column end of the statement.
 // - J is number of statements,
 // - K is count.
-func mergeCoverage(files []string, out io.Writer) error {
-	counts := map[string]int{}
-	for _, file := range files {
-		f, err := os.Open(file)
-		if err != nil {
-			return err
-		}
-		s := bufio.NewScanner(f)
-		// Strip the first line.
-		s.Scan()
-		count := 0
-		for s.Scan() {
-			items := rsplitn(s.Text(), " ", 2)
-			count, err = strconv.Atoi(items[1])
-			if err != nil {
-				break
-			}
-			counts[items[0]] += int(count)
-		}
-		f.Close()
-		if err != nil {
-			return err
-		}
-	}
+func mergeCoverage(counts map[string]int, out io.Writer) error {
 	stms := make([]string, 0, len(counts))
 	for k := range counts {
 		stms = append(stms, k)
@@ -440,6 +423,38 @@ func mergeCoverage(files []string, out io.Writer) error {
 		}
 	}
 	return nil
+}
+
+// loadRawCoverage loads a coverage profile file without any interpretation.
+func loadRawCoverage(file string, counts map[string]int) error {
+	f, err := os.Open(file)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	s := bufio.NewScanner(f)
+	// Strip the first line.
+	s.Scan()
+	if line := s.Text(); line != "mode: count" {
+		return fmt.Errorf("malformed %s: %s", file, line)
+	}
+	for s.Scan() {
+		line := s.Text()
+		items := rsplitn(line, " ", 2)
+		if len(items) != 2 {
+			return fmt.Errorf("malformed %s", file)
+		}
+		if items[0] == "total:" {
+			// Skip last line.
+			continue
+		}
+		count, err := strconv.Atoi(items[1])
+		if err != nil {
+			break
+		}
+		counts[items[0]] += int(count)
+	}
+	return err
 }
 
 // loadProfile loads the raw results of a coverage profile.
