@@ -172,9 +172,13 @@ t.Fail()
 
 func init() {
 	if IsContinuousIntegration() {
+		wd, err := os.Getwd()
+		if err != nil {
+			panic(err)
+		}
 		for _, name := range getKnownChecks() {
 			for _, p := range KnownChecks[name]().GetPrerequisites() {
-				out, _, _ := internal.Capture("", nil, "go", "get", p.URL)
+				out, _, _ := internal.Capture(wd, nil, "go", "get", p.URL)
 				if len(out) != 0 {
 					// This is essentially a race condition, ignore failure but log it.
 					fmt.Printf("prerequisite %s installation failed: %s", p.URL, out)

@@ -491,6 +491,10 @@ func cmdInstallPrereq(repo scm.ReadOnlyRepo, config *checks.Config, modes []chec
 	for url := range m {
 		urls = append(urls, url)
 	}
+	wd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
 	sort.Strings(urls)
 	if len(urls) != 0 {
 		if noUpdate {
@@ -505,7 +509,7 @@ func cmdInstallPrereq(repo scm.ReadOnlyRepo, config *checks.Config, modes []chec
 			fmt.Printf("  %s\n", url)
 		}
 
-		out, _, err := internal.Capture("", nil, append([]string{"go", "get"}, urls...)...)
+		out, _, err := internal.Capture(wd, nil, append([]string{"go", "get"}, urls...)...)
 		if len(out) != 0 {
 			return fmt.Errorf("prerequisites installation failed: %s", out)
 		}
