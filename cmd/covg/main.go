@@ -12,6 +12,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/maruel/pre-commit-go/checks"
 	"github.com/maruel/pre-commit-go/checks/definitions"
@@ -21,29 +22,23 @@ import (
 var silentError = errors.New("silent error")
 
 func printProfile(settings *definitions.CoverageSettings, profile checks.CoverageProfile, indent string) bool {
-	maxLoc := 0
-	maxName := 0
-	for _, item := range profile {
-		if item.Percent < 100. {
-			if l := len(item.SourceRef()); l > maxLoc {
-				maxLoc = l
-			}
-			if l := len(item.Name); l > maxName {
-				maxName = l
+	out, err := checks.ProcessProfile(profile, settings)
+	if indent != "" {
+		tmp := ""
+		for _, line := range strings.SplitAfter(out, "\n") {
+			if len(line) > 1 {
+				tmp += indent + line
+			} else {
+				tmp += line
 			}
 		}
+		out = tmp
 	}
-	for _, item := range profile {
-		if item.Percent < 100. {
-			fmt.Printf("%s%-*s %-*s %4.1f%% (%d/%d)\n", indent, maxLoc, item.SourceRef(), maxName, item.Name, item.Percent, item.Count, item.Total)
-		}
-	}
-	if err := profile.Passes(settings); err != nil {
-		fmt.Printf("%s%s\n", indent, err)
+	fmt.Printf("%s", out)
+	if err != nil {
+		fmt.Printf("%s%s", indent, err)
 		return false
 	}
-	fmt.Printf("%s%3.1f%% (%d/%d) >= %.1f%%; Functions: %d untested / %d partially / %d completely\n",
-		indent, profile.CoveragePercent(), profile.TotalCoveredLines(), profile.TotalLines(), settings.MinCoverage, profile.NonCoveredFuncs(), profile.PartiallyCoveredFuncs(), profile.CoveredFuncs())
 	return true
 }
 

@@ -52,35 +52,15 @@ func (c *Coverage) Run(change scm.Change) error {
 	if err != nil {
 		return err
 	}
-	// TODO(maruel): Calculate the per package coverage and make it fail if a
-	// package specific coverage level is specified and it's not high enough.
-	// TODO(maruel): Calculate the sorted list only when -v is specified.
-	maxLoc := 0
-	maxName := 0
-	for _, item := range profile {
-		if item.Percent < 100. {
-			if l := len(item.SourceRef()); l > maxLoc {
-				maxLoc = l
-			}
-			if l := len(item.Name); l > maxName {
-				maxName = l
-			}
-		}
+	out, err := ProcessProfile(profile, &c.Global)
+	log.Printf("Results:\n%s", out)
+	if err != nil {
+		return fmt.Errorf("coverage: %s", err)
 	}
-	for _, item := range profile {
-		if item.Percent < 100. {
-			log.Printf("%-*s %-*s %4.1f%% (%d/%d)", maxLoc, item.SourceRef(), maxName, item.Name, item.Percent, item.Count, item.Total)
-		}
-	}
-	if err = profile.Passes(&c.Global); err != nil {
-		err = fmt.Errorf("coverage: %s", err)
-	} else {
-		log.Printf("coverage: %3.1f%% (%d/%d) >= %.1f%%; Functions: %d untested / %d partially / %d completely\n",
-			profile.CoveragePercent(), profile.TotalCoveredLines(), profile.TotalLines(), c.Global.MinCoverage, profile.NonCoveredFuncs(), profile.PartiallyCoveredFuncs(), profile.CoveredFuncs())
-	}
-	return err
+	return nil
 }
 
+// RunProfile runs a coverage run according to the settings and return results.
 func (c *Coverage) RunProfile(change scm.Change) (profile CoverageProfile, err error) {
 	// go test accepts packages, not files.
 	coverPkg := ""
@@ -181,6 +161,7 @@ func (c *Coverage) RunProfile(change scm.Change) (profile CoverageProfile, err e
 	return profile, err
 }
 
+// SettingsForPkg returns the settings for a particular package.
 func (c *Coverage) SettingsForPkg(testPkg string) *definitions.CoverageSettings {
 	testDir := pkgToDir(testPkg)
 	if settings, ok := c.PerDir[testDir]; ok {
@@ -192,103 +173,36 @@ func (c *Coverage) SettingsForPkg(testPkg string) *definitions.CoverageSettings 
 	return nil
 }
 
-// mergeCoverage merges multiple coverage profiles into out.
-//
-// It sums all the counts of each profile. It doesn't actually process it.
-//
-// Format is "file.go:XX.YY,ZZ.II J K"
-// - file.go is path against GOPATH
-// - XX.YY is the line/column start of the statement.
-// - ZZ.II is the line/column end of the statement.
-// - J is number of statements,
-// - K is count.
-func mergeCoverage(files []string, out io.Writer) error {
-	counts := map[string]int{}
-	for _, file := range files {
-		f, err := os.Open(file)
-		if err != nil {
-			return err
-		}
-		s := bufio.NewScanner(f)
-		// Strip the first line.
-		s.Scan()
-		count := 0
-		for s.Scan() {
-			items := rsplitn(s.Text(), " ", 2)
-			count, err = strconv.Atoi(items[1])
-			if err != nil {
-				break
+// ProcessProfile generates output that can be optionally printed and an error if the check failed.
+func ProcessProfile(profile CoverageProfile, settings *definitions.CoverageSettings) (string, error) {
+	out := ""
+	maxLoc := 0
+	maxName := 0
+	for _, item := range profile {
+		if item.Percent < 100. {
+			if l := len(item.SourceRef); l > maxLoc {
+				maxLoc = l
 			}
-			counts[items[0]] += int(count)
-		}
-		f.Close()
-		if err != nil {
-			return err
+			if l := len(item.Name); l > maxName {
+				maxName = l
+			}
 		}
 	}
-	stms := make([]string, 0, len(counts))
-	for k := range counts {
-		stms = append(stms, k)
-	}
-	sort.Strings(stms)
-	if _, err := io.WriteString(out, "mode: count\n"); err != nil {
-		return err
-	}
-	for _, stm := range stms {
-		if _, err := fmt.Fprintf(out, "%s %d\n", stm, counts[stm]); err != nil {
-			return err
+	for _, item := range profile {
+		if item.Percent < 100. {
+			out += fmt.Sprintf("%-*s %-*s %4.1f%% (%d/%d)\n", maxLoc, item.SourceRef, maxName, item.Name, item.Percent, item.Count, item.Total)
 		}
 	}
-	return nil
-}
-
-// loadProfile loads the raw results of a coverage profile.
-func loadProfile(change scm.Change, r io.Reader) (CoverageProfile, error) {
-	rawProfile, err := cover.ParseProfiles(change, r)
-	if err != nil {
-		return nil, err
+	if err := profile.Passes(settings); err != nil {
+		return out, err
 	}
-
-	// Take the raw profile into a real one. This permits us to not have to
-	// depend on "go tool cover" to save one process per package and reduce I/O
-	// by reusing the in-memory file cache.
-	pkg := change.Package()
-	pkgOffset := len(pkg)
-	if pkgOffset > 0 {
-		pkgOffset++
-	}
-	out := CoverageProfile{}
-	for _, profile := range rawProfile {
-		// fn is in absolute package format based on $GOPATH. Transform to path.
-		source := profile.FileName[pkgOffset:]
-		content := change.Content(source)
-		if content == nil {
-			log.Printf("unknown file %s", source)
-			continue
-		}
-		funcs, err := cover.FindFuncs(source, bytes.NewReader(content))
-		if err != nil {
-			log.Printf("broken file %s; %s", source, err)
-			continue
-		}
-		// Now match up functions and profile blocks.
-		for _, f := range funcs {
-			// Convert a FuncExtent to a funcCovered.
-			c, t := f.Coverage(profile)
-			out = append(out, &FuncCovered{
-				Source:  source,
-				Line:    f.StartLine,
-				Name:    f.FuncName,
-				Count:   c,
-				Total:   t,
-				Percent: 100.0 * float64(c) / float64(t),
-			})
-		}
-	}
-	sort.Sort(out)
+	out += fmt.Sprintf(
+		"coverage: %3.1f%% (%d/%d) >= %.1f%%; Functions: %d untested / %d partially / %d completely\n",
+		profile.CoveragePercent(), profile.TotalCoveredLines(), profile.TotalLines(), settings.MinCoverage, profile.NonCoveredFuncs(), profile.PartiallyCoveredFuncs(), profile.CoveredFuncs())
 	return out, nil
 }
 
+// CoverageProfile is the processed results of a coverage run.
 type CoverageProfile []*FuncCovered
 
 func (c CoverageProfile) Len() int      { return len(c) }
@@ -412,22 +326,122 @@ func (c CoverageProfile) CoveredFuncs() int {
 	return total
 }
 
+// FuncCovered is the summary of a function covered.
 type FuncCovered struct {
-	Source  string
-	Line    int
-	Name    string
-	Count   int64
-	Total   int64
-	Percent float64
+	Source    string
+	Line      int
+	SourceRef string
+	Name      string
+	Count     int64
+	Total     int64
+	Percent   float64
 }
 
-func (f *FuncCovered) SourceRef() string {
-	return fmt.Sprintf("%s:%d", f.Source, f.Line)
-}
+// Private stuff.
 
 func pkgToDir(p string) string {
 	if p == "." {
 		return p
 	}
 	return p[2:]
+}
+
+// mergeCoverage merges multiple coverage profiles into out.
+//
+// It sums all the counts of each profile. It doesn't actually process it.
+//
+// Format is "file.go:XX.YY,ZZ.II J K"
+// - file.go is path against GOPATH
+// - XX.YY is the line/column start of the statement.
+// - ZZ.II is the line/column end of the statement.
+// - J is number of statements,
+// - K is count.
+func mergeCoverage(files []string, out io.Writer) error {
+	counts := map[string]int{}
+	for _, file := range files {
+		f, err := os.Open(file)
+		if err != nil {
+			return err
+		}
+		s := bufio.NewScanner(f)
+		// Strip the first line.
+		s.Scan()
+		count := 0
+		for s.Scan() {
+			items := rsplitn(s.Text(), " ", 2)
+			count, err = strconv.Atoi(items[1])
+			if err != nil {
+				break
+			}
+			counts[items[0]] += int(count)
+		}
+		f.Close()
+		if err != nil {
+			return err
+		}
+	}
+	stms := make([]string, 0, len(counts))
+	for k := range counts {
+		stms = append(stms, k)
+	}
+	sort.Strings(stms)
+	if _, err := io.WriteString(out, "mode: count\n"); err != nil {
+		return err
+	}
+	for _, stm := range stms {
+		if _, err := fmt.Fprintf(out, "%s %d\n", stm, counts[stm]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// loadProfile loads the raw results of a coverage profile.
+//
+// It is already pre-sorted.
+func loadProfile(change scm.Change, r io.Reader) (CoverageProfile, error) {
+	rawProfile, err := cover.ParseProfiles(change, r)
+	if err != nil {
+		return nil, err
+	}
+
+	// Take the raw profile into a real one. This permits us to not have to
+	// depend on "go tool cover" to save one process per package and reduce I/O
+	// by reusing the in-memory file cache.
+	pkg := change.Package()
+	pkgOffset := len(pkg)
+	if pkgOffset > 0 {
+		pkgOffset++
+	}
+	out := CoverageProfile{}
+	for _, profile := range rawProfile {
+		// fn is in absolute package format based on $GOPATH. Transform to path.
+		source := profile.FileName[pkgOffset:]
+		content := change.Content(source)
+		if content == nil {
+			log.Printf("unknown file %s", source)
+			continue
+		}
+		funcs, err := cover.FindFuncs(source, bytes.NewReader(content))
+		if err != nil {
+			log.Printf("broken file %s; %s", source, err)
+			continue
+		}
+		// Now match up functions and profile blocks.
+		for _, f := range funcs {
+			// Convert a FuncExtent to a funcCovered.
+			c, t := f.Coverage(profile)
+			out = append(out, &FuncCovered{
+				Source:    source,
+				Line:      f.StartLine,
+				SourceRef: fmt.Sprintf("%s:%d", source, f.StartLine),
+				Name:      f.FuncName,
+				Count:     c,
+				Total:     t,
+				Percent:   100.0 * float64(c) / float64(t),
+			})
+		}
+	}
+	sort.Sort(out)
+	return out, nil
 }
