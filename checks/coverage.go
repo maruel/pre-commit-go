@@ -41,7 +41,7 @@ func (c *Coverage) GetName() string {
 }
 
 func (c *Coverage) GetPrerequisites() []definitions.CheckPrerequisite {
-	if c.UseCoveralls && IsContinuousIntegration() {
+	if c.isGoverallsEnabled() {
 		return []definitions.CheckPrerequisite{{[]string{"goveralls", "-h"}, 2, "github.com/mattn/goveralls"}}
 	}
 	return nil
@@ -63,18 +63,9 @@ func (c *Coverage) Run(change scm.Change) error {
 // RunProfile runs a coverage run according to the settings and return results.
 func (c *Coverage) RunProfile(change scm.Change) (profile CoverageProfile, err error) {
 	// go test accepts packages, not files.
-	coverPkg := ""
-	for i, p := range change.All().Packages() {
-		if s := c.SettingsForPkg(p); s != nil && s.MinCoverage != 0 {
-			if i != 0 {
-				coverPkg += ","
-			}
-			coverPkg += p
-		}
-	}
-
 	testPkgs := change.All().TestPackages()
 	if len(testPkgs) == 0 {
+		// Sir, there's no test.
 		return nil, nil
 	}
 
@@ -89,10 +80,29 @@ func (c *Coverage) RunProfile(change scm.Change) (profile CoverageProfile, err e
 		}
 	}()
 
+	return c.RunGlobal(change, tmpDir)
+}
+
+// RunGlobal runs the tests under coverage with global inference.
+//
+// This means that test can contribute coverage in any other package, even
+// outside their own package.
+func (c *Coverage) RunGlobal(change scm.Change, tmpDir string) (CoverageProfile, error) {
+	coverPkg := ""
+	for i, p := range change.All().Packages() {
+		if s := c.SettingsForPkg(p); s != nil && s.MinCoverage != 0 {
+			if i != 0 {
+				coverPkg += ","
+			}
+			coverPkg += p
+		}
+	}
+
 	// This part is similar to Test.Run() except that it passes a unique
 	// -coverprofile file name, so that all the files can later be merged into a
 	// single file.
 	var wg sync.WaitGroup
+	testPkgs := change.All().TestPackages()
 	errs := make(chan error, len(testPkgs))
 	for i, tp := range testPkgs {
 		wg.Add(1)
@@ -115,8 +125,8 @@ func (c *Coverage) RunProfile(change scm.Change) (profile CoverageProfile, err e
 	wg.Wait()
 
 	select {
-	case err = <-errs:
-		return
+	case err := <-errs:
+		return nil, err
 	default:
 	}
 
@@ -128,28 +138,24 @@ func (c *Coverage) RunProfile(change scm.Change) (profile CoverageProfile, err e
 	if len(files) == 0 {
 		return nil, errors.New("no coverage found")
 	}
+
+	// Sends to coveralls.io if applicable. Do not write to disk unless needed.
+	var f readWriteSeekCloser
 	profilePath := filepath.Join(tmpDir, "profile.cov")
-	f, err2 := os.Create(profilePath)
+	if c.isGoverallsEnabled() {
+		if f, err2 = os.Create(profilePath); err2 != nil {
+			return nil, err2
+		}
+	} else {
+		f = &buffer{}
+	}
+
+	profile, err2 := loadMergeAndClose(f, files, change)
 	if err2 != nil {
-		f.Close()
 		return nil, err2
 	}
-	err2 = mergeCoverage(files, f)
-	if err2 != nil {
-		f.Close()
-		return nil, err2
-	}
-	if _, err = f.Seek(0, 0); err != nil {
-		f.Close()
-		return nil, err
-	}
-	profile, err = loadProfile(change, f)
-	f.Close()
-	if err != nil {
-		return nil, err
-	}
-	// Sends to coveralls.io if applicable.
-	if c.UseCoveralls && IsContinuousIntegration() {
+
+	if c.isGoverallsEnabled() {
 		// Please send a pull request if the following doesn't work for you on your
 		// favorite CI system.
 		out, _, err2 := capture(change.Repo(), "goveralls", "-coverprofile", profilePath)
@@ -158,7 +164,7 @@ func (c *Coverage) RunProfile(change scm.Change) (profile CoverageProfile, err e
 			fmt.Printf("%s", out)
 		}
 	}
-	return profile, err
+	return profile, nil
 }
 
 // SettingsForPkg returns the settings for a particular package.
@@ -171,6 +177,10 @@ func (c *Coverage) SettingsForPkg(testPkg string) *definitions.CoverageSettings 
 		return settings
 	}
 	return nil
+}
+
+func (c *Coverage) isGoverallsEnabled() bool {
+	return c.UseCoveralls && IsContinuousIntegration()
 }
 
 // ProcessProfile generates output that can be optionally printed and an error if the check failed.
@@ -344,6 +354,42 @@ func pkgToDir(p string) string {
 		return p
 	}
 	return p[2:]
+}
+
+type readWriteSeekCloser interface {
+	io.Reader
+	io.Writer
+	io.Seeker
+	io.Closer
+}
+
+// buffer implements readWriteSeekCloser.
+type buffer struct {
+	bytes.Buffer
+}
+
+func (b *buffer) Close() error {
+	return nil
+}
+
+func (b *buffer) Seek(i int64, j int) (int64, error) {
+	if i != 0 || j != 0 {
+		panic("internal bug")
+	}
+	return 0, nil
+}
+
+// loadMergeAndClose calls mergeCoverage() then loadProfile().
+func loadMergeAndClose(f readWriteSeekCloser, files []string, change scm.Change) (CoverageProfile, error) {
+	defer f.Close()
+	err := mergeCoverage(files, f)
+	if err != nil {
+		return nil, err
+	}
+	if _, err = f.Seek(0, 0); err != nil {
+		return nil, err
+	}
+	return loadProfile(change, f)
 }
 
 // mergeCoverage merges multiple coverage profiles into out.
