@@ -6,14 +6,13 @@ package scm
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 )
 
 // relToGOPATH returns the path relative to $GOPATH/src.
-func relToGOPATH(p string) (string, error) {
-	for _, gopath := range filepath.SplitList(os.Getenv("GOPATH")) {
+func relToGOPATH(p, gopath string) (string, error) {
+	for _, gopath := range filepath.SplitList(gopath) {
 		if len(gopath) == 0 {
 			continue
 		}

@@ -30,7 +30,7 @@ func TestGetRepoGitSlowSuccess(t *testing.T) {
 	}()
 
 	setup(t, tmpDir)
-	r, err := getRepo(tmpDir)
+	r, err := getRepo(tmpDir, "")
 	ut.AssertEqual(t, nil, err)
 	ut.AssertEqual(t, tmpDir, r.Root())
 	p, err := r.HookPath()
@@ -130,7 +130,7 @@ func TestGetRepoNoRepo(t *testing.T) {
 		}
 	}()
 
-	r, err := GetRepo(tmpDir)
+	r, err := GetRepo(tmpDir, "")
 	ut.AssertEqual(t, errors.New("failed to find git checkout root"), err)
 	ut.AssertEqual(t, nil, r)
 }
@@ -145,7 +145,7 @@ func TestGetRepoGitSlowFailures(t *testing.T) {
 	}()
 
 	setup(t, tmpDir)
-	r, err := getRepo(tmpDir)
+	r, err := getRepo(tmpDir, "")
 	ut.AssertEqual(t, nil, err)
 	ut.AssertEqual(t, tmpDir, r.Root())
 	// Remove the .git directory after calling GetRepo().

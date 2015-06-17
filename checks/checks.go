@@ -16,7 +16,6 @@ import (
 	"sync"
 
 	"github.com/maruel/pre-commit-go/checks/definitions"
-	"github.com/maruel/pre-commit-go/internal"
 	"github.com/maruel/pre-commit-go/scm"
 )
 
@@ -76,7 +75,7 @@ func (b *build) Run(change scm.Change) error {
 	// building would have to be done in an efficient way by looking at which
 	// package builds what, to not result in a O(n²) algorithm.
 	args := append([]string{"go", "build"}, b.ExtraArgs...)
-	out, _, err := internal.Capture("", nil, append(args, change.Indirect().Packages()...)...)
+	out, _, err := capture(change.Repo(), append(args, change.Indirect().Packages()...)...)
 	if len(out) != 0 {
 		return fmt.Errorf("%s failed: %s", strings.Join(args, " "), out)
 	}
@@ -103,7 +102,7 @@ func (g *gofmt) GetPrerequisites() []definitions.CheckPrerequisite {
 func (g *gofmt) Run(change scm.Change) error {
 	// gofmt doesn't return non-zero even if some files need to be updated.
 	// gofmt accepts files, not packages.
-	out, _, err := internal.Capture("", nil, "gofmt", "-l", "-s", ".")
+	out, _, err := capture(change.Repo(), "gofmt", "-l", "-s", ".")
 	if len(out) != 0 {
 		return fmt.Errorf("these files are improperly formmatted, please run: gofmt -w -s .\n%s", out)
 	}
@@ -137,7 +136,7 @@ func (t *test) Run(change scm.Change) error {
 		go func(testPkg string) {
 			defer wg.Done()
 			args := append([]string{"go", "test"}, t.ExtraArgs...)
-			out, exitCode, _ := internal.Capture("", nil, append(args, testPkg)...)
+			out, exitCode, _ := capture(change.Repo(), append(args, testPkg)...)
 			if exitCode != 0 {
 				errs <- fmt.Errorf("%s failed:\n%s", strings.Join(args, " "), out)
 			}
@@ -171,7 +170,7 @@ func (e *errcheck) GetPrerequisites() []definitions.CheckPrerequisite {
 func (e *errcheck) Run(change scm.Change) error {
 	// errcheck accepts packages, not files.
 	args := []string{"errcheck", "-ignore", e.Ignores}
-	out, _, err := internal.Capture("", nil, append(args, change.Changed().Packages()...)...)
+	out, _, err := capture(change.Repo(), append(args, change.Changed().Packages()...)...)
 	if len(out) != 0 {
 		return fmt.Errorf("%s failed:\n%s", strings.Join(args, " "), out)
 	}
@@ -200,7 +199,7 @@ func (g *goimports) GetPrerequisites() []definitions.CheckPrerequisite {
 func (g *goimports) Run(change scm.Change) error {
 	// goimports accepts files, not packages.
 	// goimports doesn't return non-zero even if some files need to be updated.
-	out, _, err := internal.Capture("", nil, append([]string{"goimports", "-l"}, change.Changed().GoFiles()...)...)
+	out, _, err := capture(change.Repo(), append([]string{"goimports", "-l"}, change.Changed().GoFiles()...)...)
 	if len(out) != 0 {
 		return fmt.Errorf("these files are improperly formmatted, please run: goimports -w <files>\n%s", out)
 	}
@@ -229,7 +228,7 @@ func (g *golint) GetPrerequisites() []definitions.CheckPrerequisite {
 func (g *golint) Run(change scm.Change) error {
 	// golint accepts packages, not files.
 	// golint doesn't return non-zero ever.
-	out, _, _ := internal.Capture("", nil, "golint", "./...")
+	out, _, _ := capture(change.Repo(), "golint", "./...")
 	result := []string{}
 	for _, line := range strings.Split(string(out), "\n") {
 		for _, b := range g.Blacklist {
@@ -264,7 +263,7 @@ func (g *govet) GetPrerequisites() []definitions.CheckPrerequisite {
 func (g *govet) Run(change scm.Change) error {
 	// govet accepts files, not packages.
 	// Ignore the return code since we ignore many errors.
-	out, _, _ := internal.Capture("", nil, "go", "tool", "vet", "-all", ".")
+	out, _, _ := capture(change.Repo(), "go", "tool", "vet", "-all", ".")
 	result := []string{}
 	for _, line := range strings.Split(string(out), "\n") {
 		for _, b := range g.Blacklist {
@@ -302,7 +301,7 @@ func (c *custom) GetPrerequisites() []definitions.CheckPrerequisite {
 func (c *custom) Run(change scm.Change) error {
 	// TODO(maruel): Make what is passed to the command configurable, e.g. one of:
 	// (Changed, Indirect, All) x (GoFiles, Packages, TestPackages)
-	out, exitCode, err := internal.Capture("", nil, c.Command...)
+	out, exitCode, err := capture(change.Repo(), c.Command...)
 	if exitCode != 0 && c.CheckExitCode {
 		return fmt.Errorf("\"%s\" failed with code %d:\n%s", strings.Join(c.Command, " "), exitCode, out)
 	}

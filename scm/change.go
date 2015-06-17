@@ -84,7 +84,7 @@ func newChange(r ReadOnlyRepo, files, allFiles, ignorePatterns IgnorePatterns) *
 	root := r.Root()
 	// An error occurs when the repository is not inside GOPATH. Ignore this
 	// error here.
-	pkgName, _ := relToGOPATH(root)
+	pkgName, _ := relToGOPATH(root, r.GOPATH())
 	c := &change{
 		repo:           r,
 		packageName:    pkgName,

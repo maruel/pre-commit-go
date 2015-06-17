@@ -6,7 +6,6 @@ package checks
 
 import (
 	"io/ioutil"
-	"os"
 	"testing"
 
 	"github.com/maruel/pre-commit-go/checks/definitions"
@@ -15,7 +14,7 @@ import (
 )
 
 func TestCoverage(t *testing.T) {
-	// Can't run in parallel due to os.Chdir() and os.Setenv().
+	t.Parallel()
 	if testing.Short() {
 		t.SkipNow()
 	}
@@ -26,16 +25,7 @@ func TestCoverage(t *testing.T) {
 			t.Fail()
 		}
 	}()
-	oldGOPATH := os.Getenv("GOPATH")
-	defer func() {
-		ut.ExpectEqual(t, nil, os.Setenv("GOPATH", oldGOPATH))
-	}()
-	ut.AssertEqual(t, nil, os.Setenv("GOPATH", td))
-
-	oldWd, change := setup(t, td, coverageFiles)
-	defer func() {
-		ut.ExpectEqual(t, nil, os.Chdir(oldWd))
-	}()
+	change := setup(t, td, coverageFiles)
 
 	c := &Coverage{
 		Global: definitions.CoverageSettings{

@@ -29,7 +29,7 @@ func mainImpl() error {
 	if err != nil {
 		return err
 	}
-	repo, err := scm.GetRepo(cwd)
+	repo, err := scm.GetRepo(cwd, "")
 	if err != nil {
 		return err
 	}

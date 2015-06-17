@@ -31,9 +31,10 @@ func Capture(wd string, env []string, args ...string) (string, int, error) {
 	default:
 		c = exec.Command(args[0], args[1:]...)
 	}
-	if wd != "" {
-		c.Dir = wd
+	if wd == "" {
+		return "", -1, errors.New("wd is required")
 	}
+	c.Dir = wd
 	procEnv := map[string]string{}
 	for _, item := range os.Environ() {
 		items := strings.SplitN(item, "=", 2)

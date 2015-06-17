@@ -317,6 +317,7 @@ func (d *dummyRepo) Between(recent, old Commit, ignoredPaths IgnorePatterns) (Ch
 	d.t.FailNow()
 	return nil, nil
 }
+func (d *dummyRepo) GOPATH() string { return d.root }
 
 // makeTree creates a temporary directory and creates the files in it.
 //

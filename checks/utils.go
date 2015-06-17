@@ -7,6 +7,9 @@ package checks
 import (
 	"os"
 	"strings"
+
+	"github.com/maruel/pre-commit-go/internal"
+	"github.com/maruel/pre-commit-go/scm"
 )
 
 // IsContinuousIntegration returns true if it thinks it's running on a known CI
@@ -44,4 +47,9 @@ func rsplitn(s, sep string, n int) []string {
 		items[i] = reverse(items[i])
 	}
 	return items
+}
+
+// capture sets GOPATH.
+func capture(r scm.ReadOnlyRepo, args ...string) (string, int, error) {
+	return internal.Capture(r.Root(), []string{"GOPATH=" + r.GOPATH()}, args...)
 }

@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -69,6 +70,8 @@ type ReadOnlyRepo interface {
 	//
 	// Returns nil and no error if there's no file difference.
 	Between(recent, old Commit, ignorePatterns IgnorePatterns) (Change, error)
+	// GOPATH returns the GOPATH. Mostly used in tests.
+	GOPATH() string
 }
 
 // Repo represents a source control managed checkout.
@@ -86,8 +89,8 @@ type Repo interface {
 }
 
 // GetRepo returns a valid Repo if one is found.
-func GetRepo(wd string) (Repo, error) {
-	return getRepo(wd)
+func GetRepo(wd, gopath string) (Repo, error) {
+	return getRepo(wd, gopath)
 }
 
 // IgnorePatterns is a list of glob that when matching, means the file should
@@ -121,17 +124,21 @@ type repo interface {
 	unstaged() []string
 }
 
-func getRepo(wd string) (repo, error) {
+func getRepo(wd, gopath string) (repo, error) {
 	root, err := captureAbs(wd, "git", "rev-parse", "--show-cdup")
 	if err == nil {
-		return &git{root: root}, nil
+		if gopath == "" {
+			gopath = os.Getenv("GOPATH")
+		}
+		return &git{root: root, gopath: gopath}, nil
 	}
 	// TODO: Add your favorite SCM.
 	return nil, fmt.Errorf("failed to find git checkout root")
 }
 
 type git struct {
-	root string
+	root   string
+	gopath string
 
 	lock   sync.Mutex
 	gitDir string
@@ -257,6 +264,10 @@ func (g *git) Between(recent, old Commit, ignorePatterns IgnorePatterns) (Change
 	wg.Wait()
 
 	return newChange(g, files, allFiles, ignorePatterns), nil
+}
+
+func (g *git) GOPATH() string {
+	return g.gopath
 }
 
 func (g *git) Stash() (bool, error) {

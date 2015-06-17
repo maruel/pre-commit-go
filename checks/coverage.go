@@ -131,7 +131,7 @@ func (c *Coverage) RunProfile(change scm.Change) (profile CoverageProfile, err e
 				"-coverprofile", filepath.Join(tmpDir, fmt.Sprintf("test%d.cov", index)),
 				testPkg,
 			}
-			out, exitCode, _ := internal.Capture("", nil, args...)
+			out, exitCode, _ := capture(change.Repo(), args...)
 			if exitCode != 0 {
 				errs <- fmt.Errorf("%s %s failed:\n%s", strings.Join(args, " "), testPkg, out)
 			}
@@ -177,7 +177,7 @@ func (c *Coverage) RunProfile(change scm.Change) (profile CoverageProfile, err e
 	if c.UseCoveralls && IsContinuousIntegration() {
 		// Please send a pull request if the following doesn't work for you on your
 		// favorite CI system.
-		out, _, err2 := internal.Capture("", nil, "goveralls", "-coverprofile", profilePath)
+		out, _, err2 := capture(change.Repo(), "goveralls", "-coverprofile", profilePath)
 		// Don't fail the build.
 		if err2 != nil {
 			fmt.Printf("%s", out)

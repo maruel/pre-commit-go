@@ -21,7 +21,7 @@ import (
 
 func TestChecksSuccess(t *testing.T) {
 	// Runs all checks, they should all pass.
-	// Can't run in parallel due to os.Chdir() and os.Setenv().
+	t.Parallel()
 	if testing.Short() {
 		t.SkipNow()
 	}
@@ -32,21 +32,21 @@ func TestChecksSuccess(t *testing.T) {
 			t.Fail()
 		}
 	}()
-	oldGOPATH := os.Getenv("GOPATH")
-	defer func() {
-		ut.ExpectEqual(t, nil, os.Setenv("GOPATH", oldGOPATH))
-	}()
-	ut.AssertEqual(t, nil, os.Setenv("GOPATH", td))
-
-	oldWd, change := setup(t, td, goodFiles)
-	defer func() {
-		ut.ExpectEqual(t, nil, os.Chdir(oldWd))
-	}()
+	change := setup(t, td, goodFiles)
 	for _, name := range getKnownChecks() {
 		c := KnownChecks[name]()
 		if name == "custom" {
-			// Tested separatedly.
-			continue
+			c = &custom{
+				Description: "foo",
+				Command:     []string{"go", "version"},
+				Prerequisites: []definitions.CheckPrerequisite{
+					{
+						HelpCommand:      []string{"go", "version"},
+						ExpectedExitCode: 0,
+						URL:              "example.com.local",
+					},
+				},
+			}
 		}
 		if l, ok := c.(sync.Locker); ok {
 			l.Lock()
@@ -60,7 +60,7 @@ func TestChecksSuccess(t *testing.T) {
 
 func TestChecksFailure(t *testing.T) {
 	// Runs all checks, they should all fail.
-	// Can't run in parallel due to os.Chdir() and os.Setenv().
+	t.Parallel()
 	if testing.Short() {
 		t.SkipNow()
 	}
@@ -71,16 +71,7 @@ func TestChecksFailure(t *testing.T) {
 			t.Fail()
 		}
 	}()
-	oldGOPATH := os.Getenv("GOPATH")
-	defer func() {
-		ut.ExpectEqual(t, nil, os.Setenv("GOPATH", oldGOPATH))
-	}()
-	ut.AssertEqual(t, nil, os.Setenv("GOPATH", td))
-
-	oldWd, change := setup(t, td, badFiles)
-	defer func() {
-		ut.ExpectEqual(t, nil, os.Chdir(oldWd))
-	}()
+	change := setup(t, td, badFiles)
 	for _, name := range getKnownChecks() {
 		c := KnownChecks[name]()
 		// TODO(maruel): Make golint and govet fail. They are not currently working
@@ -119,8 +110,6 @@ func TestCustom(t *testing.T) {
 	}
 	ut.AssertEqual(t, "foo", c.GetDescription())
 	ut.AssertEqual(t, p, c.GetPrerequisites())
-	err := c.Run(nil)
-	ut.AssertEqual(t, nil, err)
 }
 
 // Private stuff.
@@ -195,7 +184,7 @@ func init() {
 	}
 }
 
-func setup(t *testing.T, td string, files map[string]string) (string, scm.Change) {
+func setup(t *testing.T, td string, files map[string]string) scm.Change {
 	fooDir := filepath.Join(td, "src", "foo")
 	ut.AssertEqual(t, nil, os.MkdirAll(fooDir, 0700))
 	for f, c := range files {
@@ -203,9 +192,6 @@ func setup(t *testing.T, td string, files map[string]string) (string, scm.Change
 		ut.AssertEqual(t, nil, os.MkdirAll(filepath.Dir(p), 0700))
 		ut.AssertEqual(t, nil, ioutil.WriteFile(p, []byte(c), 0600))
 	}
-	oldWd, err := os.Getwd()
-	ut.AssertEqual(t, nil, err)
-	ut.AssertEqual(t, nil, os.Chdir(fooDir))
 	_, code, err := internal.Capture(fooDir, nil, "git", "init")
 	ut.AssertEqual(t, 0, code)
 	ut.AssertEqual(t, nil, err)
@@ -215,12 +201,12 @@ func setup(t *testing.T, td string, files map[string]string) (string, scm.Change
 	ut.AssertEqual(t, 0, code)
 	ut.AssertEqual(t, nil, err)
 
-	repo, err := scm.GetRepo(fooDir)
+	repo, err := scm.GetRepo(fooDir, td)
 	ut.AssertEqual(t, nil, err)
 	change, err := repo.Between(scm.Current, scm.GitInitialCommit, nil)
 	ut.AssertEqual(t, nil, err)
 	ut.AssertEqual(t, true, change != nil)
-	return oldWd, change
+	return change
 }
 
 func getKnownChecks() []string {
