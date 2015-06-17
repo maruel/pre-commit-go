@@ -74,14 +74,10 @@ func (c *Coverage) Run(change scm.Change) error {
 			log.Printf("%-*s %-*s %1.1f%%", maxLoc, item.SourceRef(), maxName, item.Name, item.Percent)
 		}
 	}
-	total := profile.Coverage()
-	partial := profile.PartiallyCoveredFuncs()
-	if total < c.Global.MinCoverage {
-		err = fmt.Errorf("coverage: %3.1f%% < %.1f%%; %d untested functions", total, c.Global.MinCoverage, partial)
-	} else if c.Global.MaxCoverage > 0 && total > c.Global.MaxCoverage {
-		err = fmt.Errorf("coverage: %3.1f%% > %.1f%%; %d untested functions; please update \"max_coverage\"", total, c.Global.MaxCoverage, partial)
+	if err = profile.Passes(&c.Global); err != nil {
+		err = fmt.Errorf("coverage: %s", err)
 	} else {
-		log.Printf("coverage: %3.1f%% >= %.1f%%; %d untested functions", total, c.Global.MinCoverage, partial)
+		log.Printf("coverage: %3.1f%% >= %.1f%%; %d untested functions", profile.Coverage(), c.Global.MinCoverage, profile.PartiallyCoveredFuncs())
 	}
 	return err
 }
@@ -324,6 +320,19 @@ func (c CoverageProfile) Less(i, j int) bool {
 		return true
 	}
 	return false
+}
+
+// Passes returns nil if it passes the settings otherwise returns an error.
+func (c CoverageProfile) Passes(s *definitions.CoverageSettings) error {
+	total := c.Coverage()
+	partial := c.PartiallyCoveredFuncs()
+	if total < s.MinCoverage {
+		return fmt.Errorf("%3.1f%% < %.1f%%; %d untested functions", total, s.MinCoverage, partial)
+	}
+	if s.MaxCoverage > 0 && total > s.MaxCoverage {
+		return fmt.Errorf("%3.1f%% > %.1f%%; %d untested functions", total, s.MaxCoverage, partial)
+	}
+	return nil
 }
 
 // Coverage returns the coverage in % for this profile.

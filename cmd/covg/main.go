@@ -70,14 +70,11 @@ func mainImpl() error {
 			fmt.Printf("%-*s %-*s %1.1f%%\n", maxLoc, item.SourceRef(), maxName, item.Name, item.Percent)
 		}
 	}
-	total := profile.Coverage()
-	partial := profile.PartiallyCoveredFuncs()
-	if total < c.Global.MinCoverage {
-		return fmt.Errorf("coverage: %3.1f%% < %.1f%%; %d untested functions", total, c.Global.MinCoverage, partial)
-	} else if c.Global.MaxCoverage > 0 && total > c.Global.MaxCoverage {
-		return fmt.Errorf("coverage: %3.1f%% > %.1f%%; %d untested functions; please update \"max_coverage\"", total, c.Global.MaxCoverage, partial)
+	err = profile.Passes(&c.Global)
+	if err != nil {
+		return err
 	}
-	fmt.Printf("coverage: %3.1f%% >= %.1f%%; %d untested functions\n", total, c.Global.MinCoverage, partial)
+	fmt.Printf("%3.1f%% >= %.1f%%; %d untested functions\n", profile.Coverage(), c.Global.MinCoverage, profile.PartiallyCoveredFuncs())
 	return nil
 }
 
