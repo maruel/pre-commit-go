@@ -56,6 +56,24 @@ pre-commit hook, use:
 You can use the `-g` flag to enable global inference, that is, coverage induced
 by a unit test will work across package boundary.
 
+#### Example coverage output
+
+    $ ./cov -i "*.pb.go" -min 50
+    common/bit_field
+      coverage: 100.0% (17/17) >= 50.0%; Functions: 0 untested / 0 partially / 8 completely
+    common/cache
+      common/cache/cache.go:166 memory.Add            66.7% (6/9) 167,172,175
+      common/cache/lru.go:79    orderedDict.popOldest 66.7% (2/3) 84
+      common/cache/lru.go:200   lruDict.UnmarshalJSON 63.6% (7/11) 202,205,208,213
+      common/cache/cache.go:276 disk.Add              60.0% (9/15) 277,282,291-292,295-296
+      common/cache/lru.go:28    entry.UnmarshalJSON   60.0% (6/10) 31,34,41,44
+      common/cache/lru.go:107   orderedDict.pushBack  40.0% (2/5) 108-110
+      coverage: 84.8% (117/138) >= 50.0%; Functions: 0 untested / 6 partially / 35 completely
+    common/clock
+      common/clock/systemclock.go:33 systemClock.NewTimer  0.0% (0/1)
+      common/clock/systemclock.go:29 systemClock.Sleep     0.0% (0/1)
+      coverage: 95.2% (40/42) >= 50.0%; Functions: 2 untested / 0 partially / 18 completely
+
 
 Configuration
 -------------
