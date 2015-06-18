@@ -4,13 +4,15 @@ pre-commit-go
 `pre-commit-go` project includes two tools:
 
   - `pcg` to run checks on a Go project *on commit* and *on push* via git hooks.
-    - It's [designed to be correct, fast, simple, versatile and
-      safe](DESIGN.md). No check ever modify any file.
-    - Native [Continuous Integration service (CI)](CI_SETUP.md) support.
-    - [Configuration](CONFIGURATION.md) is easy, flexible and extensible.
-    - See [the tutorial for examples](TUTORIAL.md).
-  - `covg` which is a *yet-another-coverage-tool* but that is more parallel than
-    any other coverage tool.
+    - [DESIGN.md](DESIGN.md): Designed to be correct, fast, simple,
+      versatile and safe. No check ever modify any file.
+    - [CI_SETUP.md](CI_SETUP.md): Native Continuous Integration service (CI)
+      support.
+    - [CONFIGURATION.md](CONFIGURATION.md): Configuration is easy, flexible and
+      extensible.
+    - [TUTORIAL.md](TUTORIAL.md): Short tutorial.
+  - `covg` which is a *yet-another-coverage-tool*. It's more parallel than
+    any other coverage tool and has native support for global inference.
 
 
 Warning
