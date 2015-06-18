@@ -51,6 +51,8 @@ func mainImpl() error {
 	maxFlag := flag.Float64("max", 100, "maximum expected coverage in %")
 	globalFlag := flag.Bool("g", false, "use global coverage")
 	verboseFlag := flag.Bool("v", false, "enable logging")
+	ignoreFlag := scm.IgnorePatterns{}
+	flag.Var(&ignoreFlag, "i", "glob to ignore, use multiple times")
 	flag.Parse()
 
 	log.SetFlags(log.Lmicroseconds)
@@ -82,7 +84,7 @@ func mainImpl() error {
 	// TODO(maruel): Run tests ala pre-commit-go; e.g. determine what diff to use.
 	// TODO(maruel): Run only tests down the current directory when
 	// *globalFlag == false.
-	change, err := repo.Between(scm.Current, scm.GitInitialCommit, nil)
+	change, err := repo.Between(scm.Current, scm.GitInitialCommit, ignoreFlag)
 	if err != nil {
 		return err
 	}

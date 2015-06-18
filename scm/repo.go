@@ -98,9 +98,9 @@ func GetRepo(wd, gopath string) (Repo, error) {
 type IgnorePatterns []string
 
 // Match returns true when the file should be ignored.
-func (i IgnorePatterns) Match(p string) bool {
+func (i *IgnorePatterns) Match(p string) bool {
 	chunks := strings.Split(p, pathSeparator)
-	for _, ignorePattern := range i {
+	for _, ignorePattern := range *i {
 		for _, chunk := range chunks {
 			if matched, err := filepath.Match(ignorePattern, chunk); matched {
 				return true
@@ -110,6 +110,16 @@ func (i IgnorePatterns) Match(p string) bool {
 		}
 	}
 	return false
+}
+
+func (i *IgnorePatterns) String() string {
+	return fmt.Sprintf("%s", *i)
+}
+
+// Set implements flag.Value.
+func (i *IgnorePatterns) Set(value string) error {
+	*i = append(*i, value)
+	return nil
 }
 
 // Private details.
