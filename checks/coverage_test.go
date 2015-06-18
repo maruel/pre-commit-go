@@ -203,8 +203,10 @@ func TestCoveragePrerequisites(t *testing.T) {
 	// This test can't be parallel.
 	if !IsContinuousIntegration() {
 		old := os.Getenv("CI")
-		defer os.Setenv("CI", old)
-		os.Setenv("CI", "true")
+		defer func() {
+			ut.ExpectEqual(t, nil, os.Setenv("CI", old))
+		}()
+		ut.AssertEqual(t, nil, os.Setenv("CI", "true"))
 		ut.AssertEqual(t, true, IsContinuousIntegration())
 	}
 	c := Coverage{UseCoveralls: true}
