@@ -5,13 +5,13 @@
 package checks
 
 import (
-	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sort"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/maruel/pre-commit-go/checks/definitions"
 	"github.com/maruel/pre-commit-go/internal"
@@ -186,16 +186,19 @@ t.Fail()
 
 func init() {
 	if IsContinuousIntegration() {
-		wd, err := os.Getwd()
-		if err != nil {
-			panic(err)
-		}
-		for _, name := range getKnownChecks() {
-			for _, p := range KnownChecks[name]().GetPrerequisites() {
-				out, _, _ := internal.Capture(wd, nil, "go", "get", p.URL)
-				if len(out) != 0 {
-					// This is essentially a race condition, ignore failure but log it.
-					fmt.Printf("prerequisite %s installation failed: %s", p.URL, out)
+		// The reason it's being done is that "go test" starts before prerequisites
+		// are installed. But since we are testing prerequisites, this runs in
+		// conflict. Wait for prerequisites to be installed.
+		loop := true
+		for loop {
+			loop = false
+			for _, name := range getKnownChecks() {
+				for _, p := range KnownChecks[name]().GetPrerequisites() {
+					if !p.IsPresent() {
+						time.Sleep(10 * time.Millisecond)
+						loop = true
+						break
+					}
 				}
 			}
 		}
