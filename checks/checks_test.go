@@ -13,7 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/maruel/pre-commit-go/checks/definitions"
 	"github.com/maruel/pre-commit-go/internal"
 	"github.com/maruel/pre-commit-go/scm"
 	"github.com/maruel/ut"
@@ -36,10 +35,10 @@ func TestChecksSuccess(t *testing.T) {
 	for _, name := range getKnownChecks() {
 		c := KnownChecks[name]()
 		if name == "custom" {
-			c = &custom{
+			c = &Custom{
 				Description: "foo",
 				Command:     []string{"go", "version"},
-				Prerequisites: []definitions.CheckPrerequisite{
+				Prerequisites: []CheckPrerequisite{
 					{
 						HelpCommand:      []string{"go", "version"},
 						ExpectedExitCode: 0,
@@ -110,14 +109,14 @@ func TestChecksDescriptions(t *testing.T) {
 
 func TestCustom(t *testing.T) {
 	t.Parallel()
-	p := []definitions.CheckPrerequisite{
+	p := []CheckPrerequisite{
 		{
 			HelpCommand:      []string{"go", "version"},
 			ExpectedExitCode: 0,
 			URL:              "example.com.local",
 		},
 	}
-	c := &custom{
+	c := &Custom{
 		Description:   "foo",
 		Command:       []string{"go", "version"},
 		Prerequisites: p,

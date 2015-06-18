@@ -21,14 +21,25 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/maruel/pre-commit-go/checks/definitions"
 	"github.com/maruel/pre-commit-go/checks/internal/cover"
 	"github.com/maruel/pre-commit-go/internal"
 	"github.com/maruel/pre-commit-go/scm"
 )
 
-// Coverage is the check implementation of definitions.Coverage.
-type Coverage definitions.Coverage
+// Coverage runs all tests with coverage.
+type Coverage struct {
+	UseGlobalInference bool                         `yaml:"use_global_inference"`
+	UseCoveralls       bool                         `yaml:"use_coveralls"`
+	Global             CoverageSettings             `yaml:"global"`
+	PerDirDefault      CoverageSettings             `yaml:"per_dir_default"`
+	PerDir             map[string]*CoverageSettings `yaml:"per_dir"`
+}
+
+// CoverageSettings specifies coverage settings.
+type CoverageSettings struct {
+	MinCoverage float64 `yaml:"min_coverage"`
+	MaxCoverage float64 `yaml:"max_coverage"`
+}
 
 func (c *Coverage) GetDescription() string {
 	return "enforces minimum test coverage on all packages"
@@ -38,9 +49,9 @@ func (c *Coverage) GetName() string {
 	return "coverage"
 }
 
-func (c *Coverage) GetPrerequisites() []definitions.CheckPrerequisite {
+func (c *Coverage) GetPrerequisites() []CheckPrerequisite {
 	if c.isGoverallsEnabled() {
-		return []definitions.CheckPrerequisite{{[]string{"goveralls", "-h"}, 2, "github.com/mattn/goveralls"}}
+		return []CheckPrerequisite{{[]string{"goveralls", "-h"}, 2, "github.com/mattn/goveralls"}}
 	}
 	return nil
 }
@@ -275,11 +286,11 @@ func (c *Coverage) RunLocal(change scm.Change, tmpDir string) (CoverageProfile, 
 //
 // If the PerDir value is set to a null pointer, returns empty coverage.
 // Otherwise returns PerDirDefault.
-func (c *Coverage) SettingsForPkg(testPkg string) *definitions.CoverageSettings {
+func (c *Coverage) SettingsForPkg(testPkg string) *CoverageSettings {
 	testDir := pkgToDir(testPkg)
 	if settings, ok := c.PerDir[testDir]; ok {
 		if settings == nil {
-			settings = &definitions.CoverageSettings{}
+			settings = &CoverageSettings{}
 		}
 		return settings
 	}
@@ -291,7 +302,7 @@ func (c *Coverage) isGoverallsEnabled() bool {
 }
 
 // ProcessProfile generates output that can be optionally printed and an error if the check failed.
-func ProcessProfile(profile CoverageProfile, settings *definitions.CoverageSettings) (string, error) {
+func ProcessProfile(profile CoverageProfile, settings *CoverageSettings) (string, error) {
 	out := ""
 	maxLoc := 0
 	maxName := 0
@@ -380,7 +391,7 @@ func (c CoverageProfile) Subset(p string) CoverageProfile {
 }
 
 // Passes returns nil if it passes the settings otherwise returns an error.
-func (c CoverageProfile) Passes(s *definitions.CoverageSettings) error {
+func (c CoverageProfile) Passes(s *CoverageSettings) error {
 	total := c.CoveragePercent()
 	if total < s.MinCoverage {
 		return fmt.Errorf("%3.1f%% (%d/%d) < %.1f%%; Functions: %d untested / %d partially / %d completely",

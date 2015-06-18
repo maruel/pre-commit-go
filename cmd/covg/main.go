@@ -15,7 +15,6 @@ import (
 	"strings"
 
 	"github.com/maruel/pre-commit-go/checks"
-	"github.com/maruel/pre-commit-go/checks/definitions"
 	"github.com/maruel/pre-commit-go/scm"
 )
 
@@ -24,7 +23,7 @@ var silentError = errors.New("silent error")
 
 // printProfile prints the results to stdout and returns false if the process
 // exit code must be 1.
-func printProfile(settings *definitions.CoverageSettings, profile checks.CoverageProfile, indent string) bool {
+func printProfile(settings *checks.CoverageSettings, profile checks.CoverageProfile, indent string) bool {
 	out, err := checks.ProcessProfile(profile, settings)
 	if indent != "" {
 		tmp := ""
@@ -71,11 +70,11 @@ func mainImpl() error {
 
 	c := checks.Coverage{
 		UseGlobalInference: *globalFlag,
-		Global: definitions.CoverageSettings{
+		Global: checks.CoverageSettings{
 			MinCoverage: *minFlag,
 			MaxCoverage: *maxFlag,
 		},
-		PerDirDefault: definitions.CoverageSettings{
+		PerDirDefault: checks.CoverageSettings{
 			MinCoverage: *minFlag,
 			MaxCoverage: *maxFlag,
 		},

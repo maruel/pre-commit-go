@@ -9,7 +9,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/maruel/pre-commit-go/checks/definitions"
 	"github.com/maruel/pre-commit-go/internal"
 	"github.com/maruel/ut"
 )
@@ -31,15 +30,15 @@ func TestCoverageGlobal(t *testing.T) {
 	c := &Coverage{
 		UseGlobalInference: true,
 		UseCoveralls:       false,
-		Global: definitions.CoverageSettings{
+		Global: CoverageSettings{
 			MinCoverage: 50,
 			MaxCoverage: 100,
 		},
-		PerDirDefault: definitions.CoverageSettings{
+		PerDirDefault: CoverageSettings{
 			MinCoverage: 50,
 			MaxCoverage: 100,
 		},
-		PerDir: map[string]*definitions.CoverageSettings{},
+		PerDir: map[string]*CoverageSettings{},
 	}
 	profile, err := c.RunProfile(change)
 	ut.AssertEqual(t, nil, err)
@@ -141,15 +140,15 @@ func TestCoverageLocal(t *testing.T) {
 	c := &Coverage{
 		UseGlobalInference: false,
 		UseCoveralls:       false,
-		Global: definitions.CoverageSettings{
+		Global: CoverageSettings{
 			MinCoverage: 50,
 			MaxCoverage: 100,
 		},
-		PerDirDefault: definitions.CoverageSettings{
+		PerDirDefault: CoverageSettings{
 			MinCoverage: 50,
 			MaxCoverage: 100,
 		},
-		PerDir: map[string]*definitions.CoverageSettings{},
+		PerDir: map[string]*CoverageSettings{},
 	}
 	profile, err := c.RunProfile(change)
 	ut.AssertEqual(t, nil, err)
@@ -287,8 +286,8 @@ func TestCoveragePrerequisites(t *testing.T) {
 func TestCoverageEmpty(t *testing.T) {
 	t.Parallel()
 	ut.AssertEqual(t, 0., CoverageProfile{}.CoveragePercent())
-	c := Coverage{PerDir: map[string]*definitions.CoverageSettings{"foo": nil}}
-	ut.AssertEqual(t, &definitions.CoverageSettings{}, c.SettingsForPkg("foo"))
+	c := Coverage{PerDir: map[string]*CoverageSettings{"foo": nil}}
+	ut.AssertEqual(t, &CoverageSettings{}, c.SettingsForPkg("foo"))
 }
 
 func TestRangeToString(t *testing.T) {

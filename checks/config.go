@@ -9,8 +9,6 @@ package checks
 import (
 	"fmt"
 
-	"github.com/maruel/pre-commit-go/checks/definitions"
-
 	"gopkg.in/yaml.v2"
 )
 
@@ -125,16 +123,16 @@ func New(v string) *Config {
 				MaxDuration: 5,
 				Checks: Checks{
 					"build": {
-						&build{
+						&Build{
 							BuildAll:  false,
 							ExtraArgs: []string{},
 						},
 					},
 					"gofmt": {
-						&gofmt{},
+						&Gofmt{},
 					},
 					"test": {
-						&test{
+						&Test{
 							ExtraArgs: []string{"-short"},
 						},
 					},
@@ -144,24 +142,24 @@ func New(v string) *Config {
 				MaxDuration: 15,
 				Checks: Checks{
 					"goimports": {
-						&goimports{},
+						&Goimports{},
 					},
 					"coverage": {
 						&Coverage{
 							UseCoveralls: false,
-							Global: definitions.CoverageSettings{
+							Global: CoverageSettings{
 								MinCoverage: 50,
 								MaxCoverage: 100,
 							},
-							PerDirDefault: definitions.CoverageSettings{
+							PerDirDefault: CoverageSettings{
 								MinCoverage: 0,
 								MaxCoverage: 0,
 							},
-							PerDir: map[string]*definitions.CoverageSettings{},
+							PerDir: map[string]*CoverageSettings{},
 						},
 					},
 					"test": {
-						&test{
+						&Test{
 							ExtraArgs: []string{"-v", "-race"},
 						},
 					},
@@ -171,33 +169,33 @@ func New(v string) *Config {
 				MaxDuration: 120,
 				Checks: Checks{
 					"build": {
-						&build{
+						&Build{
 							BuildAll:  false,
 							ExtraArgs: []string{},
 						},
 					},
 					"gofmt": {
-						&gofmt{},
+						&Gofmt{},
 					},
 					"goimports": {
-						&goimports{},
+						&Goimports{},
 					},
 					"coverage": {
 						&Coverage{
 							UseCoveralls: true,
-							Global: definitions.CoverageSettings{
+							Global: CoverageSettings{
 								MinCoverage: 50,
 								MaxCoverage: 100,
 							},
-							PerDirDefault: definitions.CoverageSettings{
+							PerDirDefault: CoverageSettings{
 								MinCoverage: 0,
 								MaxCoverage: 0,
 							},
-							PerDir: map[string]*definitions.CoverageSettings{},
+							PerDir: map[string]*CoverageSettings{},
 						},
 					},
 					"test": {
-						&test{
+						&Test{
 							ExtraArgs: []string{"-v", "-race"},
 						},
 					},
@@ -207,18 +205,18 @@ func New(v string) *Config {
 				MaxDuration: 15,
 				Checks: Checks{
 					"errcheck": {
-						&errcheck{
+						&Errcheck{
 							// "Close|Write.*|Flush|Seek|Read.*"
 							Ignores: "Close",
 						},
 					},
 					"golint": {
-						&golint{
+						&Golint{
 							Blacklist: []string{},
 						},
 					},
 					"govet": {
-						&govet{
+						&Govet{
 							Blacklist: []string{" composite literal uses unkeyed fields"},
 						},
 					},

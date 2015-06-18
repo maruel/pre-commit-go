@@ -5,30 +5,41 @@
 // Package checks implements pre-made checks for pre-commit-go.
 //
 // This package defines the `pre-commit-go.yml` configuration file format and
-// implements all the checks. For conciseness, all the check configuration
-// struct are defined in the package `definitions` below.
+// implements all the checks.
 package checks
 
 import (
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 
-	"github.com/maruel/pre-commit-go/checks/definitions"
+	"github.com/maruel/pre-commit-go/internal"
 	"github.com/maruel/pre-commit-go/scm"
 )
 
-// Checks are alias of the corresponding checks in package definitions. The
-// reason is so the definitions package documentation at
-// https://godoc.org/github.com/maruel/pre-commit-go/checks/definitions is
-// clean and the code in this package focus on the implementation.
+// CheckPrerequisite describe a Go package that is needed to run a Check.
 //
-// They are not exported since they are meant to be created by deserializing a
-// pre-commit-go.yml, not to be instantiated manually.
+// It must list a command that is to be executed and the expected exit code to
+// verify that the custom tool is properly installed. If the executable is not
+// detected, "go get $URL" will be executed.
+type CheckPrerequisite struct {
+	// HelpCommand is the help command to run to detect if this prerequisite is
+	// installed or not. This command should have no adverse effect and must be
+	// fast to execute.
+	HelpCommand []string `yaml:"help_command"`
+	// ExpectedExitCode is the exit code expected when HelpCommand is executed.
+	ExpectedExitCode int `yaml:"expected_exit_code"`
+	// URL is the url to fetch as `go get URL`.
+	URL string
+}
 
-// See build.Run() for information.
-var buildLock sync.Mutex
+// IsPresent returns true if the prerequisite is present on the system.
+func (c *CheckPrerequisite) IsPresent() bool {
+	_, exitCode, _ := internal.Capture(cwd, nil, c.HelpCommand...)
+	return exitCode == c.ExpectedExitCode
+}
 
 // Check describes an check to be executed on the code base.
 type Check interface {
@@ -38,36 +49,40 @@ type Check interface {
 	GetName() string
 	// GetPrerequisites lists all the go packages to be installed before running
 	// this check.
-	GetPrerequisites() []definitions.CheckPrerequisite
+	GetPrerequisites() []CheckPrerequisite
 	// Run executes the check.
 	Run(change scm.Change) error
 }
 
 // Native checks.
 
-type build definitions.Build
+// Build builds packages without tests via 'go build'.
+type Build struct {
+	BuildAll  bool     `yaml:"build_all"`
+	ExtraArgs []string `yaml:"extra_args"`
+}
 
-func (b *build) GetDescription() string {
+func (b *Build) GetDescription() string {
 	return "builds all packages"
 }
 
-func (b *build) GetName() string {
+func (b *Build) GetName() string {
 	return "build"
 }
 
-func (b *build) GetPrerequisites() []definitions.CheckPrerequisite {
+func (b *Build) GetPrerequisites() []CheckPrerequisite {
 	return nil
 }
 
-func (b *build) Lock() {
+func (b *Build) Lock() {
 	buildLock.Lock()
 }
 
-func (b *build) Unlock() {
+func (b *Build) Unlock() {
 	buildLock.Unlock()
 }
 
-func (b *build) Run(change scm.Change) error {
+func (b *Build) Run(change scm.Change) error {
 	// go build accepts packages, not files.
 	// Cannot build concurrently since it leaves files in the tree.
 	// TODO(maruel): Build in a temporary directory to not leave junk in the tree
@@ -85,21 +100,23 @@ func (b *build) Run(change scm.Change) error {
 	return nil
 }
 
-type gofmt definitions.Gofmt
+// Gofmt runs gofmt in check mode with code simplification enabled.
+type Gofmt struct {
+}
 
-func (g *gofmt) GetDescription() string {
+func (g *Gofmt) GetDescription() string {
 	return "enforces all .go sources are formatted with 'gofmt -s'"
 }
 
-func (g *gofmt) GetName() string {
+func (g *Gofmt) GetName() string {
 	return "gofmt"
 }
 
-func (g *gofmt) GetPrerequisites() []definitions.CheckPrerequisite {
+func (g *Gofmt) GetPrerequisites() []CheckPrerequisite {
 	return nil
 }
 
-func (g *gofmt) Run(change scm.Change) error {
+func (g *Gofmt) Run(change scm.Change) error {
 	// gofmt doesn't return non-zero even if some files need to be updated.
 	// gofmt accepts files, not packages.
 	out, _, err := capture(change.Repo(), "gofmt", "-l", "-s", ".")
@@ -112,21 +129,24 @@ func (g *gofmt) Run(change scm.Change) error {
 	return nil
 }
 
-type test definitions.Test
+// Test runs all tests via go test.
+type Test struct {
+	ExtraArgs []string `yaml:"extra_args"`
+}
 
-func (t *test) GetDescription() string {
+func (t *Test) GetDescription() string {
 	return "runs all tests, potentially with options (race detector, different tags, etc)"
 }
 
-func (t *test) GetName() string {
+func (t *Test) GetName() string {
 	return "test"
 }
 
-func (t *test) GetPrerequisites() []definitions.CheckPrerequisite {
+func (t *Test) GetPrerequisites() []CheckPrerequisite {
 	return nil
 }
 
-func (t *test) Run(change scm.Change) error {
+func (t *Test) Run(change scm.Change) error {
 	// go test accepts packages, not files.
 	var wg sync.WaitGroup
 	testPkgs := change.Indirect().TestPackages()
@@ -151,23 +171,26 @@ func (t *test) Run(change scm.Change) error {
 	return nil
 }
 
-type errcheck definitions.Errcheck
+// Errcheck runs errcheck on packages.
+type Errcheck struct {
+	Ignores string
+}
 
-func (e *errcheck) GetDescription() string {
+func (e *Errcheck) GetDescription() string {
 	return "enforces all calls returning an error are checked using tool 'errcheck'"
 }
 
-func (e *errcheck) GetName() string {
+func (e *Errcheck) GetName() string {
 	return "errcheck"
 }
 
-func (e *errcheck) GetPrerequisites() []definitions.CheckPrerequisite {
-	return []definitions.CheckPrerequisite{
+func (e *Errcheck) GetPrerequisites() []CheckPrerequisite {
+	return []CheckPrerequisite{
 		{[]string{"errcheck", "-h"}, 2, "github.com/kisielk/errcheck"},
 	}
 }
 
-func (e *errcheck) Run(change scm.Change) error {
+func (e *Errcheck) Run(change scm.Change) error {
 	// errcheck accepts packages, not files.
 	args := []string{"errcheck", "-ignore", e.Ignores}
 	out, _, err := capture(change.Repo(), append(args, change.Changed().Packages()...)...)
@@ -180,23 +203,25 @@ func (e *errcheck) Run(change scm.Change) error {
 	return nil
 }
 
-type goimports definitions.Goimports
+// Goimports runs goimports in check mode.
+type Goimports struct {
+}
 
-func (g *goimports) GetDescription() string {
+func (g *Goimports) GetDescription() string {
 	return "enforces all .go sources are formatted with 'goimports'"
 }
 
-func (g *goimports) GetName() string {
+func (g *Goimports) GetName() string {
 	return "goimports"
 }
 
-func (g *goimports) GetPrerequisites() []definitions.CheckPrerequisite {
-	return []definitions.CheckPrerequisite{
+func (g *Goimports) GetPrerequisites() []CheckPrerequisite {
+	return []CheckPrerequisite{
 		{[]string{"goimports", "-h"}, 2, "golang.org/x/tools/cmd/goimports"},
 	}
 }
 
-func (g *goimports) Run(change scm.Change) error {
+func (g *Goimports) Run(change scm.Change) error {
 	// goimports accepts files, not packages.
 	// goimports doesn't return non-zero even if some files need to be updated.
 	out, _, err := capture(change.Repo(), append([]string{"goimports", "-l"}, change.Changed().GoFiles()...)...)
@@ -209,23 +234,26 @@ func (g *goimports) Run(change scm.Change) error {
 	return nil
 }
 
-type golint definitions.Golint
+// Golint runs golint.
+type Golint struct {
+	Blacklist []string
+}
 
-func (g *golint) GetDescription() string {
+func (g *Golint) GetDescription() string {
 	return "enforces all .go sources passes golint"
 }
 
-func (g *golint) GetName() string {
+func (g *Golint) GetName() string {
 	return "golint"
 }
 
-func (g *golint) GetPrerequisites() []definitions.CheckPrerequisite {
-	return []definitions.CheckPrerequisite{
+func (g *Golint) GetPrerequisites() []CheckPrerequisite {
+	return []CheckPrerequisite{
 		{[]string{"golint", "-h"}, 2, "github.com/golang/lint/golint"},
 	}
 }
 
-func (g *golint) Run(change scm.Change) error {
+func (g *Golint) Run(change scm.Change) error {
 	// golint accepts packages, not files.
 	// golint doesn't return non-zero ever.
 	out, _, _ := capture(change.Repo(), "golint", "./...")
@@ -244,23 +272,26 @@ func (g *golint) Run(change scm.Change) error {
 	return nil
 }
 
-type govet definitions.Govet
+// Govet runs "go tool vet".
+type Govet struct {
+	Blacklist []string
+}
 
-func (g *govet) GetDescription() string {
+func (g *Govet) GetDescription() string {
 	return "enforces all .go sources passes go tool vet"
 }
 
-func (g *govet) GetName() string {
+func (g *Govet) GetName() string {
 	return "govet"
 }
 
-func (g *govet) GetPrerequisites() []definitions.CheckPrerequisite {
-	return []definitions.CheckPrerequisite{
+func (g *Govet) GetPrerequisites() []CheckPrerequisite {
+	return []CheckPrerequisite{
 		{[]string{"go", "tool", "vet", "-h"}, 1, "golang.org/x/tools/cmd/vet"},
 	}
 }
 
-func (g *govet) Run(change scm.Change) error {
+func (g *Govet) Run(change scm.Change) error {
 	// govet accepts files, not packages.
 	// Ignore the return code since we ignore many errors.
 	out, _, _ := capture(change.Repo(), "go", "tool", "vet", "-all", ".")
@@ -281,24 +312,40 @@ func (g *govet) Run(change scm.Change) error {
 
 // Extensibility.
 
-type custom definitions.Custom
+// Custom represents a user configured check running an external program.
+//
+// It can be used multiple times to run multiple external checks.
+type Custom struct {
+	// DisplayName is check's display name, required.
+	DisplayName string `yaml:"display_name"`
+	// Description is check's description, optional.
+	Description string `yaml:"description"`
+	// Command is check's command line, required.
+	Command []string `yaml:"command"`
+	// CheckExitCode specifies if the check is declared to fail when exit code is
+	// non-zero.
+	CheckExitCode bool `yaml:"check_exit_code"`
+	// Prerequisites are check's prerequisite packages to install first before
+	// running the check, optional.
+	Prerequisites []CheckPrerequisite `yaml:"prerequisites"`
+}
 
-func (c *custom) GetDescription() string {
+func (c *Custom) GetDescription() string {
 	if c.Description != "" {
 		return c.Description
 	}
 	return "runs a custom check from an external package"
 }
 
-func (c *custom) GetName() string {
+func (c *Custom) GetName() string {
 	return "custom"
 }
 
-func (c *custom) GetPrerequisites() []definitions.CheckPrerequisite {
+func (c *Custom) GetPrerequisites() []CheckPrerequisite {
 	return c.Prerequisites
 }
 
-func (c *custom) Run(change scm.Change) error {
+func (c *Custom) Run(change scm.Change) error {
 	// TODO(maruel): Make what is passed to the command configurable, e.g. one of:
 	// (Changed, Indirect, All) x (GoFiles, Packages, TestPackages)
 	out, exitCode, err := capture(change.Repo(), c.Command...)
@@ -312,13 +359,29 @@ func (c *custom) Run(change scm.Change) error {
 
 // KnownChecks is the map of all known checks per check name.
 var KnownChecks = map[string]func() Check{
-	(&build{}).GetName():     func() Check { return &build{} },
+	(&Build{}).GetName():     func() Check { return &Build{} },
 	(&Coverage{}).GetName():  func() Check { return &Coverage{} },
-	(&custom{}).GetName():    func() Check { return &custom{} },
-	(&errcheck{}).GetName():  func() Check { return &errcheck{} },
-	(&gofmt{}).GetName():     func() Check { return &gofmt{} },
-	(&goimports{}).GetName(): func() Check { return &goimports{} },
-	(&golint{}).GetName():    func() Check { return &golint{} },
-	(&govet{}).GetName():     func() Check { return &govet{} },
-	(&test{}).GetName():      func() Check { return &test{} },
+	(&Custom{}).GetName():    func() Check { return &Custom{} },
+	(&Errcheck{}).GetName():  func() Check { return &Errcheck{} },
+	(&Gofmt{}).GetName():     func() Check { return &Gofmt{} },
+	(&Goimports{}).GetName(): func() Check { return &Goimports{} },
+	(&Golint{}).GetName():    func() Check { return &Golint{} },
+	(&Govet{}).GetName():     func() Check { return &Govet{} },
+	(&Test{}).GetName():      func() Check { return &Test{} },
+}
+
+// Private stuff.
+
+// See build.Run() for information.
+var buildLock sync.Mutex
+
+// cwd provides a valid path to CheckPrerequisite.IsPresent().
+var cwd string
+
+func init() {
+	wd, err := os.Getwd()
+	if err != nil {
+		panic(err)
+	}
+	cwd = wd
 }

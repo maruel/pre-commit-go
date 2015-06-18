@@ -50,7 +50,7 @@ Design
   - Easy to configure.
   - Yet powerful extensibility.
   - Configuration file is simple and documented by
-    [structures](https://godoc.org/github.com/maruel/pre-commit-go/checks/definitions).
+    [structures](https://godoc.org/github.com/maruel/pre-commit-go/checks).
     No need to check-in the configuration file if not desired.
   - Integrated support with [popular hosted CI systems](CI_SETUP.md).
 

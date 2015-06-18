@@ -2,8 +2,8 @@
 # automatically on commit, on push and on continuous integration service after
 # a push or on merge of a pull request.
 #
-# See https://godoc.org/github.com/maruel/pre-commit-go/checks/definitions for
-# more information.
+# See https://godoc.org/github.com/maruel/pre-commit-go/checks for more
+# information.
 
 min_version: 0.4.7
 modes:

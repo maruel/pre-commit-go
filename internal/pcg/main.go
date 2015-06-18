@@ -29,7 +29,6 @@ import (
 	"time"
 
 	"github.com/maruel/pre-commit-go/checks"
-	"github.com/maruel/pre-commit-go/checks/definitions"
 	"github.com/maruel/pre-commit-go/internal"
 	"github.com/maruel/pre-commit-go/scm"
 	"gopkg.in/yaml.v2"
@@ -95,8 +94,8 @@ const yamlHeader = `# https://github.com/maruel/pre-commit-go configuration file
 # automatically on commit, on push and on continuous integration service after
 # a push or on merge of a pull request.
 #
-# See https://godoc.org/github.com/maruel/pre-commit-go/checks/definitions for
-# more information.
+# See https://godoc.org/github.com/maruel/pre-commit-go/checks for more
+# information.
 
 `
 
@@ -466,7 +465,7 @@ func cmdInstallPrereq(repo scm.ReadOnlyRepo, config *checks.Config, modes []chec
 		for _, p := range check.GetPrerequisites() {
 			number++
 			wg.Add(1)
-			go func(prereq definitions.CheckPrerequisite) {
+			go func(prereq checks.CheckPrerequisite) {
 				defer wg.Done()
 				if !prereq.IsPresent() {
 					c <- prereq.URL
