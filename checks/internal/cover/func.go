@@ -4,6 +4,7 @@
 
 // Modified to add support to load files already in memory from a io.Reader
 // instead of a filename to skip disk I/O altogether.
+// Add support for methods.
 
 // Copyright 2013 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
@@ -53,7 +54,14 @@ func (v *funcVisitor) Visit(node ast.Node) ast.Visitor {
 		name := n.Name.Name
 		if n.Recv != nil {
 			// A method.
-			name = n.Recv.List[0].Type.(*ast.Ident).Name + "." + name
+			t := n.Recv.List[0].Type
+			if s, ok := t.(*ast.StarExpr); ok {
+				// Pointer receiver.
+				t = s.X
+			}
+			if i, ok := t.(*ast.Ident); ok {
+				name = i.Name + "." + name
+			}
 		}
 		fe := &FuncExtent{
 			FileName:  v.fileName,

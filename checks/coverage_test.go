@@ -48,9 +48,9 @@ func TestCoverageGlobal(t *testing.T) {
 	expected := CoverageProfile{
 		{
 			Source:    "foo.go",
-			Line:      2,
-			SourceRef: "foo.go:2",
-			Name:      "Foo",
+			Line:      3,
+			SourceRef: "foo.go:3",
+			Name:      "Type.Foo",
 			Count:     1,
 			Total:     1,
 			Percent:   100,
@@ -101,9 +101,9 @@ func TestCoverageGlobal(t *testing.T) {
 	expected = CoverageProfile{
 		{
 			Source:    "foo.go",
-			Line:      2,
-			SourceRef: "foo.go:2",
-			Name:      "Foo",
+			Line:      3,
+			SourceRef: "foo.go:3",
+			Name:      "Type.Foo",
 			Count:     1,
 			Total:     1,
 			Percent:   100,
@@ -223,7 +223,7 @@ func TestCoverageEmpty(t *testing.T) {
 var coverageFiles = map[string]string{
 	"foo.go": `package foo
 type Type int
-func (i Type) Foo() int {
+func (i *Type) Foo() int {
   return 1
 }
 `,
