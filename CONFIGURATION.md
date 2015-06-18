@@ -98,29 +98,28 @@ Checks
 Checks fall in 4 categories:
 
   - Go native checks that dot not require any external dependency:
-    - [go build](https://golang.org/pkg/go/build/) all directories with .go files
-      found
-    - [go test](https://golang.org/pkg/testing/) with can be used along the [race
-      detector](https://blog.golang.org/race-detector)
-    - [gofmt](https://golang.org/cmd/gofmt/), especially for the -s flag.
+    - `build` builds packages without tests.
+    - `copyright` checks files for copyright header.
+    - `gofmt` runs gofmt -s.
+    - `test` runs tests.
   - Go checks that are external to the Go standard toolset:
-    - [go test -cover](https://golang.org/pkg/testing/) with
-      [coverage](https://blog.golang.org/cover). It requires an third party only
-      when using coveralls.io.
-    - [goimports](https://golang.org/x/tools/cmd/goimports)
+    - `coverage` run tests with coverage. It requires an third party only when
+      using coveralls.io.
+    - `goimports` enforces imports order.
   - Lint checks (e.g. trigger false positives by design):
-    - [errcheck](https://github.com/kisielk/errcheck)
-    - [golint](https://github.com/golang/lint)
-    - [govet (go tool vet)](https://golang.org/x/tools/cmd/vet)
+    - `errcheck` ensures call sites of a function returning error properly
+      handle the error.
+    - `golint` includes multiple stylistic rules.
+    - `govet` includes multiple stylistic rules.
   - User specified custom checks.
 
 
 ### build
 
-Builds everything inside the current directory similar to `go build ./...`
-but only builds the packages without tests. This check is mostly useful for
-executables, e.g. `package main`. Packages containing tests are covered via
-check `test`.
+Builds everything inside the current directory similar to [go build
+./...](https://golang.org/pkg/go/build/) but only builds the packages without
+tests. This check is mostly useful for executables, e.g. `package main`.
+Packages containing tests are covered via check `test`.
 
 Use multiple `build` instances to build multiple times with different tags.
 It has the following options:
@@ -166,8 +165,8 @@ copyright:
 
 ### coverage
 
-`coverage` runs all tests with coverage. Each testable package is run with `go
-test -cover`. It has the following options:
+`coverage` runs all tests with [coverage](https://blog.golang.org/cover). Each
+testable package is run with `go test -cover`. It has the following options:
 
   - `use_global_inference` (bool): determines if coverage from any unit test
     should be considered for coverage calculation for all package.
@@ -259,10 +258,10 @@ errcheck:
 
 ### gofmt
 
-`gofmt` runs gofmt in check mode with code simplification enabled. It is almost
-redundant with `goimports` except for `-s` which goimports doesn't implement and
-gofmt doesn't require any external package. It has no configuration option.
--s is always used.
+`gofmt` runs [gofmt](https://golang.org/cmd/gofmt/) in check mode with code
+simplification enabled. It is almost redundant with `goimports` except for `-s`
+which goimports doesn't implement and gofmt doesn't require any external
+package. It has no configuration option. -s is always used.
 
 ```yaml
 gofmt:
@@ -319,10 +318,11 @@ govet:
 
 ### test
 
-`test` runs all tests via go test. Use the specialized check `coverage` when
--cover is desired. Use multiple `test` instances to test multiple times with
-different flags, like with different tags, with or without the race detector,
-etc. It has the following options:
+`test` runs all tests via [go test](https://golang.org/pkg/testing/). Use the
+specialized check `coverage` when -cover is desired. Use multiple `test`
+instances to test multiple times with different flags, like with different tags,
+with or without the [race detector](https://blog.golang.org/race-detector), etc.
+It has the following options:
 
   - `extra_args` (list of string): runs the test with additional arguments like
     -v, -short, -race, etc.
