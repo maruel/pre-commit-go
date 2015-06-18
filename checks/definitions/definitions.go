@@ -105,7 +105,11 @@
 //
 package definitions
 
-import "github.com/maruel/pre-commit-go/internal"
+import (
+	"os"
+
+	"github.com/maruel/pre-commit-go/internal"
+)
 
 // CheckPrerequisite describe a Go package that is needed to run a Check.
 //
@@ -125,7 +129,7 @@ type CheckPrerequisite struct {
 
 // IsPresent returns true if the prerequisite is present on the system.
 func (c *CheckPrerequisite) IsPresent() bool {
-	_, exitCode, _ := internal.Capture("", nil, c.HelpCommand...)
+	_, exitCode, _ := internal.Capture(cwd, nil, c.HelpCommand...)
 	return exitCode == c.ExpectedExitCode
 }
 
@@ -275,4 +279,16 @@ type Custom struct {
 	// Prerequisites are check's prerequisite packages to install first before
 	// running the check, optional.
 	Prerequisites []CheckPrerequisite `yaml:"prerequisites"`
+}
+
+// Private stuff.
+
+var cwd string
+
+func init() {
+	wd, err := os.Getwd()
+	if err != nil {
+		panic(err)
+	}
+	cwd = wd
 }
