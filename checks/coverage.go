@@ -41,14 +41,17 @@ type CoverageSettings struct {
 	MaxCoverage float64 `yaml:"max_coverage"`
 }
 
+// GetDescription implements Check.
 func (c *Coverage) GetDescription() string {
 	return "enforces minimum test coverage on all packages"
 }
 
+// GetName implements Check.
 func (c *Coverage) GetName() string {
 	return "coverage"
 }
 
+// GetPrerequisites implements Check.
 func (c *Coverage) GetPrerequisites() []CheckPrerequisite {
 	if c.isGoverallsEnabled() {
 		return []CheckPrerequisite{{[]string{"goveralls", "-h"}, 2, "github.com/mattn/goveralls"}}
@@ -56,6 +59,7 @@ func (c *Coverage) GetPrerequisites() []CheckPrerequisite {
 	return nil
 }
 
+// Run implements Check.
 func (c *Coverage) Run(change scm.Change) error {
 	profile, err := c.RunProfile(change)
 	if err != nil {
@@ -404,7 +408,7 @@ func (c CoverageProfile) Passes(s *CoverageSettings) error {
 	return nil
 }
 
-// Coverage returns the coverage in % for this profile.
+// CoveragePercent returns the coverage in % for this profile.
 func (c CoverageProfile) CoveragePercent() float64 {
 	if total := c.TotalLines(); total != 0 {
 		return 100. * float64(c.TotalCoveredLines()) / float64(total)

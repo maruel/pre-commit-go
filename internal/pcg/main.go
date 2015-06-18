@@ -2,7 +2,7 @@
 // Use of this source code is governed under the Apache License, Version 2.0
 // that can be found in the LICENSE file.
 
-// pcg: runs pre-commit checks on Go projects.
+// Package pcg runs pre-commit checks on Go projects.
 //
 // See https://github.com/maruel/pre-commit-go for more details.
 package pcg
@@ -635,6 +635,7 @@ func cmdWriteConfig(repo scm.ReadOnlyRepo, config *checks.Config, configPath str
 	return ioutil.WriteFile(configPath, append([]byte(yamlHeader), content...), 0666)
 }
 
+// MainImpl implements pcg.
 func MainImpl() error {
 	if len(os.Args) == 1 {
 		if checks.IsContinuousIntegration() {

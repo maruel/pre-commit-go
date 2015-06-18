@@ -34,10 +34,12 @@ func TestChecksSuccess(t *testing.T) {
 	change := setup(t, td, goodFiles)
 	for _, name := range getKnownChecks() {
 		c := KnownChecks[name]()
-		if name == "custom" {
+		switch name {
+		case "custom":
 			c = &Custom{
-				Description: "foo",
-				Command:     []string{"go", "version"},
+				Description:   "foo",
+				Command:       []string{"go", "version"},
+				CheckExitCode: true,
 				Prerequisites: []CheckPrerequisite{
 					{
 						HelpCommand:      []string{"go", "version"},
@@ -46,20 +48,19 @@ func TestChecksSuccess(t *testing.T) {
 					},
 				},
 			}
-		}
-		if l, ok := c.(sync.Locker); ok {
-			l.Lock()
-			l.Unlock()
-		}
-		if name == "copyright" {
+		case "copyright":
 			cop := c.(*Copyright)
 			cop.Header = "// Foo"
-		} else if name == "coverage" {
+		case "coverage":
 			cov := c.(*Coverage)
 			cov.Global.MinCoverage = 100
 			cov.Global.MaxCoverage = 100
 			cov.PerDirDefault.MinCoverage = 100
 			cov.PerDirDefault.MaxCoverage = 100
+		}
+		if l, ok := c.(sync.Locker); ok {
+			l.Lock()
+			l.Unlock()
 		}
 		if err := c.Run(change); err != nil {
 			t.Errorf("%s failed: %s", c.GetName(), err)
@@ -83,15 +84,24 @@ func TestChecksFailure(t *testing.T) {
 	change := setup(t, td, badFiles)
 	for _, name := range getKnownChecks() {
 		c := KnownChecks[name]()
-		// TODO(maruel): Make golint and govet fail. They are not currently working
-		// at all.
-		if name == "custom" || name == "golint" || name == "govet" {
-			continue
-		}
-		if name == "copyright" {
+		switch name {
+		case "custom":
+			c = &Custom{
+				Description:   "foo",
+				Command:       []string{"go", "invalid"},
+				CheckExitCode: true,
+				Prerequisites: []CheckPrerequisite{
+					{
+						HelpCommand:      []string{"go", "version"},
+						ExpectedExitCode: 0,
+						URL:              "example.com.local",
+					},
+				},
+			}
+		case "copyright":
 			cop := c.(*Copyright)
 			cop.Header = "// Expected header"
-		} else if name == "coverage" {
+		case "coverage":
 			cov := c.(*Coverage)
 			cov.Global.MinCoverage = 100
 			cov.Global.MaxCoverage = 100
@@ -160,12 +170,7 @@ func TestSuccess(t *testing.T) {
 
 // This set of files fails all the tests.
 var badFiles = map[string]string{
-	"foo.go": `// Foo
-
-// +build: incorrect
-
-package foo
-
+	"foo.go": "// Foo\n\n// +build: incorrect\n\npackage foo\n" + `
 import "errors"
 
 // bad description.

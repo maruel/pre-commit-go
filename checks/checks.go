@@ -63,26 +63,32 @@ type Build struct {
 	ExtraArgs []string `yaml:"extra_args"`
 }
 
+// GetDescription implements Check.
 func (b *Build) GetDescription() string {
 	return "builds all packages"
 }
 
+// GetName implements Check.
 func (b *Build) GetName() string {
 	return "build"
 }
 
+// GetPrerequisites implements Check.
 func (b *Build) GetPrerequisites() []CheckPrerequisite {
 	return nil
 }
 
+// Lock implements sync.Locker.
 func (b *Build) Lock() {
 	buildLock.Lock()
 }
 
+// Unlock implements sync.Locker.
 func (b *Build) Unlock() {
 	buildLock.Unlock()
 }
 
+// Run implements Check.
 func (b *Build) Run(change scm.Change) error {
 	// go build accepts packages, not files.
 	// Cannot build concurrently since it leaves files in the tree.
@@ -106,18 +112,22 @@ type Copyright struct {
 	Header string
 }
 
+// GetDescription implements Check.
 func (c *Copyright) GetDescription() string {
 	return "enforces all .go sources have copyright"
 }
 
+// GetName implements Check.
 func (c *Copyright) GetName() string {
 	return "copyright"
 }
 
+// GetPrerequisites implements Check.
 func (c *Copyright) GetPrerequisites() []CheckPrerequisite {
 	return nil
 }
 
+// Run implements Check.
 func (c *Copyright) Run(change scm.Change) error {
 	var badFiles []string
 	prefix := []byte(c.Header)
@@ -142,18 +152,22 @@ func (c *Copyright) Run(change scm.Change) error {
 type Gofmt struct {
 }
 
+// GetDescription implements Check.
 func (g *Gofmt) GetDescription() string {
 	return "enforces all .go sources are formatted with 'gofmt -s'"
 }
 
+// GetName implements Check.
 func (g *Gofmt) GetName() string {
 	return "gofmt"
 }
 
+// GetPrerequisites implements Check.
 func (g *Gofmt) GetPrerequisites() []CheckPrerequisite {
 	return nil
 }
 
+// Run implements Check.
 func (g *Gofmt) Run(change scm.Change) error {
 	// gofmt doesn't return non-zero even if some files need to be updated.
 	// gofmt accepts files, not packages.
@@ -172,18 +186,22 @@ type Test struct {
 	ExtraArgs []string `yaml:"extra_args"`
 }
 
+// GetDescription implements Check.
 func (t *Test) GetDescription() string {
 	return "runs all tests, potentially with options (race detector, different tags, etc)"
 }
 
+// GetName implements Check.
 func (t *Test) GetName() string {
 	return "test"
 }
 
+// GetPrerequisites implements Check.
 func (t *Test) GetPrerequisites() []CheckPrerequisite {
 	return nil
 }
 
+// Run implements Check.
 func (t *Test) Run(change scm.Change) error {
 	// go test accepts packages, not files.
 	var wg sync.WaitGroup
@@ -214,20 +232,24 @@ type Errcheck struct {
 	Ignores string
 }
 
+// GetDescription implements Check.
 func (e *Errcheck) GetDescription() string {
 	return "enforces all calls returning an error are checked using tool 'errcheck'"
 }
 
+// GetName implements Check.
 func (e *Errcheck) GetName() string {
 	return "errcheck"
 }
 
+// GetPrerequisites implements Check.
 func (e *Errcheck) GetPrerequisites() []CheckPrerequisite {
 	return []CheckPrerequisite{
 		{[]string{"errcheck", "-h"}, 2, "github.com/kisielk/errcheck"},
 	}
 }
 
+// Run implements Check.
 func (e *Errcheck) Run(change scm.Change) error {
 	// errcheck accepts packages, not files.
 	args := []string{"errcheck", "-ignore", e.Ignores}
@@ -245,20 +267,24 @@ func (e *Errcheck) Run(change scm.Change) error {
 type Goimports struct {
 }
 
+// GetDescription implements Check.
 func (g *Goimports) GetDescription() string {
 	return "enforces all .go sources are formatted with 'goimports'"
 }
 
+// GetName implements Check.
 func (g *Goimports) GetName() string {
 	return "goimports"
 }
 
+// GetPrerequisites implements Check.
 func (g *Goimports) GetPrerequisites() []CheckPrerequisite {
 	return []CheckPrerequisite{
 		{[]string{"goimports", "-h"}, 2, "golang.org/x/tools/cmd/goimports"},
 	}
 }
 
+// Run implements Check.
 func (g *Goimports) Run(change scm.Change) error {
 	// goimports accepts files, not packages.
 	// goimports doesn't return non-zero even if some files need to be updated.
@@ -277,35 +303,57 @@ type Golint struct {
 	Blacklist []string
 }
 
+// GetDescription implements Check.
 func (g *Golint) GetDescription() string {
 	return "enforces all .go sources passes golint"
 }
 
+// GetName implements Check.
 func (g *Golint) GetName() string {
 	return "golint"
 }
 
+// GetPrerequisites implements Check.
 func (g *Golint) GetPrerequisites() []CheckPrerequisite {
 	return []CheckPrerequisite{
 		{[]string{"golint", "-h"}, 2, "github.com/golang/lint/golint"},
 	}
 }
 
+// Run implements Check.
 func (g *Golint) Run(change scm.Change) error {
-	// golint accepts packages, not files.
-	// golint doesn't return non-zero ever.
-	out, _, _ := capture(change.Repo(), "golint", "./...")
-	result := []string{}
-	for _, line := range strings.Split(string(out), "\n") {
-		for _, b := range g.Blacklist {
-			if strings.Contains(line, b) {
-				continue
+	// - accepts packages, not files.
+	// - doesn't return non-zero ever.
+	// - doesn't like multiple packages per call.
+	// - "." is not recursive.
+	pkgs := change.Changed().Packages()
+	resultsC := make(chan []string, len(pkgs))
+	for _, pkg := range pkgs {
+		go func(p string) {
+			r := []string{}
+			out, _, _ := capture(change.Repo(), "golint", p)
+			for _, line := range strings.Split(string(out), "\n") {
+				if len(line) == 0 {
+					continue
+				}
+				for _, b := range g.Blacklist {
+					if strings.Contains(line, b) {
+						goto skip
+					}
+				}
+				r = append(r, line)
+			skip:
 			}
-		}
-		result = append(result, line)
+			resultsC <- r
+		}(pkg)
 	}
-	if len(result) == 0 {
-		return errors.New(strings.Join(result, "\n"))
+
+	results := []string{}
+	for i := 0; i < len(pkgs); i++ {
+		results = append(results, <-resultsC...)
+	}
+	if len(results) != 0 {
+		return errors.New(strings.Join(results, "\n"))
 	}
 	return nil
 }
@@ -315,34 +363,45 @@ type Govet struct {
 	Blacklist []string
 }
 
+// GetDescription implements Check.
 func (g *Govet) GetDescription() string {
 	return "enforces all .go sources passes go tool vet"
 }
 
+// GetName implements Check.
 func (g *Govet) GetName() string {
 	return "govet"
 }
 
+// GetPrerequisites implements Check.
 func (g *Govet) GetPrerequisites() []CheckPrerequisite {
 	return []CheckPrerequisite{
 		{[]string{"go", "tool", "vet", "-h"}, 1, "golang.org/x/tools/cmd/vet"},
 	}
 }
 
+// Run implements Check.
 func (g *Govet) Run(change scm.Change) error {
-	// govet accepts files, not packages.
+	// - accepts packages, not files.
+	// - returns non-zero on report.
+	// - accepts multiple packages per call.
+	// - "." is recursive.
 	// Ignore the return code since we ignore many errors.
 	out, _, _ := capture(change.Repo(), "go", "tool", "vet", "-all", ".")
 	result := []string{}
 	for _, line := range strings.Split(string(out), "\n") {
+		if len(line) == 0 {
+			continue
+		}
 		for _, b := range g.Blacklist {
 			if strings.Contains(line, b) {
 				continue
 			}
 		}
+		// TODO(maruel): Filter on change.Changed().GoFiles().
 		result = append(result, line)
 	}
-	if len(result) == 0 {
+	if len(result) != 0 {
 		return errors.New(strings.Join(result, "\n"))
 	}
 	return nil
@@ -368,6 +427,7 @@ type Custom struct {
 	Prerequisites []CheckPrerequisite `yaml:"prerequisites"`
 }
 
+// GetDescription implements Check.
 func (c *Custom) GetDescription() string {
 	if c.Description != "" {
 		return c.Description
@@ -375,14 +435,17 @@ func (c *Custom) GetDescription() string {
 	return "runs a custom check from an external package"
 }
 
+// GetName implements Check.
 func (c *Custom) GetName() string {
 	return "custom"
 }
 
+// GetPrerequisites implements Check.
 func (c *Custom) GetPrerequisites() []CheckPrerequisite {
 	return c.Prerequisites
 }
 
+// Run implements Check.
 func (c *Custom) Run(change scm.Change) error {
 	// TODO(maruel): Make what is passed to the command configurable, e.g. one of:
 	// (Changed, Indirect, All) x (GoFiles, Packages, TestPackages)
