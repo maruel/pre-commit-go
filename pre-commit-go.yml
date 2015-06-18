@@ -2,15 +2,16 @@
 # automatically on commit, on push and on continuous integration service after
 # a push or on merge of a pull request.
 #
-# See https://godoc.org/github.com/maruel/pre-commit-go/checks for more
-# information.
+# See https://godoc.org/github.com/maruel/pre-commit-go/checks/definitions for
+# more information.
 
-min_version: 0.4.5
+min_version: 0.4.7
 modes:
   continuous-integration:
     checks:
       build:
-      - extra_args: []
+      - build_all: false
+        extra_args: []
       coverage:
       - use_global_inference: false
         use_coveralls: true
@@ -63,7 +64,8 @@ modes:
   pre-commit:
     checks:
       build:
-      - extra_args: []
+      - build_all: false
+        extra_args: []
       gofmt:
       - {}
       test:

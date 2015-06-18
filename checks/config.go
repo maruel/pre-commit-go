@@ -126,6 +126,7 @@ func New(v string) *Config {
 				Checks: Checks{
 					"build": {
 						&build{
+							BuildAll:  false,
 							ExtraArgs: []string{},
 						},
 					},
@@ -171,6 +172,7 @@ func New(v string) *Config {
 				Checks: Checks{
 					"build": {
 						&build{
+							BuildAll:  false,
 							ExtraArgs: []string{},
 						},
 					},
