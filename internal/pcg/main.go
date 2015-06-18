@@ -380,19 +380,25 @@ func processModes(modeFlag string) ([]checks.Mode, error) {
 	return modes, nil
 }
 
+type sortedChecks []checks.Check
+
+func (s sortedChecks) Len() int           { return len(s) }
+func (s sortedChecks) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
+func (s sortedChecks) Less(i, j int) bool { return s[i].GetName() < s[j].GetName() }
+
 // Commands.
 
 func cmdHelp(repo scm.ReadOnlyRepo, config *checks.Config, usage string) error {
 	s := &struct {
 		Usage        string
 		Max          int
-		NativeChecks []checks.Check
-		OtherChecks  []checks.Check
+		NativeChecks sortedChecks
+		OtherChecks  sortedChecks
 	}{
 		usage,
 		0,
-		[]checks.Check{},
-		[]checks.Check{},
+		sortedChecks{},
+		sortedChecks{},
 	}
 	for name, factory := range checks.KnownChecks {
 		if v := len(name); v > s.Max {
@@ -405,6 +411,8 @@ func cmdHelp(repo scm.ReadOnlyRepo, config *checks.Config, usage string) error {
 			s.OtherChecks = append(s.OtherChecks, c)
 		}
 	}
+	sort.Sort(s.NativeChecks)
+	sort.Sort(s.OtherChecks)
 	return helpText.Execute(os.Stdout, s)
 }
 
@@ -628,7 +636,6 @@ func cmdWriteConfig(repo scm.ReadOnlyRepo, config *checks.Config, configPath str
 }
 
 func MainImpl() error {
-
 	if len(os.Args) == 1 {
 		if checks.IsContinuousIntegration() {
 			os.Args = append(os.Args, "run-hook", "continuous-integration")
