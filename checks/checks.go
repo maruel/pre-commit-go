@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 
@@ -365,6 +366,7 @@ func (g *Golint) Run(change scm.Change) error {
 		results = append(results, <-resultsC...)
 	}
 	if len(results) != 0 {
+		sort.Strings(results)
 		return errors.New("golint failed:\n" + strings.Join(results, "\n"))
 	}
 	return nil
