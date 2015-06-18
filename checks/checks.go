@@ -328,12 +328,24 @@ func (g *Golint) Run(change scm.Change) error {
 	// - "." is not recursive.
 	pkgs := change.Changed().Packages()
 	resultsC := make(chan []string, len(pkgs))
+	files := map[string]bool{}
+	for _, f := range change.Changed().GoFiles() {
+		files[f] = true
+	}
 	for _, pkg := range pkgs {
 		go func(p string) {
 			r := []string{}
 			out, _, _ := capture(change.Repo(), "golint", p)
 			for _, line := range strings.Split(string(out), "\n") {
 				if len(line) == 0 {
+					continue
+				}
+				// TODO(maruel): Will fail with files with ':' in their name.
+				items := strings.SplitN(line, ":", 2)
+				if change.IsIgnored(items[0]) {
+					continue
+				}
+				if _, ok := files[items[0]]; !ok {
 					continue
 				}
 				for _, b := range g.Blacklist {
@@ -353,7 +365,7 @@ func (g *Golint) Run(change scm.Change) error {
 		results = append(results, <-resultsC...)
 	}
 	if len(results) != 0 {
-		return errors.New(strings.Join(results, "\n"))
+		return errors.New("golint failed:\n" + strings.Join(results, "\n"))
 	}
 	return nil
 }
@@ -389,8 +401,20 @@ func (g *Govet) Run(change scm.Change) error {
 	// Ignore the return code since we ignore many errors.
 	out, _, _ := capture(change.Repo(), "go", "tool", "vet", "-all", ".")
 	result := []string{}
+	files := map[string]bool{}
+	for _, f := range change.Changed().GoFiles() {
+		files[f] = true
+	}
 	for _, line := range strings.Split(string(out), "\n") {
 		if len(line) == 0 {
+			continue
+		}
+		// TODO(maruel): Will fail with files with ':' in their name.
+		items := strings.SplitN(line, ":", 2)
+		if change.IsIgnored(items[0]) {
+			continue
+		}
+		if _, ok := files[items[0]]; !ok {
 			continue
 		}
 		for _, b := range g.Blacklist {
@@ -398,11 +422,10 @@ func (g *Govet) Run(change scm.Change) error {
 				continue
 			}
 		}
-		// TODO(maruel): Filter on change.Changed().GoFiles().
 		result = append(result, line)
 	}
 	if len(result) != 0 {
-		return errors.New(strings.Join(result, "\n"))
+		return errors.New("go tool vet failed:\n" + strings.Join(result, "\n"))
 	}
 	return nil
 }
