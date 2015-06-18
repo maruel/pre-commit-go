@@ -50,9 +50,14 @@ func (v *funcVisitor) Visit(node ast.Node) ast.Visitor {
 	case *ast.FuncDecl:
 		start := v.fset.Position(n.Pos())
 		end := v.fset.Position(n.End())
+		name := n.Name.Name
+		if n.Recv != nil {
+			// A method.
+			name = n.Recv.List[0].Type.(*ast.Ident).Name + "." + name
+		}
 		fe := &FuncExtent{
 			FileName:  v.fileName,
-			FuncName:  n.Name.Name,
+			FuncName:  name,
 			StartLine: start.Line,
 			StartCol:  start.Column,
 			EndLine:   end.Line,

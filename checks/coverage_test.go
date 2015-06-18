@@ -146,9 +146,9 @@ func TestCoverageLocal(t *testing.T) {
 	expected := CoverageProfile{
 		{
 			Source:    "foo.go",
-			Line:      2,
-			SourceRef: "foo.go:2",
-			Name:      "Foo",
+			Line:      3,
+			SourceRef: "foo.go:3",
+			Name:      "Type.Foo",
 			Count:     1,
 			Total:     1,
 			Percent:   100,
@@ -222,14 +222,16 @@ func TestCoverageEmpty(t *testing.T) {
 
 var coverageFiles = map[string]string{
 	"foo.go": `package foo
-func Foo() int {
+type Type int
+func (i Type) Foo() int {
   return 1
 }
 `,
 	"foo_test.go": `package foo
 import "testing"
 func TestSuccess(t *testing.T) {
-  if Foo() != 1 {
+	f := Type(0)
+  if f.Foo() != 1 {
     t.Fail()
   }
 }
