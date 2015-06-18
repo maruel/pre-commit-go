@@ -145,6 +145,25 @@ build:
 ```
 
 
+### copyright
+
+`copyright` enforces that all files have a copyright header. If there are files
+that need to be not enforced, add them to the global ignored list. It has the
+following options:
+
+  - `header` (string): Header that all files must have.
+
+Sample:
+
+```yaml
+copyright:
+- header: |-
+    // Copyright 2015 YOUR NAME HERE. All rights reserved.
+    // Use of this source code is governed under the Apache License, Version 2.0
+    // that can be found in the LICENSE file.
+```
+
+
 ### coverage
 
 `coverage` runs all tests with coverage. Each testable package is run with `go

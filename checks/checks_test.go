@@ -51,7 +51,10 @@ func TestChecksSuccess(t *testing.T) {
 			l.Lock()
 			l.Unlock()
 		}
-		if name == "coverage" {
+		if name == "copyright" {
+			cop := c.(*Copyright)
+			cop.Header = "// Foo"
+		} else if name == "coverage" {
 			cov := c.(*Coverage)
 			cov.Global.MinCoverage = 100
 			cov.Global.MaxCoverage = 100
@@ -85,7 +88,10 @@ func TestChecksFailure(t *testing.T) {
 		if name == "custom" || name == "golint" || name == "govet" {
 			continue
 		}
-		if name == "coverage" {
+		if name == "copyright" {
+			cop := c.(*Copyright)
+			cop.Header = "// Expected header"
+		} else if name == "coverage" {
 			cov := c.(*Coverage)
 			cov.Global.MinCoverage = 100
 			cov.Global.MaxCoverage = 100

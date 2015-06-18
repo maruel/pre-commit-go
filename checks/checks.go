@@ -9,6 +9,7 @@
 package checks
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -96,6 +97,43 @@ func (b *Build) Run(change scm.Change) error {
 	}
 	if err != nil {
 		return fmt.Errorf("%s failed: %s", strings.Join(args, " "), err.Error())
+	}
+	return nil
+}
+
+// Copyright looks for copyright headers in all files.
+type Copyright struct {
+	Header string
+}
+
+func (c *Copyright) GetDescription() string {
+	return "enforces all .go sources have copyright"
+}
+
+func (c *Copyright) GetName() string {
+	return "copyright"
+}
+
+func (c *Copyright) GetPrerequisites() []CheckPrerequisite {
+	return nil
+}
+
+func (c *Copyright) Run(change scm.Change) error {
+	var badFiles []string
+	prefix := []byte(c.Header)
+	// This this serially since it's I/O bound and will compete with process
+	// startup of other checks.
+	for _, f := range change.Changed().GoFiles() {
+		if content := change.Content(f); content != nil {
+			if !bytes.HasPrefix(content, prefix) {
+				badFiles = append(badFiles, f)
+			}
+		} else {
+			badFiles = append(badFiles, f)
+		}
+	}
+	if len(badFiles) != 0 {
+		return fmt.Errorf("files have invalid copyright header:\n  %s", strings.Join(badFiles, "\n  "))
 	}
 	return nil
 }
@@ -360,6 +398,7 @@ func (c *Custom) Run(change scm.Change) error {
 // KnownChecks is the map of all known checks per check name.
 var KnownChecks = map[string]func() Check{
 	(&Build{}).GetName():     func() Check { return &Build{} },
+	(&Copyright{}).GetName(): func() Check { return &Copyright{} },
 	(&Coverage{}).GetName():  func() Check { return &Coverage{} },
 	(&Custom{}).GetName():    func() Check { return &Custom{} },
 	(&Errcheck{}).GetName():  func() Check { return &Errcheck{} },
