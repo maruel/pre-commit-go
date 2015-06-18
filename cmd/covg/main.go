@@ -18,8 +18,8 @@ import (
 	"github.com/maruel/pre-commit-go/scm"
 )
 
-// silentError means that the process exit code must be 1.
-var silentError = errors.New("silent error")
+// errSilent means that the process exit code must be 1.
+var errSilent = errors.New("silent error")
 
 // printProfile prints the results to stdout and returns false if the process
 // exit code must be 1.
@@ -94,7 +94,7 @@ func mainImpl() error {
 
 	if *globalFlag {
 		if !printProfile(&c.Global, profile, "") {
-			return silentError
+			return errSilent
 		}
 	} else {
 		for _, pkg := range change.All().TestPackages() {
@@ -103,7 +103,7 @@ func mainImpl() error {
 			if len(subset) != 0 {
 				fmt.Printf("%s\n", d)
 				if !printProfile(&c.Global, subset, "  ") {
-					err = silentError
+					err = errSilent
 				}
 			} else {
 				log.Printf("%s is empty", pkg)
@@ -115,7 +115,7 @@ func mainImpl() error {
 
 func main() {
 	if err := mainImpl(); err != nil {
-		if err != silentError {
+		if err != errSilent {
 			fmt.Fprintf(os.Stderr, "covg: %s\n", err)
 		}
 		os.Exit(1)

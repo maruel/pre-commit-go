@@ -31,6 +31,7 @@ func FindFuncs(fileName string, r io.Reader) ([]*FuncExtent, error) {
 	return visitor.funcs, nil
 }
 
+// FuncExtent is the extent of a functions.
 type FuncExtent struct {
 	FileName  string
 	FuncName  string

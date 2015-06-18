@@ -44,7 +44,8 @@ func (p byFileName) Len() int           { return len(p) }
 func (p byFileName) Less(i, j int) bool { return p[i].FileName < p[j].FileName }
 func (p byFileName) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 
-// MARUEL: Interface to ignore files.
+// IsIgnored is an interface to ignore files.
+// MARUEL
 type IsIgnored interface {
 	IsIgnored(p string) bool
 }
