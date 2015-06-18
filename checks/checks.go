@@ -2,7 +2,7 @@
 // Use of this source code is governed under the Apache License, Version 2.0
 // that can be found in the LICENSE file.
 
-// Package checks implements pre-made checks for pre-commit-go.
+// Package checks implements pre-made checks for pcg.
 //
 // This package defines the `pre-commit-go.yml` configuration file format and
 // implements all the checks.

@@ -88,7 +88,7 @@ with:
 Continous integration support
 -----------------------------
 
-`pre-commit-go` is designed to be used as part of CI. This is [described in its
+`pcg` is designed to be used as part of CI. This is [described in its
 own page](CI_SETUP.md).
 
   - Travis: [![Build Status](https://travis-ci.org/maruel/pre-commit-go.svg?branch=master)](https://travis-ci.org/maruel/pre-commit-go)

@@ -71,8 +71,8 @@ Design
 
 ### Command installrun
 
-`pre-commit-go` defaults to command `installrun` when executed without argument.
-This mode sense the current environment and switches to `run-hook
+`pcg` defaults to command `installrun` when executed without argument. This
+mode sense the current environment and switches to `run-hook
 continuous-integration` if the environment variable `CI=true` is set.
 
 It reinstalls git hooks and checks for prerequisites in this mode. Both are

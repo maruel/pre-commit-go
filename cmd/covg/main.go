@@ -45,7 +45,6 @@ func printProfile(settings *checks.CoverageSettings, profile checks.CoverageProf
 }
 
 func mainImpl() error {
-	// TODO(maruel): Add support to use the same diff as pre-commit-go.
 	minFlag := flag.Float64("min", 1, "minimum expected coverage in %")
 	maxFlag := flag.Float64("max", 100, "maximum expected coverage in %")
 	globalFlag := flag.Bool("g", false, "use global coverage")
@@ -80,7 +79,7 @@ func mainImpl() error {
 		},
 	}
 
-	// TODO(maruel): Run tests ala pre-commit-go; e.g. determine what diff to use.
+	// TODO(maruel): Run tests ala pcg; e.g. determine what diff to use.
 	// TODO(maruel): Run only tests down the current directory when
 	// *globalFlag == false.
 	change, err := repo.Between(scm.Current, scm.GitInitialCommit, ignoreFlag)

@@ -46,8 +46,8 @@ func (m *Mode) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 // Config is the serialized form of pre-commit-go.yml.
 type Config struct {
-	// MinVersion is set to the current pre-commit-go version. Earlier version
-	// will refuse to load this file.
+	// MinVersion is set to the current pcg version. Earlier version will refuse
+	// to load this file.
 	MinVersion string `yaml:"min_version"`
 	// Settings per mode. Settings includes the checks and the maximum allowed
 	// time spent to run them.

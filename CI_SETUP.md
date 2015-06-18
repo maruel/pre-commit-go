@@ -3,9 +3,9 @@ Continous Integration setup
 
 ## Overview
 
-`pre-commit-go` sets itself in mode `run-hook continuous-integration`
-automatically when run without arguments and the environment variable `CI=true`
-is set. It is set on all popular hosted CI services.
+`pcg` sets itself in mode `run-hook continuous-integration` automatically when
+run without arguments and the environment variable `CI=true` is set. It is set
+on all popular hosted CI services.
 
 Here's a sample of CI systems that can be used. Obviously, use 1, not 3 but none
 is perfect:
@@ -30,7 +30,7 @@ is perfect:
         (!?!)
       - `~/.go_project/bin` is not in `$PATH`. You have to add it manually if
         needed. You can work around with
-        `PATH="${HOME}/.go_project/bin:${PATH}" pre-commit-go`
+        `PATH="${HOME}/.go_project/bin:${PATH}" pcg`
     - Can't specify Go version.
     - Can't disable email notifications.
   - Drone: [![Build Status](https://drone.io/github.com/maruel/pre-commit-go/status.png)](https://drone.io/github.com/maruel/pre-commit-go/latest)
@@ -63,8 +63,8 @@ github organizations.
    2. At page "Setup your Build Script", put:
 
     go get -d -t ./...
-    go get github.com/maruel/pre-commit-go
-    pre-commit-go
+    go get github.com/maruel/pre-commit-go/cmd/pcg
+    pcg
 
 
 ### circleci.com
@@ -73,11 +73,11 @@ github organizations.
    1. Visit https://circleci.com and enable your repository.
    2. Click 'Project Settings', 'Dependency Commands' and type:
 
-    go get github.com/maruel/pre-commit-go
+    go get github.com/maruel/pre-commit-go/cmd/pcg
 
    3. Click 'Test Commands' and type:
 
-    pre-commit-go
+    pcg
 
 
 ### coveralls.io
@@ -100,4 +100,4 @@ particular things that take too much time for a user to test. You can configure
 this with adding a pre-commit-go.yml file in your repository. You can also
 enable running lint checks by default on your CI by enabling it explicitly:
 
-    pre-commit-go installrun -M all
+    pcg installrun -m all -a
