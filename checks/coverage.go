@@ -307,7 +307,12 @@ func ProcessProfile(profile CoverageProfile, settings *definitions.CoverageSetti
 	}
 	for _, item := range profile {
 		if item.Percent < 100. {
-			out += fmt.Sprintf("%-*s %-*s %4.1f%% (%d/%d)\n", maxLoc, item.SourceRef, maxName, item.Name, item.Percent, item.Count, item.Total)
+			missing := ""
+			//  Don't bother printing missing lines if coverage is 0.
+			if len(item.Missing) != 0 && item.Percent > 0 {
+				missing = " " + rangeToString(item.Missing)
+			}
+			out += fmt.Sprintf("%-*s %-*s %4.1f%% (%d/%d)%s\n", maxLoc, item.SourceRef, maxName, item.Name, item.Percent, item.Count, item.Total, missing)
 		}
 	}
 	if err := profile.Passes(settings); err != nil {
@@ -400,7 +405,7 @@ func (c CoverageProfile) CoveragePercent() float64 {
 func (c CoverageProfile) TotalCoveredLines() int64 {
 	total := int64(0)
 	for _, f := range c {
-		total += f.Count
+		total += int64(f.Count)
 	}
 	return total
 }
@@ -409,7 +414,7 @@ func (c CoverageProfile) TotalCoveredLines() int64 {
 func (c CoverageProfile) TotalLines() int64 {
 	total := int64(0)
 	for _, f := range c {
-		total += f.Total
+		total += int64(f.Total)
 	}
 	return total
 }
@@ -453,8 +458,10 @@ type FuncCovered struct {
 	Line      int
 	SourceRef string
 	Name      string
-	Count     int64
-	Total     int64
+	Covered   []int
+	Missing   []int
+	Count     int
+	Total     int
 	Percent   float64
 }
 
@@ -596,12 +603,16 @@ func loadProfile(change limitedChange, r io.Reader) (CoverageProfile, error) {
 		// Now match up functions and profile blocks.
 		for _, f := range funcs {
 			// Convert a FuncExtent to a funcCovered.
-			c, t := f.Coverage(profile)
+			covered, missing := f.Coverage(profile)
+			c := len(covered)
+			t := c + len(missing)
 			out = append(out, &FuncCovered{
 				Source:    source,
 				Line:      f.StartLine,
 				SourceRef: fmt.Sprintf("%s:%d", source, f.StartLine),
 				Name:      f.FuncName,
+				Covered:   covered,
+				Missing:   missing,
 				Count:     c,
 				Total:     t,
 				Percent:   100.0 * float64(c) / float64(t),
@@ -637,4 +648,41 @@ func (f *filterPkg) Package() string {
 
 func (f *filterPkg) Content(p string) []byte {
 	return f.change.Content(p)
+}
+
+func rangeToString(r []int) string {
+	if len(r) == 0 {
+		return ""
+	}
+	inRange := false
+	base := r[0]
+	lastM := base
+	ranges := []string{}
+	for i, m := range r {
+		if i == 0 {
+			continue
+		}
+		if m == lastM+1 {
+			// Walk the range.
+			lastM = m
+			inRange = true
+		} else if inRange {
+			// Range.
+			ranges = append(ranges, fmt.Sprintf("%d-%d", base, lastM))
+			lastM = m
+			base = m
+			inRange = false
+		} else {
+			ranges = append(ranges, strconv.Itoa(lastM))
+			lastM = m
+			base = m
+		}
+	}
+	// Print the last number.
+	if inRange {
+		ranges = append(ranges, fmt.Sprintf("%d-%d", base, lastM))
+	} else {
+		ranges = append(ranges, strconv.Itoa(lastM))
+	}
+	return strings.Join(ranges, ",")
 }

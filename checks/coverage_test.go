@@ -43,14 +43,14 @@ func TestCoverageGlobal(t *testing.T) {
 	}
 	profile, err := c.RunProfile(change)
 	ut.AssertEqual(t, nil, err)
-	ut.AssertEqual(t, 55.555555555555555, profile.CoveragePercent())
-	ut.AssertEqual(t, 2, profile.PartiallyCoveredFuncs())
 	expected := CoverageProfile{
 		{
 			Source:    "foo.go",
 			Line:      3,
 			SourceRef: "foo.go:3",
 			Name:      "Type.Foo",
+			Covered:   []int{4}, // The function starts at line 3 but the code is at line 4. In practice, the actual code is at line 5 but there's not enough information to know that.
+			Missing:   []int{},
 			Count:     1,
 			Total:     1,
 			Percent:   100,
@@ -60,21 +60,27 @@ func TestCoverageGlobal(t *testing.T) {
 			Line:      2,
 			SourceRef: "bar/bar.go:2",
 			Name:      "Bar",
+			Covered:   []int{3, 5},
+			Missing:   []int{7, 8},
 			Count:     2,
 			Total:     4,
 			Percent:   50,
 		},
 		{
 			Source:    "bar/bar.go",
-			Line:      10,
-			SourceRef: "bar/bar.go:10",
+			Line:      11,
+			SourceRef: "bar/bar.go:11",
 			Name:      "Baz",
+			Covered:   []int{11, 13},
+			Missing:   []int{16, 17},
 			Count:     2,
 			Total:     4,
 			Percent:   50,
 		},
 	}
 	ut.AssertEqual(t, expected, profile)
+	ut.AssertEqual(t, 55.555555555555555, profile.CoveragePercent())
+	ut.AssertEqual(t, 2, profile.PartiallyCoveredFuncs())
 
 	expected = CoverageProfile{
 		{
@@ -82,15 +88,19 @@ func TestCoverageGlobal(t *testing.T) {
 			Line:      2,
 			SourceRef: "bar/bar.go:2",
 			Name:      "Bar",
+			Covered:   []int{3, 5},
+			Missing:   []int{7, 8},
 			Count:     2,
 			Total:     4,
 			Percent:   50,
 		},
 		{
 			Source:    "bar.go",
-			Line:      10,
-			SourceRef: "bar/bar.go:10",
+			Line:      11,
+			SourceRef: "bar/bar.go:11",
 			Name:      "Baz",
+			Covered:   []int{11, 13},
+			Missing:   []int{16, 17},
 			Count:     2,
 			Total:     4,
 			Percent:   50,
@@ -104,6 +114,8 @@ func TestCoverageGlobal(t *testing.T) {
 			Line:      3,
 			SourceRef: "foo.go:3",
 			Name:      "Type.Foo",
+			Covered:   []int{4},
+			Missing:   []int{},
 			Count:     1,
 			Total:     1,
 			Percent:   100,
@@ -141,14 +153,14 @@ func TestCoverageLocal(t *testing.T) {
 	}
 	profile, err := c.RunProfile(change)
 	ut.AssertEqual(t, nil, err)
-	ut.AssertEqual(t, 55.555555555555555, profile.CoveragePercent())
-	ut.AssertEqual(t, 2, profile.PartiallyCoveredFuncs())
 	expected := CoverageProfile{
 		{
 			Source:    "foo.go",
 			Line:      3,
 			SourceRef: "foo.go:3",
 			Name:      "Type.Foo",
+			Covered:   []int{4}, // The function starts at line 3 but the code is at line 4. In practice, the actual code is at line 5 but there's not enough information to know that.
+			Missing:   []int{},
 			Count:     1,
 			Total:     1,
 			Percent:   100,
@@ -158,21 +170,27 @@ func TestCoverageLocal(t *testing.T) {
 			Line:      2,
 			SourceRef: "bar/bar.go:2",
 			Name:      "Bar",
+			Covered:   []int{3, 5},
+			Missing:   []int{7, 8},
 			Count:     2,
 			Total:     4,
 			Percent:   50,
 		},
 		{
 			Source:    "bar/bar.go",
-			Line:      10,
-			SourceRef: "bar/bar.go:10",
+			Line:      11,
+			SourceRef: "bar/bar.go:11",
 			Name:      "Baz",
+			Covered:   []int{11, 13},
+			Missing:   []int{16, 17},
 			Count:     2,
 			Total:     4,
 			Percent:   50,
 		},
 	}
 	ut.AssertEqual(t, expected, profile)
+	ut.AssertEqual(t, 55.555555555555555, profile.CoveragePercent())
+	ut.AssertEqual(t, 2, profile.PartiallyCoveredFuncs())
 
 	expected = CoverageProfile{
 		{
@@ -180,15 +198,19 @@ func TestCoverageLocal(t *testing.T) {
 			Line:      2,
 			SourceRef: "bar/bar.go:2",
 			Name:      "Bar",
+			Covered:   []int{3, 5},
+			Missing:   []int{7, 8},
 			Count:     2,
 			Total:     4,
 			Percent:   50,
 		},
 		{
 			Source:    "bar.go",
-			Line:      10,
-			SourceRef: "bar/bar.go:10",
+			Line:      11,
+			SourceRef: "bar/bar.go:11",
 			Name:      "Baz",
+			Covered:   []int{11, 13},
+			Missing:   []int{16, 17},
 			Count:     2,
 			Total:     4,
 			Percent:   50,
@@ -197,6 +219,55 @@ func TestCoverageLocal(t *testing.T) {
 	ut.AssertEqual(t, expected, profile.Subset("bar"))
 
 	ut.AssertEqual(t, nil, c.Run(change))
+}
+
+var coverageFiles = map[string]string{
+	"foo.go": `package foo
+type Type int
+func (i *Type) Foo() int {
+
+  return 1 // 5; sadly the lines reported at 3-6 so there's no way to know where the statement is in exactly.
+}
+`,
+	"foo_test.go": `package foo
+import "testing"
+func TestSuccess(t *testing.T) {
+	f := Type(0)
+  if f.Foo() != 1 {
+    t.Fail()
+  }
+}
+`,
+	"bar/bar.go": `package bar
+func Bar(i int) int {
+
+	if j := i; j == 2 {  // 3 is reported instead of 4 because the coverage is 2~4.
+		return 2  // 5
+	}
+	i++
+	return i
+}
+// 10
+func Baz(i int) int {
+	if i == 2 {
+		return 2
+	}
+	// 15 Random comment.
+	i++
+	return i
+}
+`,
+	"bar/bar_test.go": `package bar
+import "testing"
+func TestSuccess(t *testing.T) {
+  if Bar(2) != 2 {
+    t.Fail()
+  }
+  if Baz(2) != 2 {
+    t.Fail()
+  }
+}
+`,
 }
 
 func TestCoveragePrerequisites(t *testing.T) {
@@ -220,48 +291,12 @@ func TestCoverageEmpty(t *testing.T) {
 	ut.AssertEqual(t, &definitions.CoverageSettings{}, c.SettingsForPkg("foo"))
 }
 
-var coverageFiles = map[string]string{
-	"foo.go": `package foo
-type Type int
-func (i *Type) Foo() int {
-  return 1
-}
-`,
-	"foo_test.go": `package foo
-import "testing"
-func TestSuccess(t *testing.T) {
-	f := Type(0)
-  if f.Foo() != 1 {
-    t.Fail()
-  }
-}
-`,
-	"bar/bar.go": `package bar
-func Bar(i int) int {
-	if i == 2 {
-		return 2
-	}
-	i++
-	return i
-}
-
-func Baz(i int) int {
-	if i == 2 {
-		return 2
-	}
-	i++
-	return i
-}
-`,
-	"bar/bar_test.go": `package bar
-import "testing"
-func TestSuccess(t *testing.T) {
-  if Bar(2) != 2 {
-    t.Fail()
-  }
-  if Baz(2) != 2 {
-    t.Fail()
-  }
-}
-`,
+func TestRangeToString(t *testing.T) {
+	t.Parallel()
+	ut.AssertEqual(t, "", rangeToString(nil))
+	ut.AssertEqual(t, "1", rangeToString([]int{1}))
+	ut.AssertEqual(t, "1-2", rangeToString([]int{1, 2}))
+	ut.AssertEqual(t, "1-3", rangeToString([]int{1, 2, 3}))
+	ut.AssertEqual(t, "1,3-4,6-8", rangeToString([]int{1, 3, 4, 6, 7, 8}))
+	ut.AssertEqual(t, "1,3-4,6", rangeToString([]int{1, 3, 4, 6}))
 }

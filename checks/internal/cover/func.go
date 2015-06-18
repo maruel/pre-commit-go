@@ -76,11 +76,16 @@ func (v *funcVisitor) Visit(node ast.Node) ast.Visitor {
 	return v
 }
 
-func (f *FuncExtent) Coverage(profile *Profile) (num, den int64) {
-	// We could avoid making this n^2 overall by doing a single scan and annotating the functions,
-	// but the sizes of the data structures is never very large and the scan is almost instantaneous.
-	var covered, total int64
-	// The blocks are sorted, so we can stop counting as soon as we reach the end of the relevant block.
+// Coverage returns slices of lines covered and lines missing.
+func (f *FuncExtent) Coverage(profile *Profile) ([]int, []int) {
+	// We could avoid making this n^2 overall by doing a single scan and
+	// annotating the functions, but the sizes of the data structures is never
+	// very large and the scan is almost instantaneous.
+	covered := []int{}
+	missing := []int{}
+
+	// The blocks are sorted, so we can stop counting as soon as we reach the end
+	// of the relevant block.
 	for _, b := range profile.Blocks {
 		if b.StartLine > f.EndLine || (b.StartLine == f.EndLine && b.StartCol >= f.EndCol) {
 			// Past the end of the function.
@@ -90,13 +95,40 @@ func (f *FuncExtent) Coverage(profile *Profile) (num, den int64) {
 			// Before the beginning of the function
 			continue
 		}
-		total += int64(b.NumStmt)
+		// TODO(maruel): Properly handle multiple statements per line. For now we
+		// ignore that.
 		if b.Count > 0 {
-			covered += int64(b.NumStmt)
+			// A single statement can cover mulitple lines. For example:
+			//   func Foo() int {
+			//    return 1
+			//
+			//   }
+			// will start at line 1, end at line 4 and will have one statement. We
+			// want to report line 2. Sadly, this means that:
+			//   func Foo() int {
+			//
+			//    return 1
+			//   }
+			// will also report line #2.
+			//
+			// TODO(maruel): The only way to detect this is to process the file,
+			// which is more involved.
+			//
+			// TODO(maruel): For now, ignore b.NumStmt like:
+			//   func Foo() int {
+			//    i := 1
+			//    return i
+			//   }
+			if b.EndLine > b.StartLine+1 {
+				covered = append(covered, b.StartLine+1)
+			} else {
+				covered = append(covered, b.StartLine)
+			}
+		} else {
+			for l := 0; l < b.NumStmt; l++ {
+				missing = append(missing, b.StartLine+l)
+			}
 		}
 	}
-	if total == 0 {
-		total = 1 // Avoid zero denominator.
-	}
-	return covered, total
+	return covered, missing
 }
