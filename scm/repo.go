@@ -219,14 +219,14 @@ func (g *git) Between(recent, old Commit, ignorePatterns IgnorePatterns) (Change
 
 	// Gather list of all files concurrently.
 	allFilesCh := make(chan []string)
-	go func() {
-		allFilesCh <- g.captureList(nil, ignorePatterns, "ls-files", "-z")
-	}()
 	var allFiles []string
 
 	// Gather list of changes files.
 	var files []string
 	if recent == Current {
+		go func() {
+			allFilesCh <- g.captureList(nil, ignorePatterns, "ls-files", "-z")
+		}()
 		if old == GitInitialCommit {
 			// Diff against initial commit.
 			allFiles = <-allFilesCh
@@ -235,12 +235,13 @@ func (g *git) Between(recent, old Commit, ignorePatterns IgnorePatterns) (Change
 			// Gather list of unstaged file plus diff.
 			unstagedCh := make(chan []string)
 			go func() {
+				// TODO(maruel): A a test case, not 100% sure it's needed.
 				unstagedCh <- g.unstaged()
 			}()
 
 			// Need to remove duplicates.
 			filesSet := map[string]bool{}
-			for _, f := range g.captureList(nil, ignorePatterns, "diff-tree", "--no-commit-id", "--name-only", "-z", "-r", string(old)) {
+			for _, f := range g.captureList(nil, ignorePatterns, "diff-tree", "--no-commit-id", "--name-only", "-z", "-r", "--diff-filter=ACMRT", "--no-renames", "--no-ext-diff", string(old), "HEAD") {
 				filesSet[f] = true
 			}
 			for _, f := range <-unstagedCh {
@@ -253,10 +254,13 @@ func (g *git) Between(recent, old Commit, ignorePatterns IgnorePatterns) (Change
 			allFiles = <-allFilesCh
 		}
 	} else {
+		go func() {
+			allFilesCh <- g.captureList(nil, ignorePatterns, "ls-files", "-z", "--with-tree="+string(recent))
+		}()
 		if !g.isValid(recent) {
 			return nil, errors.New("invalid old commit")
 		}
-		files = g.captureList(nil, ignorePatterns, "diff-tree", "--no-commit-id", "--name-only", "-z", "-r", string(recent), string(old))
+		files = g.captureList(nil, ignorePatterns, "diff-tree", "--no-commit-id", "--name-only", "-z", "-r", "--diff-filter=ACMRT", "--no-renames", "--no-ext-diff", string(old), string(recent))
 		allFiles = <-allFilesCh
 	}
 	if len(files) == 0 {
