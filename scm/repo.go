@@ -132,6 +132,8 @@ type repo interface {
 	untracked() []string
 	// unstaged returns the list with changes not in the staging index.
 	unstaged() []string
+	// staged returns the list of files in the index.
+	staged() []string
 }
 
 func getRepo(wd, gopath string) (repo, error) {
@@ -208,6 +210,10 @@ func (g *git) unstaged() []string {
 	return g.captureList(nil, nil, "diff", "--name-only", "--no-color", "--no-ext-diff", "-z")
 }
 
+func (g *git) staged() []string {
+	return g.captureList(nil, nil, "diff", "--name-only", "--no-color", "--no-ext-diff", "--cached", "--diff-filter=ACMRT", "-z")
+}
+
 func (g *git) Between(recent, old Commit, ignorePatterns IgnorePatterns) (Change, error) {
 	log.Printf("Between(%q, %q, %s)", recent, old, ignorePatterns)
 	if old == Current {
@@ -235,8 +241,11 @@ func (g *git) Between(recent, old Commit, ignorePatterns IgnorePatterns) (Change
 			// Gather list of unstaged file plus diff.
 			unstagedCh := make(chan []string)
 			go func() {
-				// TODO(maruel): A a test case, not 100% sure it's needed.
 				unstagedCh <- g.unstaged()
+			}()
+			stagedCh := make(chan []string)
+			go func() {
+				stagedCh <- g.staged()
 			}()
 
 			// Need to remove duplicates.
@@ -245,6 +254,9 @@ func (g *git) Between(recent, old Commit, ignorePatterns IgnorePatterns) (Change
 				filesSet[f] = true
 			}
 			for _, f := range <-unstagedCh {
+				filesSet[f] = true
+			}
+			for _, f := range <-stagedCh {
 				filesSet[f] = true
 			}
 			files = make([]string, 0, len(filesSet))

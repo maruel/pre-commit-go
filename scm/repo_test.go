@@ -119,7 +119,9 @@ func TestGetRepoGitSlowSuccess(t *testing.T) {
 	// Add a file then remove it. Make sure the file doesn't show up.
 	check(t, r, []string{}, []string{})
 	write(t, tmpDir, "src/foo/deleted/deleted.go", "package deleted\n")
+	ut.AssertEqual(t, []string{}, r.staged())
 	run(t, tmpDir, nil, "add", "src/foo/deleted/deleted.go")
+	ut.AssertEqual(t, []string{"src/foo/deleted/deleted.go"}, r.staged())
 	deterministicCommit(t, tmpDir)
 	commitWithDeleted := assertHEAD(t, r, "c9b5f312ec8eefb58beeaf8c3684bb832fdefef7")
 	c, err = r.Between(commitWithDeleted, GitInitialCommit, nil)
@@ -135,6 +137,7 @@ func TestGetRepoGitSlowSuccess(t *testing.T) {
 
 	// Do the delete.
 	run(t, tmpDir, nil, "rm", "src/foo/deleted/deleted.go")
+	ut.AssertEqual(t, []string{}, r.staged())
 	deterministicCommit(t, tmpDir)
 	commitAfterDelete := assertHEAD(t, r, "8aacb7c27c4d012c56bd861d2a8bc4da8ea7ee73")
 	c, err = r.Between(commitAfterDelete, GitInitialCommit, nil)
