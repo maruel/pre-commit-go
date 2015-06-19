@@ -2,7 +2,7 @@
 // Use of this source code is governed under the Apache License, Version 2.0
 // that can be found in the LICENSE file.
 
-// covg: yet another coverage tool.
+// covg: yet another coverage tool. Supports global inference.
 package main
 
 import (

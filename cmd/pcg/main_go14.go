@@ -9,7 +9,7 @@
 // Ref:
 // https://docs.google.com/document/d/1At2Ls5_fhJQ59kDK2DFVhFu3g5mATSXqqV5QrxinasI/preview
 
-package pcg
+package main
 
 import "runtime"
 

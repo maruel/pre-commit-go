@@ -2,7 +2,7 @@
 // Use of this source code is governed under the Apache License, Version 2.0
 // that can be found in the LICENSE file.
 
-// Package scm implements repository management.
+// Package scm implements repository management specific for Go projects.
 package scm
 
 import (

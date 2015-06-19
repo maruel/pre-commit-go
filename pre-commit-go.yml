@@ -22,7 +22,7 @@ modes:
           min_coverage: 80
           max_coverage: 90
         per_dir:
-          internal/pcg: null
+          cmd/pcg: null
           scm:
             min_coverage: 60
             max_coverage: 100
@@ -93,7 +93,7 @@ modes:
           min_coverage: 70
           max_coverage: 90
         per_dir:
-          internal/pcg: null
+          cmd/pcg: null
           scm:
             min_coverage: 60
             max_coverage: 100
