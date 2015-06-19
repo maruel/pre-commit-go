@@ -210,7 +210,11 @@ coverage:
   per_dir_default:
     min_coverage: 50
     max_coverage: 100
-  per_dir: {}
+  per_dir:
+    internal:
+      min_coverage: 90
+      max_coverage: 100
+    third_party: null
 ```
 
 ### custom
@@ -219,6 +223,9 @@ Any number of custom checks can be specified in any mode. A custom check can be
 defined by adding a `custom` check in one of the modes.  Here's an example
 running `sample-pre-commit-go-custom-check` on the tree in mode
 continuous-integration:
+
+*Warning*: `custom` is a work in progress and incomplete. Suggestions are
+appreciated.
 
 ```yaml
 modes:

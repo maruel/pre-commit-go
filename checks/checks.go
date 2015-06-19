@@ -12,10 +12,12 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/maruel/pre-commit-go/internal"
 	"github.com/maruel/pre-commit-go/scm"
@@ -213,7 +215,13 @@ func (t *Test) Run(change scm.Change) error {
 		go func(testPkg string) {
 			defer wg.Done()
 			args := append([]string{"go", "test"}, t.ExtraArgs...)
-			out, exitCode, _ := capture(change.Repo(), append(args, testPkg)...)
+			args = append(args, testPkg)
+			start := time.Now()
+			out, exitCode, _ := capture(change.Repo(), args...)
+			duration := time.Since(start)
+			if duration > time.Second {
+				log.Printf("%s was slow: %s", args, round(duration, time.Millisecond))
+			}
 			if exitCode != 0 {
 				errs <- fmt.Errorf("%s failed:\n%s", strings.Join(args, " "), out)
 			}
@@ -256,6 +264,10 @@ func (e *Errcheck) Run(change scm.Change) error {
 	args := []string{"errcheck", "-ignore", e.Ignores}
 	out, _, err := capture(change.Repo(), append(args, change.Changed().Packages()...)...)
 	if len(out) != 0 {
+		// TODO(maruel): Process output so paths are relative from
+		// change.Repo().Root().
+		// TODO(maruel): Filter out files in change.IsIgnored() and not in
+		// change.Changed().GoFiles()
 		return fmt.Errorf("%s failed:\n%s", strings.Join(args, " "), out)
 	}
 	if err != nil {

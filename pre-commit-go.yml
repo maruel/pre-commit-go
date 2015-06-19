@@ -19,9 +19,11 @@ modes:
           min_coverage: 50
           max_coverage: 90
         per_dir_default:
-          min_coverage: 0
-          max_coverage: 0
-        per_dir: {}
+          min_coverage: 70
+          max_coverage: 80
+        per_dir:
+          internal/pcg: null
+    third_party: null
       custom:
       - display_name: sample-pre-commit-go-custom-check
         description: runs the check sample-pre-commit-go-custom-check on this repository
@@ -86,9 +88,10 @@ modes:
           min_coverage: 50
           max_coverage: 90
         per_dir_default:
-          min_coverage: 0
-          max_coverage: 0
-        per_dir: {}
+          min_coverage: 70
+          max_coverage: 80
+        per_dir:
+          internal/pcg: null
       goimports:
       - {}
       test:

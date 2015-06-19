@@ -7,6 +7,7 @@ package checks
 import (
 	"os"
 	"strings"
+	"time"
 
 	"github.com/maruel/pre-commit-go/internal"
 	"github.com/maruel/pre-commit-go/scm"
@@ -52,4 +53,14 @@ func rsplitn(s, sep string, n int) []string {
 // capture sets GOPATH.
 func capture(r scm.ReadOnlyRepo, args ...string) (string, int, error) {
 	return internal.Capture(r.Root(), []string{"GOPATH=" + r.GOPATH()}, args...)
+}
+
+// round rounds a time.Duration at round.
+func round(value time.Duration, resolution time.Duration) time.Duration {
+	if value < 0 {
+		value -= resolution / 2
+	} else {
+		value += resolution / 2
+	}
+	return value / resolution * resolution
 }

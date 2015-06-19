@@ -20,6 +20,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/maruel/pre-commit-go/checks/internal/cover"
 	"github.com/maruel/pre-commit-go/internal"
@@ -174,7 +175,12 @@ func (c *Coverage) RunGlobal(change scm.Change, tmpDir string) (CoverageProfile,
 				"-coverprofile", f,
 				testPkg,
 			}
+			start := time.Now()
 			out, exitCode, err := capture(change.Repo(), args...)
+			duration := time.Since(start)
+			if duration > time.Second {
+				log.Printf("%s was slow: %s", args, round(duration, time.Millisecond))
+			}
 			if exitCode != 0 {
 				err = fmt.Errorf("%s %s failed:\n%s", strings.Join(args, " "), testPkg, out)
 			}
@@ -240,7 +246,12 @@ func (c *Coverage) RunLocal(change scm.Change, tmpDir string) (CoverageProfile, 
 				"-coverprofile", p,
 				testPkg,
 			}
+			start := time.Now()
 			out, exitCode, _ := capture(change.Repo(), args...)
+			duration := time.Since(start)
+			if duration > time.Second {
+				log.Printf("%s was slow: %s", args, round(duration, time.Millisecond))
+			}
 			if exitCode != 0 {
 				results <- &result{err: fmt.Errorf("%s %s failed:\n%s", strings.Join(args, " "), testPkg, out)}
 				return
