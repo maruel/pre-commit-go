@@ -20,7 +20,7 @@ modes:
           max_coverage: 90
         per_dir_default:
           min_coverage: 70
-          max_coverage: 80
+          max_coverage: 90
         per_dir:
           internal/pcg: null
       custom:
@@ -88,7 +88,7 @@ modes:
           max_coverage: 90
         per_dir_default:
           min_coverage: 70
-          max_coverage: 80
+          max_coverage: 90
         per_dir:
           internal/pcg: null
       goimports:
