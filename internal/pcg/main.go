@@ -237,6 +237,7 @@ func runChecks(config *checks.Config, change scm.Change, modes []checks.Mode, pr
 			log.Printf("... %s in %1.2fs%s", check.GetName(), duration.Seconds(), suffix)
 			if err != nil {
 				errs <- err
+				return
 			}
 			// A check that took too long is a check that failed.
 			if duration > time.Duration(maxDuration)*time.Second {
