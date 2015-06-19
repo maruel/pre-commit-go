@@ -1,11 +1,48 @@
 Tutorial
 ========
 
-Also see the full [configuration](CONFIGURATION.md) page.
+
+Getting started
+---------------
+
+`pcg` installs itself virally; once run in a git repository, it sets itself up
+to be run automatically via git hooks on commit and on push. You only need to do
+something if you want to tweak its default behavior.
+
+That's it! Start coding!
 
 
-Forcing update for clients
---------------------------
+Removing
+--------
+
+```
+export FOO="$(git rev-parse --git-dir)"
+rm "${FOO}/hooks/pre-commit" "${FOO}/hooks/pre-push"
+export -n FOO
+```
+
+
+Configuration
+-------------
+
+See the full [configuration](CONFIGURATION.md) page for the full details.
+
+
+### Getting started with configuration
+
+First generate the default version with:
+
+```
+pcg writeconfig
+```
+
+then edit this file as needed by adding, removing checks and ignoring more
+files. See the [configuration file
+location](CONFIGURATION.md#configuration-file-location) to know where to put
+this file, if you do not want to commit it in your repository.
+
+
+### Forcing update for clients
 
 `pcg` refuses to load a file if its version is less than what is specified by
 `min_version`. So to force all the contributors to upgrade to the current
@@ -15,8 +52,7 @@ current version:
     pcg writeconfig
 
 
-Build on pre-commit only
-------------------------
+### Build on pre-commit only
 
 A trivial configuration that would build everything on commit only would look
 like:
@@ -34,8 +70,7 @@ This is useful for small projects that do not contain tests. It ensures that at
 least the code compiles before commit.
 
 
-Test with -race
----------------
+### Test with -race
 
 To run tests with `-race` but only short test to reduce the amount of time taken
 to push but runs more on CI, use:
