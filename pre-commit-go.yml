@@ -24,7 +24,7 @@ modes:
         per_dir:
           internal/pcg: null
           scm:
-            min_coverage: 90
+            min_coverage: 60
             max_coverage: 100
       custom:
       - display_name: sample-pre-commit-go-custom-check
@@ -95,7 +95,7 @@ modes:
         per_dir:
           internal/pcg: null
           scm:
-            min_coverage: 90
+            min_coverage: 60
             max_coverage: 100
       goimports:
       - {}
