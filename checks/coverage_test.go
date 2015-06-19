@@ -48,10 +48,9 @@ func TestCoverageGlobal(t *testing.T) {
 			Line:      3,
 			SourceRef: "foo.go:3",
 			Name:      "Type.Foo",
-			Covered:   []int{4}, // The function starts at line 3 but the code is at line 4. In practice, the actual code is at line 5 but there's not enough information to know that.
+			Covered:   2,
 			Missing:   []int{},
-			Count:     1,
-			Total:     1,
+			Total:     2,
 			Percent:   100,
 		},
 		{
@@ -59,9 +58,8 @@ func TestCoverageGlobal(t *testing.T) {
 			Line:      2,
 			SourceRef: "bar/bar.go:2",
 			Name:      "Bar",
-			Covered:   []int{3, 5},
+			Covered:   2,
 			Missing:   []int{7, 8},
-			Count:     2,
 			Total:     4,
 			Percent:   50,
 		},
@@ -70,15 +68,14 @@ func TestCoverageGlobal(t *testing.T) {
 			Line:      11,
 			SourceRef: "bar/bar.go:11",
 			Name:      "Baz",
-			Covered:   []int{11, 13},
+			Covered:   2,
 			Missing:   []int{16, 17},
-			Count:     2,
 			Total:     4,
 			Percent:   50,
 		},
 	}
 	ut.AssertEqual(t, expected, profile)
-	ut.AssertEqual(t, 55.555555555555555, profile.CoveragePercent())
+	ut.AssertEqual(t, 60., profile.CoveragePercent())
 	ut.AssertEqual(t, 2, profile.PartiallyCoveredFuncs())
 
 	expected = CoverageProfile{
@@ -87,9 +84,8 @@ func TestCoverageGlobal(t *testing.T) {
 			Line:      2,
 			SourceRef: "bar/bar.go:2",
 			Name:      "Bar",
-			Covered:   []int{3, 5},
+			Covered:   2,
 			Missing:   []int{7, 8},
-			Count:     2,
 			Total:     4,
 			Percent:   50,
 		},
@@ -98,9 +94,8 @@ func TestCoverageGlobal(t *testing.T) {
 			Line:      11,
 			SourceRef: "bar/bar.go:11",
 			Name:      "Baz",
-			Covered:   []int{11, 13},
+			Covered:   2,
 			Missing:   []int{16, 17},
-			Count:     2,
 			Total:     4,
 			Percent:   50,
 		},
@@ -113,10 +108,9 @@ func TestCoverageGlobal(t *testing.T) {
 			Line:      3,
 			SourceRef: "foo.go:3",
 			Name:      "Type.Foo",
-			Covered:   []int{4},
+			Covered:   2,
 			Missing:   []int{},
-			Count:     1,
-			Total:     1,
+			Total:     2,
 			Percent:   100,
 		},
 	}
@@ -158,10 +152,9 @@ func TestCoverageLocal(t *testing.T) {
 			Line:      3,
 			SourceRef: "foo.go:3",
 			Name:      "Type.Foo",
-			Covered:   []int{4}, // The function starts at line 3 but the code is at line 4. In practice, the actual code is at line 5 but there's not enough information to know that.
+			Covered:   2,
 			Missing:   []int{},
-			Count:     1,
-			Total:     1,
+			Total:     2,
 			Percent:   100,
 		},
 		{
@@ -169,9 +162,8 @@ func TestCoverageLocal(t *testing.T) {
 			Line:      2,
 			SourceRef: "bar/bar.go:2",
 			Name:      "Bar",
-			Covered:   []int{3, 5},
+			Covered:   2,
 			Missing:   []int{7, 8},
-			Count:     2,
 			Total:     4,
 			Percent:   50,
 		},
@@ -180,15 +172,14 @@ func TestCoverageLocal(t *testing.T) {
 			Line:      11,
 			SourceRef: "bar/bar.go:11",
 			Name:      "Baz",
-			Covered:   []int{11, 13},
+			Covered:   2,
 			Missing:   []int{16, 17},
-			Count:     2,
 			Total:     4,
 			Percent:   50,
 		},
 	}
 	ut.AssertEqual(t, expected, profile)
-	ut.AssertEqual(t, 55.555555555555555, profile.CoveragePercent())
+	ut.AssertEqual(t, 60., profile.CoveragePercent())
 	ut.AssertEqual(t, 2, profile.PartiallyCoveredFuncs())
 
 	expected = CoverageProfile{
@@ -197,9 +188,8 @@ func TestCoverageLocal(t *testing.T) {
 			Line:      2,
 			SourceRef: "bar/bar.go:2",
 			Name:      "Bar",
-			Covered:   []int{3, 5},
+			Covered:   2,
 			Missing:   []int{7, 8},
-			Count:     2,
 			Total:     4,
 			Percent:   50,
 		},
@@ -208,9 +198,8 @@ func TestCoverageLocal(t *testing.T) {
 			Line:      11,
 			SourceRef: "bar/bar.go:11",
 			Name:      "Baz",
-			Covered:   []int{11, 13},
+			Covered:   2,
 			Missing:   []int{16, 17},
-			Count:     2,
 			Total:     4,
 			Percent:   50,
 		},
@@ -225,7 +214,8 @@ var coverageFiles = map[string]string{
 type Type int
 func (i *Type) Foo() int {
 
-  return 1 // 5; sadly the lines reported at 3-6 so there's no way to know where the statement is in exactly.
+	j := int(*i) // 5
+	return j+1
 }
 `,
 	"foo_test.go": `package foo

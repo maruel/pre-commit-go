@@ -77,12 +77,12 @@ func (v *funcVisitor) Visit(node ast.Node) ast.Visitor {
 	return v
 }
 
-// Coverage returns slices of lines covered and lines missing.
-func (f *FuncExtent) Coverage(profile *Profile) ([]int, []int) {
+// Coverage returns number of lines covered and the slice of lines missing.
+func (f *FuncExtent) Coverage(profile *Profile) (int, []int) {
 	// We could avoid making this n^2 overall by doing a single scan and
 	// annotating the functions, but the sizes of the data structures is never
 	// very large and the scan is almost instantaneous.
-	covered := []int{}
+	covered := 0
 	missing := []int{}
 
 	// The blocks are sorted, so we can stop counting as soon as we reach the end
@@ -120,11 +120,9 @@ func (f *FuncExtent) Coverage(profile *Profile) ([]int, []int) {
 			//    i := 1
 			//    return i
 			//   }
-			if b.EndLine > b.StartLine+1 {
-				covered = append(covered, b.StartLine+1)
-			} else {
-				covered = append(covered, b.StartLine)
-			}
+			//
+			// So for now, just count the number of statments.
+			covered += b.NumStmt
 		} else {
 			for l := 0; l < b.NumStmt; l++ {
 				missing = append(missing, b.StartLine+l)

@@ -338,7 +338,7 @@ func ProcessProfile(profile CoverageProfile, settings *CoverageSettings) (string
 			if len(item.Missing) != 0 && item.Percent > 0 {
 				missing = " " + rangeToString(item.Missing)
 			}
-			out += fmt.Sprintf("%-*s %-*s %4.1f%% (%d/%d)%s\n", maxLoc, item.SourceRef, maxName, item.Name, item.Percent, item.Count, item.Total, missing)
+			out += fmt.Sprintf("%-*s %-*s %4.1f%% (%d/%d)%s\n", maxLoc, item.SourceRef, maxName, item.Name, item.Percent, item.Covered, item.Total, missing)
 		}
 	}
 	if err := profile.Passes(settings); err != nil {
@@ -428,19 +428,19 @@ func (c CoverageProfile) CoveragePercent() float64 {
 }
 
 // TotalCoveredLines returns the number of lines that were covered.
-func (c CoverageProfile) TotalCoveredLines() int64 {
-	total := int64(0)
+func (c CoverageProfile) TotalCoveredLines() int {
+	total := 0
 	for _, f := range c {
-		total += int64(f.Count)
+		total += f.Covered
 	}
 	return total
 }
 
 // TotalLines returns the total number of source lines found.
-func (c CoverageProfile) TotalLines() int64 {
-	total := int64(0)
+func (c CoverageProfile) TotalLines() int {
+	total := 0
 	for _, f := range c {
-		total += int64(f.Total)
+		total += f.Total
 	}
 	return total
 }
@@ -449,7 +449,7 @@ func (c CoverageProfile) TotalLines() int64 {
 func (c CoverageProfile) NonCoveredFuncs() int {
 	total := 0
 	for _, f := range c {
-		if f.Count == 0 {
+		if f.Covered == 0 {
 			total++
 		}
 	}
@@ -460,7 +460,7 @@ func (c CoverageProfile) NonCoveredFuncs() int {
 func (c CoverageProfile) PartiallyCoveredFuncs() int {
 	total := 0
 	for _, f := range c {
-		if f.Count != 0 && f.Total != f.Count {
+		if f.Covered != 0 && f.Total != f.Covered {
 			total++
 		}
 	}
@@ -471,7 +471,7 @@ func (c CoverageProfile) PartiallyCoveredFuncs() int {
 func (c CoverageProfile) CoveredFuncs() int {
 	total := 0
 	for _, f := range c {
-		if f.Total == f.Count {
+		if f.Total == f.Covered {
 			total++
 		}
 	}
@@ -484,9 +484,8 @@ type FuncCovered struct {
 	Line      int
 	SourceRef string
 	Name      string
-	Covered   []int
+	Covered   int
 	Missing   []int
-	Count     int
 	Total     int
 	Percent   float64
 }
@@ -630,8 +629,7 @@ func loadProfile(change limitedChange, r io.Reader) (CoverageProfile, error) {
 		for _, f := range funcs {
 			// Convert a FuncExtent to a funcCovered.
 			covered, missing := f.Coverage(profile)
-			c := len(covered)
-			t := c + len(missing)
+			t := covered + len(missing)
 			out = append(out, &FuncCovered{
 				Source:    source,
 				Line:      f.StartLine,
@@ -639,9 +637,8 @@ func loadProfile(change limitedChange, r io.Reader) (CoverageProfile, error) {
 				Name:      f.FuncName,
 				Covered:   covered,
 				Missing:   missing,
-				Count:     c,
 				Total:     t,
-				Percent:   100.0 * float64(c) / float64(t),
+				Percent:   100.0 * float64(covered) / float64(t),
 			})
 		}
 	}
