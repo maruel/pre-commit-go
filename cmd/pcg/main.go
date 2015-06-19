@@ -341,7 +341,7 @@ func runPrePush(repo scm.Repo, config *checks.Config) (err error) {
 		if from == gitNilCommit {
 			from = scm.GitInitialCommit
 		}
-		change, err := repo.Between(from, to, config.IgnorePatterns)
+		change, err := repo.Between(to, from, config.IgnorePatterns)
 		if err != nil {
 			return err
 		}
