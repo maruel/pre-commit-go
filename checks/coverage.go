@@ -11,6 +11,7 @@ package checks
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -70,10 +71,10 @@ func (c *Coverage) Run(change scm.Change) error {
 	if c.UseGlobalInference {
 		out, err := ProcessProfile(profile, &c.Global)
 		if out != "" {
-			log.Printf("Results:\n%s", out)
+			log.Printf("coverage for %s:\n%s\n", change.Repo().Root(), out)
 		}
 		if err != nil {
-			return fmt.Errorf("coverage: %s", err)
+			return fmt.Errorf("coverage for %s: %s", change.Repo().Root(), err)
 		}
 	} else {
 		for _, testPkg := range change.Indirect().TestPackages() {
@@ -84,10 +85,10 @@ func (c *Coverage) Run(change scm.Change) error {
 			}
 			out, err := ProcessProfile(p, settings)
 			if out != "" {
-				log.Printf("Results:\n%s", out)
+				log.Printf("%s:\n%s\n", testPkg, out)
 			}
 			if err != nil {
-				return fmt.Errorf("coverage: %s", err)
+				return fmt.Errorf("coverage for %s: %s", testPkg, err)
 			}
 		}
 	}
@@ -341,12 +342,11 @@ func ProcessProfile(profile CoverageProfile, settings *CoverageSettings) (string
 			out += fmt.Sprintf("%-*s %-*s %4.1f%% (%d/%d)%s\n", maxLoc, item.SourceRef, maxName, item.Name, item.Percent, item.Covered, item.Total, missing)
 		}
 	}
-	if err := profile.Passes(settings); err != nil {
-		return out, err
+	result, success := profile.Passes(settings)
+	out += result + "\n"
+	if !success {
+		return out, errors.New(result)
 	}
-	out += fmt.Sprintf(
-		"coverage: %3.1f%% (%d/%d) >= %.1f%%; Functions: %d untested / %d partially / %d completely\n",
-		profile.CoveragePercent(), profile.TotalCoveredLines(), profile.TotalLines(), settings.MinCoverage, profile.NonCoveredFuncs(), profile.PartiallyCoveredFuncs(), profile.CoveredFuncs())
 	return out, nil
 }
 
@@ -405,18 +405,18 @@ func (c CoverageProfile) Subset(p string) CoverageProfile {
 	return out
 }
 
-// Passes returns nil if it passes the settings otherwise returns an error.
-func (c CoverageProfile) Passes(s *CoverageSettings) error {
-	total := c.CoveragePercent()
-	if total < s.MinCoverage {
-		return fmt.Errorf("%3.1f%% (%d/%d) < %.1f%%; Functions: %d untested / %d partially / %d completely",
-			total, c.TotalCoveredLines(), c.TotalLines(), s.MinCoverage, c.NonCoveredFuncs(), c.PartiallyCoveredFuncs(), c.CoveredFuncs())
+// Passes returns a summary as if it passes the settings and true if it passes.
+func (c CoverageProfile) Passes(s *CoverageSettings) (string, bool) {
+	percent := c.CoveragePercent()
+	prefix := fmt.Sprintf("%3.1f%% (%d/%d)", percent, c.TotalCoveredLines(), c.TotalLines())
+	suffix := fmt.Sprintf("; Functions: %d untested / %d partially / %d completely", c.NonCoveredFuncs(), c.PartiallyCoveredFuncs(), c.CoveredFuncs())
+	if percent < s.MinCoverage {
+		return fmt.Sprintf("%s < %.1f%% (min)%s", prefix, s.MinCoverage, suffix), false
 	}
-	if s.MaxCoverage > 0 && total > s.MaxCoverage {
-		return fmt.Errorf("%3.1f%% (%d/%d) > %.1f%%; Functions: %d untested / %d partially / %d completely",
-			total, c.TotalCoveredLines(), c.TotalLines(), s.MaxCoverage, c.NonCoveredFuncs(), c.PartiallyCoveredFuncs(), c.CoveredFuncs())
+	if s.MaxCoverage > 0 && percent > s.MaxCoverage {
+		return fmt.Sprintf("%s > %.1f%% (max)%s", prefix, s.MaxCoverage, suffix), false
 	}
-	return nil
+	return fmt.Sprintf("%s >= %.1f%%%s", prefix, s.MinCoverage, suffix), true
 }
 
 // CoveragePercent returns the coverage in % for this profile.

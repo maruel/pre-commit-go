@@ -38,7 +38,6 @@ func printProfile(settings *checks.CoverageSettings, profile checks.CoverageProf
 	}
 	fmt.Printf("%s", out)
 	if err != nil {
-		fmt.Printf("%s%s\n", indent, err)
 		return false
 	}
 	return true
