@@ -650,7 +650,7 @@ func mainImpl() error {
 	copy(os.Args[1:], os.Args[2:])
 	os.Args = os.Args[:len(os.Args)-1]
 
-	verboseFlag := flag.Bool("v", checks.IsContinuousIntegration(), "enables verbose logging output")
+	verboseFlag := flag.Bool("v", checks.IsContinuousIntegration() || os.Getenv("VERBOSE") != "", "enables verbose logging output")
 	allFlag := flag.Bool("a", false, "runs checks as if all files had been modified")
 	noUpdateFlag := flag.Bool("n", false, "disallow using go get even if a prerequisite is missing; bail out instead")
 	configPathFlag := flag.String("c", "pre-commit-go.yml", "file name of the config to load")
