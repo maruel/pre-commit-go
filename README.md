@@ -96,5 +96,5 @@ own page](CI_SETUP.md).
   - Travis: [![Build Status](https://travis-ci.org/maruel/pre-commit-go.svg?branch=master)](https://travis-ci.org/maruel/pre-commit-go)
   - CircleCI: [![Build Status](https://circleci.com/gh/maruel/pre-commit-go.svg?style=shield&circle-token=:circle-token)](https://circleci.com/gh/maruel/pre-commit-go)
   - Drone: [![Build Status](https://drone.io/github.com/maruel/pre-commit-go/status.png)](https://drone.io/github.com/maruel/pre-commit-go/latest)
-  - Codeship: [![Build Status](https://codeship.com/projects/86965/status?branch=master)](https://codeship.com/projects/86965)
+  - Codeship: [![Build Status](https://codeship.com/projects/a932ed10-faa2-0132-33b9-1a34b2d0f857/status?branch=master)](https://codeship.com/projects/86965)
   - Coveralls: [![Coverage Status](https://coveralls.io/repos/maruel/pre-commit-go/badge.svg?branch=master)](https://coveralls.io/r/maruel/pre-commit-go?branch=master)
