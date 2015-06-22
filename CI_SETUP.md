@@ -40,7 +40,6 @@ is perfect:
     - Can't ssh in.
   - Codeship: [![Build Status](https://codeship.com/projects/a932ed10-faa2-0132-33b9-1a34b2d0f857/status?branch=master)](https://codeship.com/projects/86965)
     - Lets you ssh into the bot to debug a failure!
-    - Doesn't stream stdout, unlike every other services.
     - Can't specify Go version.
     - CWD is the wrong directory, ~/clone instead of inside $GOPATH. cd'ing to
       the right directory works just fine.
