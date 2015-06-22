@@ -99,8 +99,12 @@ func (b *Build) Run(change scm.Change) error {
 	// with -o. On the other hand, ./... and -o foo are incompatible. But
 	// building would have to be done in an efficient way by looking at which
 	// package builds what, to not result in a O(n²) algorithm.
+	pkgs := change.Indirect().Packages()
+	if len(pkgs) == 0 {
+		return nil
+	}
 	args := append([]string{"go", "build"}, b.ExtraArgs...)
-	out, _, err := capture(change.Repo(), append(args, change.Indirect().Packages()...)...)
+	out, _, err := capture(change.Repo(), append(args, pkgs...)...)
 	if len(out) != 0 {
 		return fmt.Errorf("%s failed: %s", strings.Join(args, " "), out)
 	}
