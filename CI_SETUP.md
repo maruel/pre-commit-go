@@ -7,8 +7,8 @@ Continous Integration setup
 run without arguments and the environment variable `CI=true` is set. It is set
 on all popular hosted CI services.
 
-Here's a sample of CI systems that can be used. Obviously, use 1, not 3 but none
-is perfect:
+Here's a sample of CI systems that can be used. Obviously, use 1, not all but
+none is perfect:
 
   - Travis: [![Build Status](https://travis-ci.org/maruel/pre-commit-go.svg?branch=master)](https://travis-ci.org/maruel/pre-commit-go)
     - Lets you to run tests against multiple versions of Go, even against tip!
