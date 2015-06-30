@@ -305,7 +305,7 @@ func (g *git) Stash() (bool, error) {
 		if untracked := g.untracked(); untracked == nil {
 			errUntrackedCh <- errors.New("failed to get list of untracked files")
 		} else if len(untracked) != 0 {
-			errUntrackedCh <- errors.New(fmt.Sprintf("can't stash if there are untracked files: %q", untracked))
+			errUntrackedCh <- fmt.Errorf("can't stash if there are untracked files: %q", untracked)
 		} else {
 			errUntrackedCh <- nil
 		}
