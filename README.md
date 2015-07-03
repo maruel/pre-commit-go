@@ -15,6 +15,10 @@ pre-commit-go
     any other coverage tool and has native support for global inference.
 
 
+Or watch the [short presentation about
+pre-commit-go](https://maruel.net/presentation/pre-commit-go/).
+
+
 Warning
 -------
 
