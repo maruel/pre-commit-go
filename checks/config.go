@@ -223,6 +223,11 @@ func New(v string) *Config {
 				},
 			},
 		},
-		IgnorePatterns: []string{".*", "_*", "*.pb.go"},
+		IgnorePatterns: []string{
+			".*",          // SCM
+			"_*",          // Godeps
+			"*.pb.go",     // protobuf
+			"*_string.go", // stringer
+		},
 	}
 }
