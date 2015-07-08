@@ -60,28 +60,41 @@ type Config struct {
 }
 
 // EnabledChecks returns all the checks enabled.
-func (c *Config) EnabledChecks(modes []Mode) ([]Check, int) {
-	max := 0
+func (c *Config) EnabledChecks(modes []Mode) ([]Check, *Options) {
 	out := []Check{}
+	options := &Options{}
 	for _, mode := range modes {
 		for _, checks := range c.Modes[mode].Checks {
 			out = append(out, checks...)
 		}
-		if c.Modes[mode].MaxDuration > max {
-			max = c.Modes[mode].MaxDuration
-		}
+		options = options.merge(c.Modes[mode].Options)
 	}
-	return out, max
+	return out, options
 }
 
 // Settings is the settings used for a mode.
 type Settings struct {
 	// Checks is a map of all checks enabled for this mode, with the key being
 	// the check type.
-	Checks Checks `yaml:"checks"`
+	Checks  Checks  `yaml:"checks"`
+	Options Options `yaml:",inline"`
+}
+
+// Options hold the settings for a mode shared by all checks.
+type Options struct {
 	// MaxDuration is the maximum allowed duration to run all the checks in
 	// seconds. If it takes more time than that, it is marked as failed.
 	MaxDuration int `yaml:"max_duration"`
+}
+
+// merge merges two options and returns a result.
+// This is used for multimode runs.
+func (o *Options) merge(r Options) *Options {
+	out := &Options{MaxDuration: o.MaxDuration}
+	if out.MaxDuration < r.MaxDuration {
+		out.MaxDuration = r.MaxDuration
+	}
+	return out
 }
 
 // Checks helps with Check serialization.
@@ -120,7 +133,7 @@ func New(v string) *Config {
 		MinVersion: v,
 		Modes: map[Mode]Settings{
 			PreCommit: {
-				MaxDuration: 5,
+				Options: Options{MaxDuration: 5},
 				Checks: Checks{
 					"build": {
 						&Build{
@@ -139,7 +152,7 @@ func New(v string) *Config {
 				},
 			},
 			PrePush: {
-				MaxDuration: 15,
+				Options: Options{MaxDuration: 15},
 				Checks: Checks{
 					"goimports": {
 						&Goimports{},
@@ -166,7 +179,7 @@ func New(v string) *Config {
 				},
 			},
 			ContinuousIntegration: {
-				MaxDuration: 120,
+				Options: Options{MaxDuration: 120},
 				Checks: Checks{
 					"build": {
 						&Build{
@@ -202,7 +215,7 @@ func New(v string) *Config {
 				},
 			},
 			Lint: {
-				MaxDuration: 15,
+				Options: Options{MaxDuration: 15},
 				Checks: Checks{
 					"errcheck": {
 						&Errcheck{

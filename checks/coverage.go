@@ -62,8 +62,8 @@ func (c *Coverage) GetPrerequisites() []CheckPrerequisite {
 }
 
 // Run implements Check.
-func (c *Coverage) Run(change scm.Change) error {
-	profile, err := c.RunProfile(change)
+func (c *Coverage) Run(change scm.Change, options *Options) error {
+	profile, err := c.RunProfile(change, options)
 	if err != nil {
 		return err
 	}
@@ -96,7 +96,7 @@ func (c *Coverage) Run(change scm.Change) error {
 }
 
 // RunProfile runs a coverage run according to the settings and return results.
-func (c *Coverage) RunProfile(change scm.Change) (profile CoverageProfile, err error) {
+func (c *Coverage) RunProfile(change scm.Change, options *Options) (profile CoverageProfile, err error) {
 	// go test accepts packages, not files.
 	var testPkgs []string
 	if c.UseGlobalInference {
@@ -121,9 +121,9 @@ func (c *Coverage) RunProfile(change scm.Change) (profile CoverageProfile, err e
 	}()
 
 	if c.UseGlobalInference {
-		profile, err = c.RunGlobal(change, tmpDir)
+		profile, err = c.RunGlobal(change, options, tmpDir)
 	} else {
-		profile, err = c.RunLocal(change, tmpDir)
+		profile, err = c.RunLocal(change, options, tmpDir)
 	}
 	if err != nil {
 		return nil, err
@@ -145,7 +145,7 @@ func (c *Coverage) RunProfile(change scm.Change) (profile CoverageProfile, err e
 //
 // This means that test can contribute coverage in any other package, even
 // outside their own package.
-func (c *Coverage) RunGlobal(change scm.Change, tmpDir string) (CoverageProfile, error) {
+func (c *Coverage) RunGlobal(change scm.Change, options *Options, tmpDir string) (CoverageProfile, error) {
 	coverPkg := ""
 	for i, p := range change.All().Packages() {
 		if s := c.SettingsForPkg(p); s.MinCoverage != 0 {
@@ -174,6 +174,7 @@ func (c *Coverage) RunGlobal(change scm.Change, tmpDir string) (CoverageProfile,
 			args := []string{
 				"go", "test", "-v", "-covermode=count", "-coverpkg", coverPkg,
 				"-coverprofile", f,
+				"-timeout", fmt.Sprintf("%ds", options.MaxDuration),
 				testPkg,
 			}
 			start := time.Now()
@@ -225,7 +226,7 @@ func (c *Coverage) RunGlobal(change scm.Change, tmpDir string) (CoverageProfile,
 
 // RunLocal runs all tests and reports the merged coverage of each individual
 // covered package.
-func (c *Coverage) RunLocal(change scm.Change, tmpDir string) (CoverageProfile, error) {
+func (c *Coverage) RunLocal(change scm.Change, options *Options, tmpDir string) (CoverageProfile, error) {
 	testPkgs := change.Indirect().TestPackages()
 	type result struct {
 		file string
@@ -245,6 +246,7 @@ func (c *Coverage) RunLocal(change scm.Change, tmpDir string) (CoverageProfile, 
 			args := []string{
 				"go", "test", "-v", "-covermode=count",
 				"-coverprofile", p,
+				"-timeout", fmt.Sprintf("%ds", options.MaxDuration),
 				testPkg,
 			}
 			start := time.Now()

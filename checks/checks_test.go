@@ -62,7 +62,7 @@ func TestChecksSuccess(t *testing.T) {
 			l.Lock()
 			l.Unlock()
 		}
-		if err := c.Run(change); err != nil {
+		if err := c.Run(change, &Options{MaxDuration: 1}); err != nil {
 			t.Errorf("%s failed: %s", c.GetName(), err)
 		}
 	}
@@ -108,7 +108,7 @@ func TestChecksFailure(t *testing.T) {
 			cov.PerDirDefault.MinCoverage = 100
 			cov.PerDirDefault.MaxCoverage = 100
 		}
-		if err := c.Run(change); err == nil {
+		if err := c.Run(change, &Options{MaxDuration: 1}); err == nil {
 			t.Errorf("%s didn't fail but was expected to", c.GetName())
 		}
 	}

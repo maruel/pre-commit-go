@@ -18,8 +18,8 @@ func TestConfigNew(t *testing.T) {
 	ut.AssertEqual(t, 3, len(config.Modes[PrePush].Checks))
 	ut.AssertEqual(t, 5, len(config.Modes[ContinuousIntegration].Checks))
 	ut.AssertEqual(t, 3, len(config.Modes[Lint].Checks))
-	checks, max := config.EnabledChecks([]Mode{PreCommit, PrePush, ContinuousIntegration, Lint})
-	ut.AssertEqual(t, 120, max)
+	checks, options := config.EnabledChecks([]Mode{PreCommit, PrePush, ContinuousIntegration, Lint})
+	ut.AssertEqual(t, Options{MaxDuration: 120}, *options)
 	ut.AssertEqual(t, 2+4+5+3, len(checks))
 }
 

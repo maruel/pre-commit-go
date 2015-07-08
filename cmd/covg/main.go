@@ -86,7 +86,7 @@ func mainImpl() error {
 		return err
 	}
 	log.Printf("Packages: %s\n", change.All().TestPackages())
-	profile, err := c.RunProfile(change)
+	profile, err := c.RunProfile(change, &checks.Options{MaxDuration: 999})
 	if err != nil {
 		return err
 	}

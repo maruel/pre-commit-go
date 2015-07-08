@@ -55,7 +55,7 @@ type Check interface {
 	// this check.
 	GetPrerequisites() []CheckPrerequisite
 	// Run executes the check.
-	Run(change scm.Change) error
+	Run(change scm.Change, options *Options) error
 }
 
 // Native checks.
@@ -92,7 +92,7 @@ func (b *Build) Unlock() {
 }
 
 // Run implements Check.
-func (b *Build) Run(change scm.Change) error {
+func (b *Build) Run(change scm.Change, options *Options) error {
 	// go build accepts packages, not files.
 	// Cannot build concurrently since it leaves files in the tree.
 	// TODO(maruel): Build in a temporary directory to not leave junk in the tree
@@ -135,7 +135,7 @@ func (c *Copyright) GetPrerequisites() []CheckPrerequisite {
 }
 
 // Run implements Check.
-func (c *Copyright) Run(change scm.Change) error {
+func (c *Copyright) Run(change scm.Change, options *Options) error {
 	var badFiles []string
 	prefix := []byte(c.Header)
 	// This this serially since it's I/O bound and will compete with process
@@ -175,7 +175,7 @@ func (g *Gofmt) GetPrerequisites() []CheckPrerequisite {
 }
 
 // Run implements Check.
-func (g *Gofmt) Run(change scm.Change) error {
+func (g *Gofmt) Run(change scm.Change, options *Options) error {
 	// gofmt doesn't return non-zero even if some files need to be updated.
 	// gofmt accepts files, not packages.
 	out, _, err := capture(change.Repo(), "gofmt", "-l", "-s", ".")
@@ -209,7 +209,7 @@ func (t *Test) GetPrerequisites() []CheckPrerequisite {
 }
 
 // Run implements Check.
-func (t *Test) Run(change scm.Change) error {
+func (t *Test) Run(change scm.Change, options *Options) error {
 	// go test accepts packages, not files.
 	var wg sync.WaitGroup
 	testPkgs := change.Indirect().TestPackages()
@@ -218,7 +218,12 @@ func (t *Test) Run(change scm.Change) error {
 		wg.Add(1)
 		go func(testPkg string) {
 			defer wg.Done()
-			args := append([]string{"go", "test"}, t.ExtraArgs...)
+			args := append(
+				[]string{
+					"go", "test",
+					"-timeout", fmt.Sprintf("%ds", options.MaxDuration),
+				},
+				t.ExtraArgs...)
 			args = append(args, testPkg)
 			start := time.Now()
 			out, exitCode, _ := capture(change.Repo(), args...)
@@ -263,7 +268,7 @@ func (e *Errcheck) GetPrerequisites() []CheckPrerequisite {
 }
 
 // Run implements Check.
-func (e *Errcheck) Run(change scm.Change) error {
+func (e *Errcheck) Run(change scm.Change, options *Options) error {
 	// errcheck accepts packages, not files.
 	args := []string{"errcheck", "-ignore", e.Ignores}
 	out, _, err := capture(change.Repo(), append(args, change.Changed().Packages()...)...)
@@ -302,7 +307,7 @@ func (g *Goimports) GetPrerequisites() []CheckPrerequisite {
 }
 
 // Run implements Check.
-func (g *Goimports) Run(change scm.Change) error {
+func (g *Goimports) Run(change scm.Change, options *Options) error {
 	// goimports accepts files, not packages.
 	// goimports doesn't return non-zero even if some files need to be updated.
 	out, _, err := capture(change.Repo(), append([]string{"goimports", "-l"}, change.Changed().GoFiles()...)...)
@@ -338,7 +343,7 @@ func (g *Golint) GetPrerequisites() []CheckPrerequisite {
 }
 
 // Run implements Check.
-func (g *Golint) Run(change scm.Change) error {
+func (g *Golint) Run(change scm.Change, options *Options) error {
 	// - accepts packages, not files.
 	// - doesn't return non-zero ever.
 	// - doesn't like multiple packages per call.
@@ -411,7 +416,7 @@ func (g *Govet) GetPrerequisites() []CheckPrerequisite {
 }
 
 // Run implements Check.
-func (g *Govet) Run(change scm.Change) error {
+func (g *Govet) Run(change scm.Change, options *Options) error {
 	// - accepts packages, not files.
 	// - returns non-zero on report.
 	// - accepts multiple packages per call.
@@ -487,7 +492,7 @@ func (c *Custom) GetPrerequisites() []CheckPrerequisite {
 }
 
 // Run implements Check.
-func (c *Custom) Run(change scm.Change) error {
+func (c *Custom) Run(change scm.Change, options *Options) error {
 	// TODO(maruel): Make what is passed to the command configurable, e.g. one of:
 	// (Changed, Indirect, All) x (GoFiles, Packages, TestPackages)
 	out, exitCode, err := capture(change.Repo(), c.Command...)
