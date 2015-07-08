@@ -184,7 +184,7 @@ func (c *Coverage) RunGlobal(change scm.Change, options *Options, tmpDir string)
 				log.Printf("%s was slow: %s", args, round(duration, time.Millisecond))
 			}
 			if exitCode != 0 {
-				err = fmt.Errorf("%s %s failed:\n%s", strings.Join(args, " "), testPkg, out)
+				err = fmt.Errorf("%s %s failed:\n%s", strings.Join(args, " "), testPkg, processStackTrace(out))
 			}
 			results <- &result{f, err}
 		}(f, tp)
@@ -256,7 +256,7 @@ func (c *Coverage) RunLocal(change scm.Change, options *Options, tmpDir string) 
 				log.Printf("%s was slow: %s", args, round(duration, time.Millisecond))
 			}
 			if exitCode != 0 {
-				results <- &result{err: fmt.Errorf("%s %s failed:\n%s", strings.Join(args, " "), testPkg, out)}
+				results <- &result{err: fmt.Errorf("%s %s failed:\n%s", strings.Join(args, " "), testPkg, processStackTrace(out))}
 				return
 			}
 			results <- &result{file: p}

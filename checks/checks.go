@@ -232,7 +232,7 @@ func (t *Test) Run(change scm.Change, options *Options) error {
 				log.Printf("%s was slow: %s", args, round(duration, time.Millisecond))
 			}
 			if exitCode != 0 {
-				errs <- fmt.Errorf("%s failed:\n%s", strings.Join(args, " "), out)
+				errs <- fmt.Errorf("%s failed:\n%s", strings.Join(args, " "), processStackTrace(out))
 			}
 		}(tp)
 	}
