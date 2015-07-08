@@ -199,19 +199,19 @@ func loadConfig(repo scm.ReadOnlyRepo, path string) (string, *checks.Config) {
 	return "<N/A>", checks.New(version)
 }
 
-func callRun(check checks.Check, change scm.Change) (time.Duration, error) {
+func callRun(check checks.Check, change scm.Change, options *checks.Options) (time.Duration, error) {
 	if l, ok := check.(sync.Locker); ok {
 		l.Lock()
 		defer l.Unlock()
 	}
 	start := time.Now()
-	err := check.Run(change)
+	err := check.Run(change, options)
 	return time.Now().Sub(start), err
 }
 
 func runChecks(config *checks.Config, change scm.Change, modes []checks.Mode, prereqReady *sync.WaitGroup) error {
-	enabledChecks, maxDuration := config.EnabledChecks(modes)
-	log.Printf("mode: %s; %d checks; %d max seconds allowed", modes, len(enabledChecks), maxDuration)
+	enabledChecks, options := config.EnabledChecks(modes)
+	log.Printf("mode: %s; %d checks; %d max seconds allowed", modes, len(enabledChecks), options.MaxDuration)
 	if change == nil {
 		log.Printf("no change")
 		return nil
@@ -229,7 +229,7 @@ func runChecks(config *checks.Config, change scm.Change, modes []checks.Mode, pr
 				prereqReady.Wait()
 			}
 			log.Printf("%s...", check.GetName())
-			duration, err := callRun(check, change)
+			duration, err := callRun(check, change, options)
 			suffix := ""
 			if err != nil {
 				suffix = " FAILED"
@@ -240,7 +240,7 @@ func runChecks(config *checks.Config, change scm.Change, modes []checks.Mode, pr
 				return
 			}
 			// A check that took too long is a check that failed.
-			if duration > time.Duration(maxDuration)*time.Second {
+			if duration > time.Duration(options.MaxDuration)*time.Second {
 				errs <- fmt.Errorf("check %s took %1.2fs", check.GetName(), duration.Seconds())
 			}
 		}(c)
@@ -442,7 +442,7 @@ func cmdInfo(repo scm.ReadOnlyRepo, config *checks.Config, modes []checks.Mode, 
 				}
 			}
 		}
-		fmt.Printf("\n%s:\n  %-*s %d seconds\n", mode, maxLen+1, "Limit:", settings.MaxDuration)
+		fmt.Printf("\n%s:\n  %-*s %d seconds\n", mode, maxLen+1, "Limit:", settings.Options.MaxDuration)
 		for _, checks := range settings.Checks {
 			for _, check := range checks {
 				name := check.GetName()
