@@ -12,7 +12,7 @@ import (
 	"github.com/maruel/panicparse/stack"
 )
 
-func CalcLengths(buckets stack.Buckets) (int, int) {
+func calcLengths(buckets stack.Buckets) (int, int) {
 	srcLen := 0
 	pkgLen := 0
 	for _, bucket := range buckets {
@@ -30,7 +30,7 @@ func CalcLengths(buckets stack.Buckets) (int, int) {
 	return srcLen, pkgLen
 }
 
-func PrettyStack(r *stack.Signature, srcLen, pkgLen int) string {
+func prettyStack(r *stack.Signature, srcLen, pkgLen int) string {
 	out := []string{}
 	for _, line := range r.Stack {
 		s := fmt.Sprintf(
@@ -52,7 +52,7 @@ func processStackTrace(data string) string {
 		return data
 	}
 	buckets := stack.SortBuckets(stack.Bucketize(goroutines, true))
-	srcLen, pkgLen := CalcLengths(buckets)
+	srcLen, pkgLen := calcLengths(buckets)
 	for _, bucket := range buckets {
 		extra := ""
 		created := bucket.CreatedBy.Func.PkgDotName()
@@ -64,7 +64,7 @@ func processStackTrace(data string) string {
 		}
 
 		fmt.Fprintf(out, "%d: %s%s\n", len(bucket.Routines), bucket.State, extra)
-		fmt.Fprintf(out, "%s\n", PrettyStack(&bucket.Signature, srcLen, pkgLen))
+		fmt.Fprintf(out, "%s\n", prettyStack(&bucket.Signature, srcLen, pkgLen))
 	}
 	return out.String()
 }
