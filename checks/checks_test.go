@@ -18,6 +18,13 @@ import (
 	"github.com/maruel/ut"
 )
 
+func TestCheckPrerequisite(t *testing.T) {
+	// Runs all checks, they should all pass.
+	t.Parallel()
+	ut.AssertEqual(t, true, (&CheckPrerequisite{HelpCommand: []string{"go", "version"}, ExpectedExitCode: 0}).IsPresent())
+	ut.AssertEqual(t, false, (&CheckPrerequisite{HelpCommand: []string{"go", "version"}, ExpectedExitCode: 1}).IsPresent())
+}
+
 func TestChecksSuccess(t *testing.T) {
 	// Runs all checks, they should all pass.
 	t.Parallel()
