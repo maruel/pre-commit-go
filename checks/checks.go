@@ -177,10 +177,20 @@ func (g *Gofmt) GetPrerequisites() []CheckPrerequisite {
 // Run implements Check.
 func (g *Gofmt) Run(change scm.Change, options *Options) error {
 	// gofmt doesn't return non-zero even if some files need to be updated.
-	// gofmt accepts files, not packages.
+	// gofmt accepts files, not packages but using . makes it recursive.
+	//
+	// TODO(maruel): Do it in process. It'll be much faster as the content of the
+	// modified files is already in memory.
 	out, _, err := capture(change.Repo(), "gofmt", "-l", "-s", ".")
-	if len(out) != 0 {
-		return fmt.Errorf("these files are improperly formmatted, please run: gofmt -w -s .\n%s", out)
+	// Split the files to ignore as needed.
+	files := []string{}
+	for _, line := range strings.Split(string(out), "\n") {
+		if len(line) != 0 && !change.IsIgnored(line) {
+			files = append(files, line)
+		}
+	}
+	if len(files) != 0 {
+		return fmt.Errorf("these files are improperly formmatted, please run: gofmt -w -s .\n%s", strings.Join(files, "\n"))
 	}
 	if err != nil {
 		return fmt.Errorf("gofmt -l -s . failed: %s", err)
