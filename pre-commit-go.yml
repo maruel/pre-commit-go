@@ -22,6 +22,9 @@ modes:
           min_coverage: 80
           max_coverage: 90
         per_dir:
+          checks:
+            min_coverage: 70
+            max_coverage: 90
           cmd/pcg: null
           scm:
             min_coverage: 60
