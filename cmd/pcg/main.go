@@ -218,6 +218,7 @@ func runChecks(config *checks.Config, change scm.Change, modes []checks.Mode, pr
 	}
 	var wg sync.WaitGroup
 	errs := make(chan error, len(enabledChecks))
+	warnings := make(chan error, len(enabledChecks))
 	start := time.Now()
 	for _, c := range enabledChecks {
 		wg.Add(1)
@@ -234,14 +235,15 @@ func runChecks(config *checks.Config, change scm.Change, modes []checks.Mode, pr
 			if err != nil {
 				suffix = " FAILED"
 			}
-			log.Printf("... %s in %1.2fs%s", check.GetName(), duration.Seconds(), suffix)
+			log.Printf("... %s in %1.2fs%s\n%s", check.GetName(), duration.Seconds(), suffix, err)
 			if err != nil {
 				errs <- err
 				return
 			}
 			// A check that took too long is a check that failed.
-			if duration > time.Duration(options.MaxDuration)*time.Second {
-				errs <- fmt.Errorf("check %s took %1.2fs", check.GetName(), duration.Seconds())
+			max := time.Duration(options.MaxDuration) * time.Second
+			if duration > max {
+				warnings <- fmt.Errorf("check %s took %1.2fs -> IT IS TOO SLOW (limit: %s).", check.GetName(), duration.Seconds(), max)
 			}
 		}(c)
 	}
@@ -252,6 +254,8 @@ func runChecks(config *checks.Config, change scm.Change, modes []checks.Mode, pr
 		select {
 		case err = <-errs:
 			fmt.Printf("%s\n", err)
+		case warning := <-warnings:
+			fmt.Printf("warning: %s\n", warning)
 		default:
 			if err != nil {
 				duration := time.Now().Sub(start)
