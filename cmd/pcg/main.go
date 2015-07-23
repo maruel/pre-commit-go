@@ -231,19 +231,16 @@ func runChecks(config *checks.Config, change scm.Change, modes []checks.Mode, pr
 			}
 			log.Printf("%s...", check.GetName())
 			duration, err := callRun(check, change, options)
-			suffix := ""
 			if err != nil {
-				suffix = " FAILED"
-			}
-			log.Printf("... %s in %1.2fs%s\n%s", check.GetName(), duration.Seconds(), suffix, err)
-			if err != nil {
+				log.Printf("... %s in %1.2fs FAILED\n%s", check.GetName(), duration.Seconds(), err)
 				errs <- err
 				return
 			}
+			log.Printf("... %s in %1.2fs", check.GetName(), duration.Seconds())
 			// A check that took too long is a check that failed.
 			max := time.Duration(options.MaxDuration) * time.Second
 			if duration > max {
-				warnings <- fmt.Errorf("check %s took %1.2fs -> IT IS TOO SLOW (limit: %s).", check.GetName(), duration.Seconds(), max)
+				warnings <- fmt.Errorf("check %s took %1.2fs -> IT IS TOO SLOW (limit: %s)", check.GetName(), duration.Seconds(), max)
 			}
 		}(c)
 	}
