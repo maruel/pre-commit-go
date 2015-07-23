@@ -165,8 +165,8 @@ func New(v string) *Config {
 								MaxCoverage: 100,
 							},
 							PerDirDefault: CoverageSettings{
-								MinCoverage: 0,
-								MaxCoverage: 0,
+								MinCoverage: 1,
+								MaxCoverage: 100,
 							},
 							PerDir: map[string]*CoverageSettings{},
 						},
@@ -201,8 +201,8 @@ func New(v string) *Config {
 								MaxCoverage: 100,
 							},
 							PerDirDefault: CoverageSettings{
-								MinCoverage: 0,
-								MaxCoverage: 0,
+								MinCoverage: 1,
+								MaxCoverage: 100,
 							},
 							PerDir: map[string]*CoverageSettings{},
 						},
