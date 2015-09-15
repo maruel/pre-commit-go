@@ -570,10 +570,14 @@ func cmdInstall(repo scm.ReadOnlyRepo, config *checks.Config, modes []checks.Mod
 }
 
 // cmdRun runs all the enabled checks.
-func cmdRun(repo scm.ReadOnlyRepo, config *checks.Config, modes []checks.Mode, allFiles bool, prereqReady *sync.WaitGroup) error {
-	old := scm.GitInitialCommit
-	if !allFiles {
-		var err error
+func cmdRun(repo scm.ReadOnlyRepo, config *checks.Config, modes []checks.Mode, against string, prereqReady *sync.WaitGroup) error {
+	var err error
+	var old scm.Commit
+	if against != "" {
+		if old, err = repo.Eval(against); err != nil {
+			return err
+		}
+	} else {
 		if old, err = repo.Upstream(); err != nil {
 			return err
 		}
@@ -653,10 +657,18 @@ func mainImpl() error {
 
 	verboseFlag := flag.Bool("v", checks.IsContinuousIntegration() || os.Getenv("VERBOSE") != "", "enables verbose logging output")
 	allFlag := flag.Bool("a", false, "runs checks as if all files had been modified")
+	againstFlag := flag.String("r", "", "runs checks on files modified since this revision, as evaluated by your scm repo")
 	noUpdateFlag := flag.Bool("n", false, "disallow using go get even if a prerequisite is missing; bail out instead")
 	configPathFlag := flag.String("c", "pre-commit-go.yml", "file name of the config to load")
 	modeFlag := flag.String("m", "", "coma separated list of modes to process; default depends on the command")
 	flag.Parse()
+
+	if *allFlag {
+		if *againstFlag != "" {
+			return errors.New("-a can't be used with -r")
+		}
+		*againstFlag = string(scm.GitInitialCommit)
+	}
 
 	log.SetFlags(log.Lmicroseconds)
 	if !*verboseFlag {
@@ -686,6 +698,9 @@ func mainImpl() error {
 		if *allFlag != false {
 			return fmt.Errorf("-a can't be used with %s", cmd)
 		}
+		if *againstFlag != "" {
+			return fmt.Errorf("-r can't be used with %s", cmd)
+		}
 		if *noUpdateFlag != false {
 			return fmt.Errorf("-n can't be used with %s", cmd)
 		}
@@ -704,6 +719,9 @@ func mainImpl() error {
 		if *allFlag != false {
 			return fmt.Errorf("-a can't be used with %s", cmd)
 		}
+		if *againstFlag != "" {
+			return fmt.Errorf("-r can't be used with %s", cmd)
+		}
 		if *noUpdateFlag != false {
 			return fmt.Errorf("-n can't be used with %s", cmd)
 		}
@@ -713,6 +731,9 @@ func mainImpl() error {
 		cmd = "install"
 		if *allFlag != false {
 			return fmt.Errorf("-a can't be used with %s", cmd)
+		}
+		if *againstFlag != "" {
+			return fmt.Errorf("-r can't be used with %s", cmd)
 		}
 		if len(modes) == 0 {
 			modes = checks.AllModes
@@ -733,7 +754,7 @@ func mainImpl() error {
 		go func() {
 			errCh <- cmdInstall(repo, config, modes, *noUpdateFlag, &prereqReady)
 		}()
-		err := cmdRun(repo, config, modes, *allFlag, &prereqReady)
+		err := cmdRun(repo, config, modes, *againstFlag, &prereqReady)
 		if err2 := <-errCh; err2 != nil {
 			return err2
 		}
@@ -743,6 +764,9 @@ func mainImpl() error {
 		cmd = "prereq"
 		if *allFlag != false {
 			return fmt.Errorf("-a can't be used with %s", cmd)
+		}
+		if *againstFlag != "" {
+			return fmt.Errorf("-r can't be used with %s", cmd)
 		}
 		if len(modes) == 0 {
 			modes = checks.AllModes
@@ -757,7 +781,7 @@ func mainImpl() error {
 		if len(modes) == 0 {
 			modes = []checks.Mode{checks.PrePush}
 		}
-		return cmdRun(repo, config, modes, *allFlag, &sync.WaitGroup{})
+		return cmdRun(repo, config, modes, *againstFlag, &sync.WaitGroup{})
 
 	case "run-hook":
 		if modes != nil {
@@ -765,6 +789,9 @@ func mainImpl() error {
 		}
 		if *allFlag != false {
 			return fmt.Errorf("-a can't be used with %s", cmd)
+		}
+		if *againstFlag != "" {
+			return fmt.Errorf("-r can't be used with %s", cmd)
 		}
 		if flag.NArg() != 1 {
 			return errors.New("run-hook is only meant to be used by hooks")
@@ -778,6 +805,9 @@ func mainImpl() error {
 		if *allFlag != false {
 			return fmt.Errorf("-a can't be used with %s", cmd)
 		}
+		if *againstFlag != "" {
+			return fmt.Errorf("-r can't be used with %s", cmd)
+		}
 		if *noUpdateFlag != false {
 			return fmt.Errorf("-n can't be used with %s", cmd)
 		}
@@ -790,6 +820,9 @@ func mainImpl() error {
 		}
 		if *allFlag != false {
 			return fmt.Errorf("-a can't be used with %s", cmd)
+		}
+		if *againstFlag != "" {
+			return fmt.Errorf("-r can't be used with %s", cmd)
 		}
 		// Note that in that case, configPath is ignored and not overritten.
 		return cmdWriteConfig(repo, config, *configPathFlag)

@@ -90,6 +90,10 @@ func TestGetRepoGitSlowSuccess(t *testing.T) {
 	ut.AssertEqual(t, Commit(""), upstream)
 	ut.AssertEqual(t, errors.New("no upstream"), err)
 
+	against, err := r.Eval("HEAD~1000")
+	ut.AssertEqual(t, Commit(""), against)
+	ut.AssertEqual(t, errors.New("couldn't evaluate HEAD~1000"), err)
+
 	c, err := r.Between(commitInitial, GitInitialCommit, nil)
 	ut.AssertEqual(t, nil, err)
 	ut.AssertEqual(t, []string{"src/foo/file1.go"}, c.Changed().GoFiles())
