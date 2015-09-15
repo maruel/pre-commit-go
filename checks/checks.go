@@ -452,10 +452,11 @@ func (g *Govet) Run(change scm.Change, options *Options) error {
 		}
 		for _, b := range g.Blacklist {
 			if strings.Contains(line, b) {
-				continue
+				goto skip
 			}
 		}
 		result = append(result, line)
+	skip:
 	}
 	if len(result) != 0 {
 		return errors.New("go tool vet failed:\n" + strings.Join(result, "\n"))
