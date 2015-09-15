@@ -52,6 +52,8 @@ type ReadOnlyRepo interface {
 	Ref() string
 	// Upstream returns the upstream commit.
 	Upstream() (Commit, error)
+	// Eval returns the commit hash by evaluating refish.
+	Eval(refish string) (Commit, error)
 
 	// Between returns a change with files touched between from and to in it.
 	// If recent is Current, it diffs against the current tree, independent of
@@ -196,10 +198,17 @@ func (g *git) Ref() string {
 }
 
 func (g *git) Upstream() (Commit, error) {
-	if out, code, _ := g.capture(nil, "log", "-1", "--format=%H", "@{upstream}"); code == 0 {
-		return Commit(out), nil
+	if commit, err := g.Eval("@{upstream}"); err == nil {
+		return commit, nil
 	}
 	return "", errors.New("no upstream")
+}
+
+func (g *git) Eval(refish string) (Commit, error) {
+	if out, code, _ := g.capture(nil, "log", "-1", "--format=%H", refish); code == 0 {
+		return Commit(out), nil
+	}
+	return "", fmt.Errorf("couldn't evaluate %s", refish)
 }
 
 func (g *git) untracked() []string {
