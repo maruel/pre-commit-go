@@ -51,7 +51,7 @@ func processStackTrace(data string) string {
 	if err != nil || len(goroutines) == 0 {
 		return data
 	}
-	buckets := stack.SortBuckets(stack.Bucketize(goroutines, true))
+	buckets := stack.SortBuckets(stack.Bucketize(goroutines, stack.AnyPointer))
 	srcLen, pkgLen := calcLengths(buckets)
 	for _, bucket := range buckets {
 		extra := ""
