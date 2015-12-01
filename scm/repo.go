@@ -223,7 +223,7 @@ func (g *git) Ref(c Commit) string {
 	if gc == gitCurrent {
 		gc = gitHead
 	}
-	out, code, _ := g.capture(nil, "symbolic-ref", "--short", string(gc))
+	out, code, _ := g.capture("symbolic-ref", "--short", string(gc))
 	if code == 0 {
 		return out
 	}
@@ -245,7 +245,7 @@ func (g *git) Eval(refish string) Commit {
 	if c == gitInvalid {
 		return Invalid
 	}
-	out, code, _ := g.capture(nil, "log", "-1", "--format=%H", string(c))
+	out, code, _ := g.capture("log", "-1", "--format=%H", string(c))
 	if code == 0 {
 		return Commit(out)
 	}
@@ -286,7 +286,7 @@ func (g *git) Between(recent, old Commit, ignorePatterns IgnorePatterns) (Change
 	if grecent == gitCurrent {
 		// Current is special cased, as it has to look at the checked out files.
 		go func() {
-			allFilesCh <- g.captureList(nil, ignorePatterns, "ls-files", "-z")
+			allFilesCh <- g.captureList(ignorePatterns, "ls-files", "-z")
 		}()
 		if gold == gitInitial {
 			// Fast path: diff against initial commit.
@@ -306,7 +306,7 @@ func (g *git) Between(recent, old Commit, ignorePatterns IgnorePatterns) (Change
 			// Need to remove duplicates.
 			// TODO(maruel): Use github.com/xtgo/set
 			filesSet := map[string]struct{}{}
-			for _, f := range g.captureList(nil, ignorePatterns, "diff-tree", "--no-commit-id", "--name-only", "-z", "-r", "--diff-filter=ACMRT", "--no-renames", "--no-ext-diff", string(gold), string(gitHead)) {
+			for _, f := range g.captureList(ignorePatterns, "diff-tree", "--no-commit-id", "--name-only", "-z", "-r", "--diff-filter=ACMRT", "--no-renames", "--no-ext-diff", string(gold), string(gitHead)) {
 				filesSet[f] = struct{}{}
 			}
 			for _, f := range <-unstagedCh {
@@ -324,9 +324,9 @@ func (g *git) Between(recent, old Commit, ignorePatterns IgnorePatterns) (Change
 	} else {
 		// Not using Current, so only use the index.
 		go func() {
-			allFilesCh <- g.captureList(nil, ignorePatterns, "ls-files", "-z", "--with-tree="+string(grecent))
+			allFilesCh <- g.captureList(ignorePatterns, "ls-files", "-z", "--with-tree="+string(grecent))
 		}()
-		files = g.captureList(nil, ignorePatterns, "diff-tree", "--no-commit-id", "--name-only", "-z", "-r", "--diff-filter=ACMRT", "--no-renames", "--no-ext-diff", string(gold), string(grecent))
+		files = g.captureList(ignorePatterns, "diff-tree", "--no-commit-id", "--name-only", "-z", "-r", "--diff-filter=ACMRT", "--no-renames", "--no-ext-diff", string(gold), string(grecent))
 		allFiles = <-allFilesCh
 	}
 	if len(files) == 0 {
@@ -382,7 +382,7 @@ func (g *git) Stash() (bool, error) {
 
 	oldStashCh := make(chan string)
 	go func() {
-		o, _, _ := g.capture(nil, "rev-parse", "-q", "--verify", "refs/stash")
+		o, _, _ := g.capture("rev-parse", "-q", "--verify", "refs/stash")
 		oldStashCh <- o
 	}()
 
@@ -398,13 +398,13 @@ func (g *git) Stash() (bool, error) {
 	}
 	oldStash := <-oldStashCh
 
-	if out, e, err := g.capture(nil, "stash", "save", "-q", "--keep-index"); e != 0 || err != nil {
+	if out, e, err := g.capture("stash", "save", "-q", "--keep-index"); e != 0 || err != nil {
 		if gitCommit(g.Eval(string(gitHead))) == gitInitial {
 			return false, errors.New("Can't stash until there's at least one commit")
 		}
 		return false, fmt.Errorf("failed to stash:\n%s", out)
 	}
-	newStash, e, err := g.capture(nil, "rev-parse", "-q", "--verify", "refs/stash")
+	newStash, e, err := g.capture("rev-parse", "-q", "--verify", "refs/stash")
 	if e != 0 || err != nil {
 		return false, fmt.Errorf("failed to parse stash: %s\n%s", err, newStash)
 	}
@@ -412,13 +412,13 @@ func (g *git) Stash() (bool, error) {
 }
 
 func (g *git) Restore() error {
-	if out, e, err := g.capture(nil, "reset", "--hard", "-q"); e != 0 || err != nil {
+	if out, e, err := g.capture("reset", "--hard", "-q"); e != 0 || err != nil {
 		return fmt.Errorf("git reset failed:\n%s", out)
 	}
-	if out, e, err := g.capture(nil, "stash", "apply", "--index", "-q"); e != 0 || err != nil {
+	if out, e, err := g.capture("stash", "apply", "--index", "-q"); e != 0 || err != nil {
 		return fmt.Errorf("stash reapplication failed:\n%s", out)
 	}
-	if out, e, err := g.capture(nil, "stash", "drop", "-q"); e != 0 || err != nil {
+	if out, e, err := g.capture("stash", "drop", "-q"); e != 0 || err != nil {
 		return fmt.Errorf("dropping temporary stash failed:\n%s", out)
 	}
 	return nil
@@ -429,25 +429,29 @@ func (g *git) Checkout(refish string) error {
 	if c == gitInvalid {
 		return errors.New("invalid commit")
 	}
-	if out, e, err := g.capture(nil, "checkout", "-f", "-q", string(c)); e != 0 || err != nil {
+	if out, e, err := g.capture("checkout", "-f", "-q", string(c)); e != 0 || err != nil {
 		return fmt.Errorf("checkout failed:\n%s", out)
 	}
 	return nil
 }
 
 func (g *git) untracked() []string {
-	return g.captureList(nil, nil, "ls-files", "--others", "--exclude-standard", "-z")
+	return g.captureList(nil, "ls-files", "--others", "--exclude-standard", "-z")
 }
 
 func (g *git) unstaged() []string {
-	return g.captureList(nil, nil, "diff", "--name-only", "--no-color", "--no-ext-diff", "-z")
+	return g.captureList(nil, "diff", "--name-only", "--no-color", "--no-ext-diff", "-z")
 }
 
 func (g *git) staged() []string {
-	return g.captureList(nil, nil, "diff", "--name-only", "--no-color", "--no-ext-diff", "--cached", "--diff-filter=ACMRT", "-z")
+	return g.captureList(nil, "diff", "--name-only", "--no-color", "--no-ext-diff", "--cached", "--diff-filter=ACMRT", "-z")
 }
 
-func (g *git) capture(env []string, args ...string) (string, int, error) {
+func (g *git) capture(args ...string) (string, int, error) {
+	return g.captureEnv(nil, args...)
+}
+
+func (g *git) captureEnv(env []string, args ...string) (string, int, error) {
 	out, code, err := internal.Capture(g.root, env, append([]string{"git"}, args...)...)
 	return strings.TrimRight(out, "\n\r"), code, err
 }
@@ -455,13 +459,13 @@ func (g *git) capture(env []string, args ...string) (string, int, error) {
 // captureList assumes the -z argument is used. Returns nil in case of error.
 //
 // It strips any file in ignorePatterns glob that applies to any path component.
-func (g *git) captureList(env []string, ignorePatterns IgnorePatterns, args ...string) []string {
+func (g *git) captureList(ignorePatterns IgnorePatterns, args ...string) []string {
 	// TOOD(maruel): stream stdout instead of taking the whole output at once. It
 	// may only have an effect on larger repositories and that's not guaranteed.
 	// For example, the output of "git ls-files -z" on the chromium tree with 86k
 	// files is 4.5Mib and takes ~110ms to run. Revisit later when this becomes a
 	// bottleneck.
-	out, code, err := g.capture(env, args...)
+	out, code, err := g.capture(args...)
 	if code != 0 || err != nil {
 		return nil
 	}

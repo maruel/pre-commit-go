@@ -239,7 +239,7 @@ func check(t *testing.T, r repo, untracked []string, unstaged []string) {
 
 func run(t *testing.T, tmpDir string, env []string, args ...string) string {
 	internal := &git{root: tmpDir}
-	out, code, err := internal.capture(env, args...)
+	out, code, err := internal.captureEnv(env, args...)
 	ut.AssertEqualf(t, 0, code, "%s", out)
 	ut.AssertEqual(t, nil, err)
 	return out
