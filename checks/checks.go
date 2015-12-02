@@ -141,12 +141,14 @@ func (c *Copyright) Run(change scm.Change, options *Options) error {
 	// This this serially since it's I/O bound and will compete with process
 	// startup of other checks.
 	for _, f := range change.Changed().GoFiles() {
-		if content := change.Content(f); content != nil {
-			if !bytes.HasPrefix(content, prefix) {
+		if !change.IsIgnored(f) {
+			if content := change.Content(f); content != nil {
+				if !bytes.HasPrefix(content, prefix) {
+					badFiles = append(badFiles, f)
+				}
+			} else {
 				badFiles = append(badFiles, f)
 			}
-		} else {
-			badFiles = append(badFiles, f)
 		}
 	}
 	if len(badFiles) != 0 {
