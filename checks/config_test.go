@@ -8,8 +8,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/maruel/ut"
-	"gopkg.in/yaml.v2"
+	"github.com/maruel/pre-commit-go/Godeps/_workspace/src/github.com/maruel/ut"
+	"github.com/maruel/pre-commit-go/Godeps/_workspace/src/gopkg.in/yaml.v2"
 )
 
 func TestConfigNew(t *testing.T) {

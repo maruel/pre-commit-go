@@ -13,9 +13,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/maruel/pre-commit-go/Godeps/_workspace/src/github.com/maruel/ut"
 	"github.com/maruel/pre-commit-go/internal"
 	"github.com/maruel/pre-commit-go/scm"
-	"github.com/maruel/ut"
 )
 
 func TestCheckPrerequisite(t *testing.T) {

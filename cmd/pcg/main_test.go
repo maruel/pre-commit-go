@@ -8,8 +8,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/maruel/pre-commit-go/Godeps/_workspace/src/github.com/maruel/ut"
 	"github.com/maruel/pre-commit-go/checks"
-	"github.com/maruel/ut"
 )
 
 func TestProcessModes(t *testing.T) {

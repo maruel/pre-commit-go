@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/maruel/ut"
+	"github.com/maruel/pre-commit-go/Godeps/_workspace/src/github.com/maruel/ut"
 )
 
 func TestCaptureNormal(t *testing.T) {

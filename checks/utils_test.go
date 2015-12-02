@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/maruel/ut"
+	"github.com/maruel/pre-commit-go/Godeps/_workspace/src/github.com/maruel/ut"
 )
 
 func TestRound(t *testing.T) {

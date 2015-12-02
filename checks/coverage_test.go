@@ -9,8 +9,8 @@ import (
 	"os"
 	"testing"
 
+	"github.com/maruel/pre-commit-go/Godeps/_workspace/src/github.com/maruel/ut"
 	"github.com/maruel/pre-commit-go/internal"
-	"github.com/maruel/ut"
 )
 
 func TestCoverageGlobal(t *testing.T) {

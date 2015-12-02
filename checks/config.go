@@ -9,7 +9,7 @@ package checks
 import (
 	"fmt"
 
-	"gopkg.in/yaml.v2"
+	"github.com/maruel/pre-commit-go/Godeps/_workspace/src/gopkg.in/yaml.v2"
 )
 
 // Mode is one of the check mode. When running checks, the mode determine what

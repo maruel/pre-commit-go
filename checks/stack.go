@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/maruel/panicparse/stack"
+	"github.com/maruel/pre-commit-go/Godeps/_workspace/src/github.com/maruel/panicparse/stack"
 )
 
 func calcLengths(buckets stack.Buckets) (int, int) {
