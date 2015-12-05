@@ -69,6 +69,10 @@ func (c *Coverage) Run(change scm.Change, options *Options) error {
 	}
 
 	if c.UseGlobalInference {
+		if !options.isSingleton() {
+			return nil
+		}
+
 		out, err := ProcessProfile(profile, &c.Global)
 		if out != "" {
 			log.Printf("coverage for %s:\n%s\n", change.Repo().Root(), out)
@@ -78,6 +82,10 @@ func (c *Coverage) Run(change scm.Change, options *Options) error {
 		}
 	} else {
 		for _, testPkg := range change.Indirect().TestPackages() {
+			if !options.isEnabled(testPkg) {
+				continue
+			}
+
 			p := profile.Subset(pkgToDir(testPkg))
 			settings := c.SettingsForPkg(testPkg)
 			if settings.MinCoverage == 0 {
