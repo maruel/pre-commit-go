@@ -99,7 +99,7 @@ func (b *Build) Run(change scm.Change, options *Options) error {
 	// with -o. On the other hand, ./... and -o foo are incompatible. But
 	// building would have to be done in an efficient way by looking at which
 	// package builds what, to not result in a O(n²) algorithm.
-	pkgs := change.Indirect().Packages()
+	pkgs := options.enabledValues(change.Indirect().Packages()...)
 	if len(pkgs) == 0 {
 		return nil
 	}
@@ -141,7 +141,7 @@ func (c *Copyright) Run(change scm.Change, options *Options) error {
 	// This this serially since it's I/O bound and will compete with process
 	// startup of other checks.
 	for _, f := range change.Changed().GoFiles() {
-		if !change.IsIgnored(f) {
+		if options.isEnabled(f) && !change.IsIgnored(f) {
 			if content := change.Content(f); content != nil {
 				if !bytes.HasPrefix(content, prefix) {
 					badFiles = append(badFiles, f)
@@ -178,6 +178,10 @@ func (g *Gofmt) GetPrerequisites() []CheckPrerequisite {
 
 // Run implements Check.
 func (g *Gofmt) Run(change scm.Change, options *Options) error {
+	if !options.isSingleton() {
+		return nil
+	}
+
 	// gofmt doesn't return non-zero even if some files need to be updated.
 	// gofmt accepts files, not packages but using . makes it recursive.
 	//
@@ -227,6 +231,10 @@ func (t *Test) Run(change scm.Change, options *Options) error {
 	testPkgs := change.Indirect().TestPackages()
 	errs := make(chan error, len(testPkgs))
 	for _, tp := range testPkgs {
+		if !options.isEnabled(tp) {
+			continue
+		}
+
 		wg.Add(1)
 		go func(testPkg string) {
 			defer wg.Done()
@@ -283,7 +291,7 @@ func (e *Errcheck) GetPrerequisites() []CheckPrerequisite {
 func (e *Errcheck) Run(change scm.Change, options *Options) error {
 	// errcheck accepts packages, not files.
 	args := []string{"errcheck", "-ignore", e.Ignores}
-	out, _, err := capture(change.Repo(), append(args, change.Changed().Packages()...)...)
+	out, _, err := capture(change.Repo(), append(args, options.enabledValues(change.Changed().Packages()...)...)...)
 	if len(out) != 0 {
 		// TODO(maruel): Process output so paths are relative from
 		// change.Repo().Root().
@@ -322,7 +330,7 @@ func (g *Goimports) GetPrerequisites() []CheckPrerequisite {
 func (g *Goimports) Run(change scm.Change, options *Options) error {
 	// goimports accepts files, not packages.
 	// goimports doesn't return non-zero even if some files need to be updated.
-	out, _, err := capture(change.Repo(), append([]string{"goimports", "-l"}, change.Changed().GoFiles()...)...)
+	out, _, err := capture(change.Repo(), append([]string{"goimports", "-l"}, options.enabledValues(change.Changed().GoFiles()...)...)...)
 	if len(out) != 0 {
 		return fmt.Errorf("these files are improperly formmatted, please run: goimports -w <files>\n%s", out)
 	}
@@ -367,6 +375,10 @@ func (g *Golint) Run(change scm.Change, options *Options) error {
 		files[f] = true
 	}
 	for _, pkg := range pkgs {
+		if !options.isEnabled(pkg) {
+			continue
+		}
+
 		go func(p string) {
 			r := []string{}
 			out, _, _ := capture(change.Repo(), "golint", p)
@@ -429,6 +441,10 @@ func (g *Govet) GetPrerequisites() []CheckPrerequisite {
 
 // Run implements Check.
 func (g *Govet) Run(change scm.Change, options *Options) error {
+	if !options.isSingleton() {
+		return nil
+	}
+
 	// - accepts packages, not files.
 	// - returns non-zero on report.
 	// - accepts multiple packages per call.
@@ -506,6 +522,10 @@ func (c *Custom) GetPrerequisites() []CheckPrerequisite {
 
 // Run implements Check.
 func (c *Custom) Run(change scm.Change, options *Options) error {
+	if !options.isSingleton() {
+		return nil
+	}
+
 	// TODO(maruel): Make what is passed to the command configurable, e.g. one of:
 	// (Changed, Indirect, All) x (GoFiles, Packages, TestPackages)
 	out, exitCode, err := capture(change.Repo(), c.Command...)

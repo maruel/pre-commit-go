@@ -7,6 +7,7 @@
 package checks
 
 import (
+	"crypto/sha1"
 	"fmt"
 
 	"github.com/maruel/pre-commit-go/Godeps/_workspace/src/gopkg.in/yaml.v2"
@@ -85,6 +86,12 @@ type Options struct {
 	// MaxDuration is the maximum allowed duration to run all the checks in
 	// seconds. If it takes more time than that, it is marked as failed.
 	MaxDuration int `yaml:"max_duration"`
+
+	// CurrentShard is the current shard value being executed.
+	CurrentShard int `yaml:"-"`
+	// TotalShards is the tutal number of shards being executed. If zero, this
+	// execution is not being sharded.
+	TotalShards int `yaml:"-"`
 }
 
 // merge merges two options and returns a result.
@@ -95,6 +102,41 @@ func (o *Options) merge(r Options) *Options {
 		out.MaxDuration = r.MaxDuration
 	}
 	return out
+}
+
+// isEnabled returns true if the named configuration option is enabled.
+//
+// This is determined by examining the sharding options. The named
+// configuration option is enabled if it maps to the current shard.
+func (o *Options) isEnabled(name string) bool {
+	if o.TotalShards <= 1 {
+		return true
+	}
+
+	// Condense the hash of "name" into an int64.
+	value := int64(0)
+	for i, b := range sha1.Sum([]byte(name)) {
+		value ^= (int64(b) << (8 * (uint(i) % 8)))
+	}
+	return (int64(o.CurrentShard) == (value % int64(o.TotalShards)))
+}
+
+// isSingleton returns true if this is a singleton shard. Non-sharded Checks
+// should test this to avoid running once for each shard.
+func (o *Options) isSingleton() bool {
+	return o.CurrentShard == 0
+}
+
+// enabledValues returns the list of supplied strings that map to the configured
+// shard.
+func (o *Options) enabledValues(s ...string) []string {
+	r := make([]string, 0, len(s))
+	for _, v := range s {
+		if o.isEnabled(v) {
+			r = append(r, v)
+		}
+	}
+	return r
 }
 
 // Checks helps with Check serialization.
