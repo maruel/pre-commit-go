@@ -132,7 +132,7 @@ func (c *Coverage) RunProfile(change scm.Change, options *Options) (profile Cove
 	if c.isGoverallsEnabled() {
 		// Please send a pull request if the following doesn't work for you on your
 		// favorite CI system.
-		out, _, err2 := capture(change.Repo(), "goveralls", "-coverprofile", filepath.Join(tmpDir, "profile.cov"))
+		out, _, err2 := options.Capture(change.Repo(), "goveralls", "-coverprofile", filepath.Join(tmpDir, "profile.cov"))
 		// Don't fail the build.
 		if err2 != nil {
 			fmt.Printf("%s", out)
@@ -178,7 +178,7 @@ func (c *Coverage) RunGlobal(change scm.Change, options *Options, tmpDir string)
 				testPkg,
 			}
 			start := time.Now()
-			out, exitCode, err := capture(change.Repo(), args...)
+			out, exitCode, err := options.Capture(change.Repo(), args...)
 			duration := time.Since(start)
 			if duration > time.Second {
 				log.Printf("%s was slow: %s", args, round(duration, time.Millisecond))
@@ -250,7 +250,7 @@ func (c *Coverage) RunLocal(change scm.Change, options *Options, tmpDir string) 
 				testPkg,
 			}
 			start := time.Now()
-			out, exitCode, _ := capture(change.Repo(), args...)
+			out, exitCode, _ := options.Capture(change.Repo(), args...)
 			duration := time.Since(start)
 			if duration > time.Second {
 				log.Printf("%s was slow: %s", args, round(duration, time.Millisecond))

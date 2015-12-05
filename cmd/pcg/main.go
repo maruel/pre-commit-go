@@ -101,6 +101,12 @@ const yamlHeader = `# https://github.com/maruel/pre-commit-go configuration file
 
 var parsedVersion []int
 
+// Runtime Options.
+type application struct {
+	config        *checks.Config
+	maxConcurrent int
+}
+
 // Utils.
 
 func init() {
@@ -209,8 +215,8 @@ func callRun(check checks.Check, change scm.Change, options *checks.Options) (ti
 	return time.Now().Sub(start), err
 }
 
-func runChecks(config *checks.Config, change scm.Change, modes []checks.Mode, prereqReady *sync.WaitGroup) error {
-	enabledChecks, options := config.EnabledChecks(modes)
+func (a *application) runChecks(change scm.Change, modes []checks.Mode, prereqReady *sync.WaitGroup) error {
+	enabledChecks, options := a.config.EnabledChecks(modes)
 	log.Printf("mode: %s; %d checks; %d max seconds allowed", modes, len(enabledChecks), options.MaxDuration)
 	if change == nil {
 		log.Printf("no change")
@@ -263,7 +269,7 @@ func runChecks(config *checks.Config, change scm.Change, modes []checks.Mode, pr
 	}
 }
 
-func runPreCommit(repo scm.Repo, config *checks.Config) error {
+func (a *application) runPreCommit(repo scm.Repo) error {
 	// First, stash index and work dir, keeping only the to-be-committed changes
 	// in the working directory.
 	// TODO(maruel): When running for an git commit --amend run, use HEAD~1.
@@ -273,9 +279,9 @@ func runPreCommit(repo scm.Repo, config *checks.Config) error {
 	}
 	// Run the checks.
 	var change scm.Change
-	change, err = repo.Between(scm.Current, scm.Head, config.IgnorePatterns)
+	change, err = repo.Between(scm.Current, scm.Head, a.config.IgnorePatterns)
 	if change != nil {
-		err = runChecks(config, change, []checks.Mode{checks.PreCommit}, &sync.WaitGroup{})
+		err = a.runChecks(change, []checks.Mode{checks.PreCommit}, &sync.WaitGroup{})
 	}
 	// If stashed is false, everything was in the index so no stashing was needed.
 	if stashed {
@@ -286,7 +292,7 @@ func runPreCommit(repo scm.Repo, config *checks.Config) error {
 	return err
 }
 
-func runPrePush(repo scm.Repo, config *checks.Config) (err error) {
+func (a *application) runPrePush(repo scm.Repo) (err error) {
 	previous := scm.Head
 	// Will be "" if the current checkout was detached.
 	previousRef := repo.Ref(scm.Head)
@@ -343,11 +349,11 @@ func runPrePush(repo scm.Repo, config *checks.Config) (err error) {
 		if from == gitNilCommit {
 			from = scm.Initial
 		}
-		change, err := repo.Between(to, from, config.IgnorePatterns)
+		change, err := repo.Between(to, from, a.config.IgnorePatterns)
 		if err != nil {
 			return err
 		}
-		if err = runChecks(config, change, []checks.Mode{checks.PrePush}, &sync.WaitGroup{}); err != nil {
+		if err = a.runChecks(change, []checks.Mode{checks.PrePush}, &sync.WaitGroup{}); err != nil {
 			return err
 		}
 	}
@@ -391,7 +397,7 @@ func (s sortedChecks) Less(i, j int) bool { return s[i].GetName() < s[j].GetName
 
 // Commands.
 
-func cmdHelp(repo scm.ReadOnlyRepo, config *checks.Config, usage string) error {
+func (a *application) cmdHelp(repo scm.ReadOnlyRepo, usage string) error {
 	s := &struct {
 		Usage        string
 		Max          int
@@ -420,12 +426,12 @@ func cmdHelp(repo scm.ReadOnlyRepo, config *checks.Config, usage string) error {
 }
 
 // cmdInfo displays the current configuration used.
-func cmdInfo(repo scm.ReadOnlyRepo, config *checks.Config, modes []checks.Mode, configPath string) error {
+func (a *application) cmdInfo(repo scm.ReadOnlyRepo, modes []checks.Mode, configPath string) error {
 	fmt.Printf("File: %s\n", configPath)
 	fmt.Printf("Repo: %s\n", repo.Root())
 
-	fmt.Printf("MinVersion: %s\n", config.MinVersion)
-	content, err := yaml.Marshal(config.IgnorePatterns)
+	fmt.Printf("MinVersion: %s\n", a.config.MinVersion)
+	content, err := yaml.Marshal(a.config.IgnorePatterns)
 	if err != nil {
 		return err
 	}
@@ -435,7 +441,7 @@ func cmdInfo(repo scm.ReadOnlyRepo, config *checks.Config, modes []checks.Mode, 
 		modes = checks.AllModes
 	}
 	for _, mode := range modes {
-		settings := config.Modes[mode]
+		settings := a.config.Modes[mode]
 		maxLen := 0
 		for _, checks := range settings.Checks {
 			for _, check := range checks {
@@ -467,9 +473,9 @@ func cmdInfo(repo scm.ReadOnlyRepo, config *checks.Config, modes []checks.Mode, 
 }
 
 // cmdInstallPrereq installs all the packages needed to run the enabled checks.
-func cmdInstallPrereq(repo scm.ReadOnlyRepo, config *checks.Config, modes []checks.Mode, noUpdate bool) error {
+func (a *application) cmdInstallPrereq(repo scm.ReadOnlyRepo, modes []checks.Mode, noUpdate bool) error {
 	var wg sync.WaitGroup
-	enabledChecks, _ := config.EnabledChecks(modes)
+	enabledChecks, _ := a.config.EnabledChecks(modes)
 	number := 0
 	c := make(chan string, len(enabledChecks))
 	for _, check := range enabledChecks {
@@ -536,11 +542,11 @@ func cmdInstallPrereq(repo scm.ReadOnlyRepo, config *checks.Config, modes []chec
 //
 // Silently ignore installing the hooks when running under a CI. In
 // particular, circleci.com doesn't create the directory .git/hooks.
-func cmdInstall(repo scm.ReadOnlyRepo, config *checks.Config, modes []checks.Mode, noUpdate bool, prereqReady *sync.WaitGroup) (err error) {
+func (a *application) cmdInstall(repo scm.ReadOnlyRepo, modes []checks.Mode, noUpdate bool, prereqReady *sync.WaitGroup) (err error) {
 	errCh := make(chan error, 1)
 	go func() {
 		defer prereqReady.Done()
-		errCh <- cmdInstallPrereq(repo, config, modes, noUpdate)
+		errCh <- a.cmdInstallPrereq(repo, modes, noUpdate)
 	}()
 
 	defer func() {
@@ -571,7 +577,7 @@ func cmdInstall(repo scm.ReadOnlyRepo, config *checks.Config, modes []checks.Mod
 }
 
 // cmdRun runs all the enabled checks.
-func cmdRun(repo scm.ReadOnlyRepo, config *checks.Config, modes []checks.Mode, against string, prereqReady *sync.WaitGroup) error {
+func (a *application) cmdRun(repo scm.ReadOnlyRepo, modes []checks.Mode, against string, prereqReady *sync.WaitGroup) error {
 	var err error
 	var old scm.Commit
 	if against != "" {
@@ -583,28 +589,28 @@ func cmdRun(repo scm.ReadOnlyRepo, config *checks.Config, modes []checks.Mode, a
 			return errors.New("no upstream")
 		}
 	}
-	change, err := repo.Between(scm.Current, old, config.IgnorePatterns)
+	change, err := repo.Between(scm.Current, old, a.config.IgnorePatterns)
 	if err != nil {
 		return err
 	}
-	return runChecks(config, change, modes, prereqReady)
+	return a.runChecks(change, modes, prereqReady)
 }
 
 // cmdRunHook runs the checks in a git repository.
 //
 // Use a precise "stash, run checks, unstash" to ensure that the check is
 // properly run on the data in the index.
-func cmdRunHook(repo scm.Repo, config *checks.Config, mode string, noUpdate bool) error {
+func (a *application) cmdRunHook(repo scm.Repo, mode string, noUpdate bool) error {
 	switch checks.Mode(mode) {
 	case checks.PreCommit:
-		return runPreCommit(repo, config)
+		return a.runPreCommit(repo)
 
 	case checks.PrePush:
-		return runPrePush(repo, config)
+		return a.runPrePush(repo)
 
 	case checks.ContinuousIntegration:
 		// Always runs all tests on CI.
-		change, err := repo.Between(scm.Current, scm.Initial, config.IgnorePatterns)
+		change, err := repo.Between(scm.Current, scm.Initial, a.config.IgnorePatterns)
 		if err != nil {
 			return err
 		}
@@ -619,9 +625,9 @@ func cmdRunHook(repo scm.Repo, config *checks.Config, mode string, noUpdate bool
 		prereqReady.Add(1)
 		go func() {
 			defer prereqReady.Done()
-			errCh <- cmdInstallPrereq(repo, config, mode, noUpdate)
+			errCh <- a.cmdInstallPrereq(repo, mode, noUpdate)
 		}()
-		err = runChecks(config, change, mode, &prereqReady)
+		err = a.runChecks(change, mode, &prereqReady)
 		if err2 := <-errCh; err2 != nil {
 			return err2
 		}
@@ -632,9 +638,9 @@ func cmdRunHook(repo scm.Repo, config *checks.Config, mode string, noUpdate bool
 	}
 }
 
-func cmdWriteConfig(repo scm.ReadOnlyRepo, config *checks.Config, configPath string) error {
-	config.MinVersion = version
-	content, err := yaml.Marshal(config)
+func (a *application) cmdWriteConfig(repo scm.ReadOnlyRepo, configPath string) error {
+	a.config.MinVersion = version
+	content, err := yaml.Marshal(a.config)
 	if err != nil {
 		return fmt.Errorf("internal error when marshaling config: %s", err)
 	}
@@ -656,12 +662,15 @@ func mainImpl() error {
 	copy(os.Args[1:], os.Args[2:])
 	os.Args = os.Args[:len(os.Args)-1]
 
+	a := application{}
+
 	verboseFlag := flag.Bool("v", checks.IsContinuousIntegration() || os.Getenv("VERBOSE") != "", "enables verbose logging output")
 	allFlag := flag.Bool("a", false, "runs checks as if all files had been modified")
 	againstFlag := flag.String("r", "", "runs checks on files modified since this revision, as evaluated by your scm repo")
 	noUpdateFlag := flag.Bool("n", false, "disallow using go get even if a prerequisite is missing; bail out instead")
 	configPathFlag := flag.String("c", "pre-commit-go.yml", "file name of the config to load")
-	modeFlag := flag.String("m", "", "coma separated list of modes to process; default depends on the command")
+	modeFlag := flag.String("m", "", "comma separated list of modes to process; default depends on the command")
+	flag.IntVar(&a.maxConcurrent, "C", 0, "maximum number of concurrent processes")
 	flag.Parse()
 
 	if *allFlag {
@@ -690,7 +699,11 @@ func mainImpl() error {
 		return err
 	}
 
-	configPath, config := loadConfig(repo, *configPathFlag)
+	var configPath string
+	configPath, a.config = loadConfig(repo, *configPathFlag)
+	if a.maxConcurrent > 0 {
+		a.config.MaxConcurrent = a.maxConcurrent
+	}
 	log.Printf("config: %s", configPath)
 
 	switch cmd {
@@ -714,7 +727,7 @@ func mainImpl() error {
 		b := &bytes.Buffer{}
 		flag.CommandLine.SetOutput(b)
 		flag.CommandLine.PrintDefaults()
-		return cmdHelp(repo, config, b.String())
+		return a.cmdHelp(repo, b.String())
 
 	case "info":
 		if *allFlag != false {
@@ -726,7 +739,7 @@ func mainImpl() error {
 		if *noUpdateFlag != false {
 			return fmt.Errorf("-n can't be used with %s", cmd)
 		}
-		return cmdInfo(repo, config, modes, configPath)
+		return a.cmdInfo(repo, modes, configPath)
 
 	case "install", "i":
 		cmd = "install"
@@ -741,7 +754,7 @@ func mainImpl() error {
 		}
 		var prereqReady sync.WaitGroup
 		prereqReady.Add(1)
-		return cmdInstall(repo, config, modes, *noUpdateFlag, &prereqReady)
+		return a.cmdInstall(repo, modes, *noUpdateFlag, &prereqReady)
 
 	case "installrun":
 		if len(modes) == 0 {
@@ -753,9 +766,9 @@ func mainImpl() error {
 		prereqReady.Add(1)
 		errCh := make(chan error, 1)
 		go func() {
-			errCh <- cmdInstall(repo, config, modes, *noUpdateFlag, &prereqReady)
+			errCh <- a.cmdInstall(repo, modes, *noUpdateFlag, &prereqReady)
 		}()
-		err := cmdRun(repo, config, modes, *againstFlag, &prereqReady)
+		err := a.cmdRun(repo, modes, *againstFlag, &prereqReady)
 		if err2 := <-errCh; err2 != nil {
 			return err2
 		}
@@ -772,7 +785,7 @@ func mainImpl() error {
 		if len(modes) == 0 {
 			modes = checks.AllModes
 		}
-		return cmdInstallPrereq(repo, config, modes, *noUpdateFlag)
+		return a.cmdInstallPrereq(repo, modes, *noUpdateFlag)
 
 	case "run", "r":
 		cmd = "run"
@@ -782,7 +795,7 @@ func mainImpl() error {
 		if len(modes) == 0 {
 			modes = []checks.Mode{checks.PrePush}
 		}
-		return cmdRun(repo, config, modes, *againstFlag, &sync.WaitGroup{})
+		return a.cmdRun(repo, modes, *againstFlag, &sync.WaitGroup{})
 
 	case "run-hook":
 		if modes != nil {
@@ -797,7 +810,7 @@ func mainImpl() error {
 		if flag.NArg() != 1 {
 			return errors.New("run-hook is only meant to be used by hooks")
 		}
-		return cmdRunHook(repo, config, flag.Arg(0), *noUpdateFlag)
+		return a.cmdRunHook(repo, flag.Arg(0), *noUpdateFlag)
 
 	case "version":
 		if modes != nil {
@@ -826,7 +839,7 @@ func mainImpl() error {
 			return fmt.Errorf("-r can't be used with %s", cmd)
 		}
 		// Note that in that case, configPath is ignored and not overritten.
-		return cmdWriteConfig(repo, config, *configPathFlag)
+		return a.cmdWriteConfig(repo, *configPathFlag)
 
 	default:
 		return errors.New("unknown command, try 'help'")

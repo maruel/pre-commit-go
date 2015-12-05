@@ -40,7 +40,7 @@ func TestCoverageGlobal(t *testing.T) {
 		},
 		PerDir: map[string]*CoverageSettings{},
 	}
-	profile, err := c.RunProfile(change, &Options{1})
+	profile, err := c.RunProfile(change, &Options{MaxDuration: 1})
 	ut.AssertEqual(t, nil, err)
 	expected := CoverageProfile{
 		{
@@ -144,7 +144,7 @@ func TestCoverageLocal(t *testing.T) {
 		},
 		PerDir: map[string]*CoverageSettings{},
 	}
-	profile, err := c.RunProfile(change, &Options{1})
+	profile, err := c.RunProfile(change, &Options{MaxDuration: 1})
 	ut.AssertEqual(t, nil, err)
 	expected := CoverageProfile{
 		{
