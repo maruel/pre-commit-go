@@ -81,7 +81,7 @@ func mainImpl() error {
 	// TODO(maruel): Run tests ala pcg; e.g. determine what diff to use.
 	// TODO(maruel): Run only tests down the current directory when
 	// *globalFlag == false.
-	change, err := repo.Between(scm.Current, scm.GitInitialCommit, ignoreFlag)
+	change, err := repo.Between(scm.Current, scm.Initial, ignoreFlag)
 	if err != nil {
 		return err
 	}

@@ -23,12 +23,18 @@ import (
 type Commit string
 
 const (
-	// GitInitialCommit is the root invisible commit.
-	// TODO(maruel): When someone want to add mercurial support, refactor this to
-	// create a pseudo constant named InitialCommit.
-	GitInitialCommit Commit = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
-	// Current is a meta-reference to the current tree.
-	Current Commit = ""
+	// Initial is the root invisible commit.
+	Initial Commit = "<initial>"
+	// Head is the reference to the current checkout as referenced by what is
+	// checked in.
+	Head Commit = "<head>"
+	// Current is a meta-reference to the current tree as on the file system.
+	Current Commit = "<current>"
+	// Upstream is the commit on the remote repository against with the current
+	// branch is based on.
+	Upstream Commit = "<upstream>"
+	// Invalid is an invalid commit reference.
+	Invalid Commit = "<invalid>"
 )
 
 // ReadOnlyRepo represents a source control managemed checkout.
@@ -45,30 +51,26 @@ type ReadOnlyRepo interface {
 	ScmDir() (string, error)
 	// HookPath returns the directory containing the commit and push hooks.
 	HookPath() (string, error)
-	// HEAD returns the HEAD commit hash.
-	HEAD() Commit
-	// Ref returns the HEAD branch name if any. If a remote branch is checked
-	// out, "" is returned.
-	Ref() string
-	// Upstream returns the upstream commit.
-	Upstream() (Commit, error)
-	// Eval returns the commit hash by evaluating refish.
-	Eval(refish string) (Commit, error)
-
+	// Ref returns the branch name referencing to commit c. If there is no branch
+	// name, "" is returned.
+	Ref(c Commit) string
+	// Eval returns the commit hash by evaluating refish. Returns Invalid in case
+	// of failure.
+	Eval(refish string) Commit
 	// Between returns a change with files touched between from and to in it.
 	// If recent is Current, it diffs against the current tree, independent of
 	// what is versioned.
 	//
-	// To get files in the staging area, use (Current, HEAD()).
+	// To get files in the staging area, use (Current, Head).
 	//
 	// Untracked files are always excluded.
 	//
 	// Files with untracked change will be included if recent == Current. To
 	// exclude untracked changes to tracked files, use Stash() first or specify
-	// recent=HEAD().
+	// Head for recent.
 	//
 	// To get the list of all files in the tree and the index, use
-	// Between(Current, GitInitialCommit, ...).
+	// Between(Current, Initial, ...).
 	//
 	// Returns nil and no error if there's no file difference.
 	Between(recent, old Commit, ignorePatterns IgnorePatterns) (Change, error)
@@ -87,7 +89,7 @@ type Repo interface {
 	// Stash restores the stash generated from Stash.
 	Restore() error
 	// Checkout checks out a commit or a branch.
-	Checkout(ref string) error
+	Checkout(refish string) error
 }
 
 // GetRepo returns a valid Repo if one is found.
@@ -150,6 +152,33 @@ func getRepo(wd, gopath string) (repo, error) {
 	return nil, fmt.Errorf("failed to find git checkout root")
 }
 
+type gitCommit Commit
+
+const (
+	gitInitial  gitCommit = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+	gitHead     gitCommit = "HEAD"
+	gitCurrent  gitCommit = "<current>"
+	gitUpstream gitCommit = "@{upstream}"
+	gitInvalid  gitCommit = "<invalid>"
+)
+
+func toGitCommit(c Commit) gitCommit {
+	switch c {
+	case Initial:
+		return gitInitial
+	case Head:
+		return gitHead
+	case Current:
+		return gitCurrent
+	case Upstream:
+		return gitUpstream
+	case Invalid, "":
+		return gitInvalid
+	default:
+		return gitCommit(c)
+	}
+}
+
 type git struct {
 	root   string
 	gopath string
@@ -157,6 +186,8 @@ type git struct {
 	lock   sync.Mutex
 	gitDir string
 }
+
+// ReadOnlyRepo interface.
 
 func (g *git) Root() string {
 	return g.root
@@ -183,52 +214,66 @@ func (g *git) HookPath() (string, error) {
 	return filepath.Join(d, "hooks"), nil
 }
 
-func (g *git) HEAD() Commit {
-	if out, code, _ := g.capture(nil, "rev-parse", "--verify", "HEAD"); code == 0 {
-		return Commit(out)
+func (g *git) Ref(c Commit) string {
+	gc := toGitCommit(c)
+	if gc == gitInvalid {
+		return string(Invalid)
 	}
-	return GitInitialCommit
-}
-
-func (g *git) Ref() string {
-	if out, code, _ := g.capture(nil, "symbolic-ref", "--short", "HEAD"); code == 0 {
+	// Semantically, Current == Head for the Ref.
+	if gc == gitCurrent {
+		gc = gitHead
+	}
+	out, code, _ := g.capture(nil, "symbolic-ref", "--short", string(gc))
+	if code == 0 {
 		return out
 	}
+	log.Println(out)
 	return ""
 }
 
-func (g *git) Upstream() (Commit, error) {
-	if commit, err := g.Eval("@{upstream}"); err == nil {
-		return commit, nil
+func (g *git) Eval(refish string) Commit {
+	// Look for meta-commit. Branch names will be passing fine, unless there's a
+	// branch named "<invalid>".
+	c := toGitCommit(Commit(refish))
+	if c == gitCurrent {
+		c = gitHead
 	}
-	return "", errors.New("no upstream")
-}
-
-func (g *git) Eval(refish string) (Commit, error) {
-	if out, code, _ := g.capture(nil, "log", "-1", "--format=%H", refish); code == 0 {
-		return Commit(out), nil
+	if c == gitInitial {
+		// Shortcut.
+		return Commit(gitInitial)
 	}
-	return "", fmt.Errorf("couldn't evaluate %s", refish)
-}
-
-func (g *git) untracked() []string {
-	return g.captureList(nil, nil, "ls-files", "--others", "--exclude-standard", "-z")
-}
-
-func (g *git) unstaged() []string {
-	return g.captureList(nil, nil, "diff", "--name-only", "--no-color", "--no-ext-diff", "-z")
-}
-
-func (g *git) staged() []string {
-	return g.captureList(nil, nil, "diff", "--name-only", "--no-color", "--no-ext-diff", "--cached", "--diff-filter=ACMRT", "-z")
+	if c == gitInvalid {
+		return Invalid
+	}
+	out, code, _ := g.capture(nil, "log", "-1", "--format=%H", string(c))
+	if code == 0 {
+		return Commit(out)
+	}
+	if c == gitHead {
+		// It's because there hasn't been a commit yet.
+		return Commit(gitInitial)
+	}
+	log.Println(out)
+	return Invalid
 }
 
 func (g *git) Between(recent, old Commit, ignorePatterns IgnorePatterns) (Change, error) {
 	log.Printf("Between(%q, %q, %s)", recent, old, ignorePatterns)
-	if old == Current {
+	grecent := toGitCommit(recent)
+	if grecent == gitInvalid {
+		return nil, errors.New("invalid recent commit")
+	}
+	if grecent != gitCurrent && !g.isValid(grecent) {
+		return nil, errors.New("invalid recent commit")
+	}
+	gold := toGitCommit(old)
+	if gold == gitInvalid {
+		return nil, errors.New("invalid old commit")
+	}
+	if gold == gitCurrent {
 		return nil, errors.New("can't use Current as old commit")
 	}
-	if !g.isValid(old) {
+	if gold != gitUpstream && gold != gitHead && !g.isValid(gold) {
 		return nil, errors.New("invalid old commit")
 	}
 
@@ -236,14 +281,15 @@ func (g *git) Between(recent, old Commit, ignorePatterns IgnorePatterns) (Change
 	allFilesCh := make(chan []string)
 	var allFiles []string
 
-	// Gather list of changes files.
+	// Gather list of changed files.
 	var files []string
-	if recent == Current {
+	if grecent == gitCurrent {
+		// Current is special cased, as it has to look at the checked out files.
 		go func() {
 			allFilesCh <- g.captureList(nil, ignorePatterns, "ls-files", "-z")
 		}()
-		if old == GitInitialCommit {
-			// Diff against initial commit.
+		if gold == gitInitial {
+			// Fast path: diff against initial commit.
 			allFiles = <-allFilesCh
 			files = allFiles
 		} else {
@@ -258,15 +304,16 @@ func (g *git) Between(recent, old Commit, ignorePatterns IgnorePatterns) (Change
 			}()
 
 			// Need to remove duplicates.
-			filesSet := map[string]bool{}
-			for _, f := range g.captureList(nil, ignorePatterns, "diff-tree", "--no-commit-id", "--name-only", "-z", "-r", "--diff-filter=ACMRT", "--no-renames", "--no-ext-diff", string(old), "HEAD") {
-				filesSet[f] = true
+			// TODO(maruel): Use github.com/xtgo/set
+			filesSet := map[string]struct{}{}
+			for _, f := range g.captureList(nil, ignorePatterns, "diff-tree", "--no-commit-id", "--name-only", "-z", "-r", "--diff-filter=ACMRT", "--no-renames", "--no-ext-diff", string(gold), string(gitHead)) {
+				filesSet[f] = struct{}{}
 			}
 			for _, f := range <-unstagedCh {
-				filesSet[f] = true
+				filesSet[f] = struct{}{}
 			}
 			for _, f := range <-stagedCh {
-				filesSet[f] = true
+				filesSet[f] = struct{}{}
 			}
 			files = make([]string, 0, len(filesSet))
 			for f := range filesSet {
@@ -275,13 +322,11 @@ func (g *git) Between(recent, old Commit, ignorePatterns IgnorePatterns) (Change
 			allFiles = <-allFilesCh
 		}
 	} else {
+		// Not using Current, so only use the index.
 		go func() {
-			allFilesCh <- g.captureList(nil, ignorePatterns, "ls-files", "-z", "--with-tree="+string(recent))
+			allFilesCh <- g.captureList(nil, ignorePatterns, "ls-files", "-z", "--with-tree="+string(grecent))
 		}()
-		if !g.isValid(recent) {
-			return nil, errors.New("invalid old commit")
-		}
-		files = g.captureList(nil, ignorePatterns, "diff-tree", "--no-commit-id", "--name-only", "-z", "-r", "--diff-filter=ACMRT", "--no-renames", "--no-ext-diff", string(old), string(recent))
+		files = g.captureList(nil, ignorePatterns, "diff-tree", "--no-commit-id", "--name-only", "-z", "-r", "--diff-filter=ACMRT", "--no-renames", "--no-ext-diff", string(gold), string(grecent))
 		allFiles = <-allFilesCh
 	}
 	if len(files) == 0 {
@@ -304,6 +349,8 @@ func (g *git) Between(recent, old Commit, ignorePatterns IgnorePatterns) (Change
 func (g *git) GOPATH() string {
 	return g.gopath
 }
+
+// Repo interface.
 
 func (g *git) Stash() (bool, error) {
 	// Ensure everything is either tracked or ignored. This is because git stash
@@ -352,7 +399,7 @@ func (g *git) Stash() (bool, error) {
 	oldStash := <-oldStashCh
 
 	if out, e, err := g.capture(nil, "stash", "save", "-q", "--keep-index"); e != 0 || err != nil {
-		if g.HEAD() == GitInitialCommit {
+		if gitCommit(g.Eval(string(gitHead))) == gitInitial {
 			return false, errors.New("Can't stash until there's at least one commit")
 		}
 		return false, fmt.Errorf("failed to stash:\n%s", out)
@@ -377,11 +424,27 @@ func (g *git) Restore() error {
 	return nil
 }
 
-func (g *git) Checkout(ref string) error {
-	if out, e, err := g.capture(nil, "checkout", "-f", "-q", ref); e != 0 || err != nil {
+func (g *git) Checkout(refish string) error {
+	c := toGitCommit(Commit(refish))
+	if c == gitInvalid {
+		return errors.New("invalid commit")
+	}
+	if out, e, err := g.capture(nil, "checkout", "-f", "-q", string(c)); e != 0 || err != nil {
 		return fmt.Errorf("checkout failed:\n%s", out)
 	}
 	return nil
+}
+
+func (g *git) untracked() []string {
+	return g.captureList(nil, nil, "ls-files", "--others", "--exclude-standard", "-z")
+}
+
+func (g *git) unstaged() []string {
+	return g.captureList(nil, nil, "diff", "--name-only", "--no-color", "--no-ext-diff", "-z")
+}
+
+func (g *git) staged() []string {
+	return g.captureList(nil, nil, "diff", "--name-only", "--no-color", "--no-ext-diff", "--cached", "--diff-filter=ACMRT", "-z")
 }
 
 func (g *git) capture(env []string, args ...string) (string, int, error) {
@@ -418,7 +481,7 @@ func (g *git) captureList(env []string, ignorePatterns IgnorePatterns, args ...s
 	return list
 }
 
-func (g *git) isValid(c Commit) bool {
+func (g *git) isValid(c gitCommit) bool {
 	return reCommit.MatchString(string(c))
 }
 

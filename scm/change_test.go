@@ -307,13 +307,11 @@ type dummyRepo struct {
 	root string
 }
 
-func (d *dummyRepo) Root() string                  { return d.root }
-func (d *dummyRepo) ScmDir() (string, error)       { d.t.FailNow(); return "", nil }
-func (d *dummyRepo) HookPath() (string, error)     { d.t.FailNow(); return "", nil }
-func (d *dummyRepo) HEAD() Commit                  { d.t.FailNow(); return "" }
-func (d *dummyRepo) Ref() string                   { d.t.FailNow(); return "" }
-func (d *dummyRepo) Upstream() (Commit, error)     { d.t.FailNow(); return "", nil }
-func (d *dummyRepo) Eval(e string) (Commit, error) { d.t.FailNow(); return "", nil }
+func (d *dummyRepo) Root() string              { return d.root }
+func (d *dummyRepo) ScmDir() (string, error)   { d.t.FailNow(); return "", nil }
+func (d *dummyRepo) HookPath() (string, error) { d.t.FailNow(); return "", nil }
+func (d *dummyRepo) Ref(c Commit) string       { d.t.FailNow(); return "" }
+func (d *dummyRepo) Eval(refish string) Commit { d.t.FailNow(); return Invalid }
 func (d *dummyRepo) Between(recent, old Commit, ignoredPaths IgnorePatterns) (Change, error) {
 	d.t.FailNow()
 	return nil, nil

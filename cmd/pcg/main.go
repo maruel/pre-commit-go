@@ -266,13 +266,14 @@ func runChecks(config *checks.Config, change scm.Change, modes []checks.Mode, pr
 func runPreCommit(repo scm.Repo, config *checks.Config) error {
 	// First, stash index and work dir, keeping only the to-be-committed changes
 	// in the working directory.
+	// TODO(maruel): When running for an git commit --amend run, use HEAD~1.
 	stashed, err := repo.Stash()
 	if err != nil {
 		return err
 	}
 	// Run the checks.
 	var change scm.Change
-	change, err = repo.Between(scm.Current, repo.HEAD(), config.IgnorePatterns)
+	change, err = repo.Between(scm.Current, scm.Head, config.IgnorePatterns)
 	if change != nil {
 		err = runChecks(config, change, []checks.Mode{checks.PreCommit}, &sync.WaitGroup{})
 	}
@@ -286,9 +287,9 @@ func runPreCommit(repo scm.Repo, config *checks.Config) error {
 }
 
 func runPrePush(repo scm.Repo, config *checks.Config) (err error) {
-	previous := repo.HEAD()
+	previous := scm.Head
 	// Will be "" if the current checkout was detached.
-	previousRef := repo.Ref()
+	previousRef := repo.Ref(scm.Head)
 	curr := previous
 	stashed := false
 	defer func() {
@@ -340,7 +341,7 @@ func runPrePush(repo scm.Repo, config *checks.Config) (err error) {
 			}
 		}
 		if from == gitNilCommit {
-			from = scm.GitInitialCommit
+			from = scm.Initial
 		}
 		change, err := repo.Between(to, from, config.IgnorePatterns)
 		if err != nil {
@@ -574,12 +575,12 @@ func cmdRun(repo scm.ReadOnlyRepo, config *checks.Config, modes []checks.Mode, a
 	var err error
 	var old scm.Commit
 	if against != "" {
-		if old, err = repo.Eval(against); err != nil {
-			return err
+		if old = repo.Eval(against); old == scm.Invalid {
+			return errors.New("invalid commit 'against'")
 		}
 	} else {
-		if old, err = repo.Upstream(); err != nil {
-			return err
+		if old = repo.Eval(string(scm.Upstream)); old == scm.Invalid {
+			return errors.New("no upstream")
 		}
 	}
 	change, err := repo.Between(scm.Current, old, config.IgnorePatterns)
@@ -603,7 +604,7 @@ func cmdRunHook(repo scm.Repo, config *checks.Config, mode string, noUpdate bool
 
 	case checks.ContinuousIntegration:
 		// Always runs all tests on CI.
-		change, err := repo.Between(scm.Current, scm.GitInitialCommit, config.IgnorePatterns)
+		change, err := repo.Between(scm.Current, scm.Initial, config.IgnorePatterns)
 		if err != nil {
 			return err
 		}
@@ -667,7 +668,7 @@ func mainImpl() error {
 		if *againstFlag != "" {
 			return errors.New("-a can't be used with -r")
 		}
-		*againstFlag = string(scm.GitInitialCommit)
+		*againstFlag = string(scm.Initial)
 	}
 
 	log.SetFlags(log.Lmicroseconds)

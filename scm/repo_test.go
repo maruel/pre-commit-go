@@ -36,8 +36,9 @@ func TestGetRepoGitSlowSuccess(t *testing.T) {
 	p, err := r.HookPath()
 	ut.AssertEqual(t, nil, err)
 	ut.AssertEqual(t, filepath.Join(tmpDir, ".git", "hooks"), p)
-	ut.AssertEqual(t, GitInitialCommit, r.HEAD())
-	err = r.Checkout(string(GitInitialCommit))
+	ut.AssertEqual(t, Commit(gitInitial), r.Eval(string(Head)))
+	ut.AssertEqual(t, nil, err)
+	err = r.Checkout(string(Initial))
 	ut.AssertEqual(t, errors.New("checkout failed:\nfatal: Cannot switch branch to a non-commit '4b825dc642cb6eb9a060e54bf8d69288fbee4904'"), err)
 
 	ut.AssertEqual(t, []string{}, r.untracked())
@@ -61,10 +62,10 @@ func TestGetRepoGitSlowSuccess(t *testing.T) {
 	ut.AssertEqual(t, false, done)
 
 	deterministicCommit(t, tmpDir)
-	ut.AssertEqual(t, "master", r.Ref())
+	ut.AssertEqual(t, "master", r.Ref(Head))
 	ut.AssertEqual(t, "package foo\n// hello\n", read(t, tmpDir, "src/foo/file1.go"))
 	commitInitial := assertHEAD(t, r, "f4edb8ac30289340040451b6f8c20d17614a9ae7")
-	ut.AssertEqual(t, "master", r.Ref())
+	ut.AssertEqual(t, "master", r.Ref(Head))
 
 	done, err = r.Stash()
 	ut.AssertEqual(t, nil, err)
@@ -76,35 +77,29 @@ func TestGetRepoGitSlowSuccess(t *testing.T) {
 	msg := "checkout failed:\nerror: pathspec 'invalid' did not match any file(s) known to git."
 	ut.AssertEqual(t, errors.New(msg), r.Checkout("invalid"))
 	ut.AssertEqual(t, "package foo\n// hello\n", read(t, tmpDir, "src/foo/file1.go"))
-	ut.AssertEqual(t, "master", r.Ref())
+	ut.AssertEqual(t, "master", r.Ref(Head))
 	ut.AssertEqual(t, nil, r.Checkout(string(commitInitial)))
 	ut.AssertEqual(t, "package foo\n", read(t, tmpDir, "src/foo/file1.go"))
-	ut.AssertEqual(t, "", r.Ref())
-	ut.AssertEqual(t, commitInitial, r.HEAD())
+	ut.AssertEqual(t, commitInitial, r.Eval(string(Head)))
 	ut.AssertEqual(t, nil, r.Checkout("master"))
 	ut.AssertEqual(t, "package foo\n", read(t, tmpDir, "src/foo/file1.go"))
-	ut.AssertEqual(t, "master", r.Ref())
-	ut.AssertEqual(t, commitInitial, r.HEAD())
+	ut.AssertEqual(t, "master", r.Ref(Head))
+	ut.AssertEqual(t, commitInitial, r.Eval(string(Head)))
 
-	upstream, err := r.Upstream()
-	ut.AssertEqual(t, Commit(""), upstream)
-	ut.AssertEqual(t, errors.New("no upstream"), err)
+	ut.AssertEqual(t, Invalid, r.Eval(string(Upstream)))
+	ut.AssertEqual(t, Invalid, r.Eval("HEAD~1000"))
 
-	against, err := r.Eval("HEAD~1000")
-	ut.AssertEqual(t, Commit(""), against)
-	ut.AssertEqual(t, errors.New("couldn't evaluate HEAD~1000"), err)
-
-	c, err := r.Between(commitInitial, GitInitialCommit, nil)
+	c, err := r.Between(commitInitial, Initial, nil)
 	ut.AssertEqual(t, nil, err)
 	ut.AssertEqual(t, []string{"src/foo/file1.go"}, c.Changed().GoFiles())
 	ut.AssertEqual(t, []string{"src/foo/file1.go"}, c.Indirect().GoFiles())
 	ut.AssertEqual(t, []string{"src/foo/file1.go"}, c.All().GoFiles())
 
-	c, err = r.Between(Current, GitInitialCommit, nil)
+	c, err = r.Between(Current, Initial, nil)
 	ut.AssertEqual(t, nil, err)
 	ut.AssertEqual(t, []string{"src/foo/file1.go"}, c.Changed().GoFiles())
 
-	c, err = r.Between(Current, GitInitialCommit, []string{"f*"})
+	c, err = r.Between(Current, Initial, []string{"f*"})
 	ut.AssertEqual(t, nil, err)
 	ut.AssertEqual(t, nil, c)
 
@@ -128,7 +123,7 @@ func TestGetRepoGitSlowSuccess(t *testing.T) {
 	ut.AssertEqual(t, []string{"src/foo/deleted/deleted.go"}, r.staged())
 	deterministicCommit(t, tmpDir)
 	commitWithDeleted := assertHEAD(t, r, "c9b5f312ec8eefb58beeaf8c3684bb832fdefef7")
-	c, err = r.Between(commitWithDeleted, GitInitialCommit, nil)
+	c, err = r.Between(commitWithDeleted, Initial, nil)
 	ut.AssertEqual(t, []string{"src/foo/deleted/deleted.go", "src/foo/file1.go"}, c.Changed().GoFiles())
 	ut.AssertEqual(t, []string{"src/foo/deleted/deleted.go", "src/foo/file1.go"}, c.Indirect().GoFiles())
 	ut.AssertEqual(t, []string{"src/foo/deleted/deleted.go", "src/foo/file1.go"}, c.All().GoFiles())
@@ -144,7 +139,7 @@ func TestGetRepoGitSlowSuccess(t *testing.T) {
 	ut.AssertEqual(t, []string{}, r.staged())
 	deterministicCommit(t, tmpDir)
 	commitAfterDelete := assertHEAD(t, r, "8aacb7c27c4d012c56bd861d2a8bc4da8ea7ee73")
-	c, err = r.Between(commitAfterDelete, GitInitialCommit, nil)
+	c, err = r.Between(commitAfterDelete, Initial, nil)
 	ut.AssertEqual(t, nil, err)
 	ut.AssertEqual(t, []string{"src/foo/file1.go"}, c.Changed().GoFiles())
 	ut.AssertEqual(t, []string{"src/foo/file1.go"}, c.Indirect().GoFiles())
@@ -152,7 +147,7 @@ func TestGetRepoGitSlowSuccess(t *testing.T) {
 	c, err = r.Between(commitAfterDelete, commitWithDeleted, nil)
 	ut.AssertEqual(t, nil, err)
 	ut.AssertEqual(t, nil, c)
-	c, err = r.Between(commitWithDeleted, GitInitialCommit, nil)
+	c, err = r.Between(commitWithDeleted, Initial, nil)
 	ut.AssertEqual(t, nil, err)
 	ut.AssertEqual(t, []string{"src/foo/deleted/deleted.go", "src/foo/file1.go"}, c.Changed().GoFiles())
 	ut.AssertEqual(t, []string{"src/foo/deleted/deleted.go", "src/foo/file1.go"}, c.Indirect().GoFiles())
@@ -210,8 +205,8 @@ func TestGetRepoGitSlowFailures(t *testing.T) {
 	ut.AssertEqual(t, []string(nil), r.untracked())
 	ut.AssertEqual(t, []string(nil), r.unstaged())
 
-	ut.AssertEqual(t, GitInitialCommit, r.HEAD())
-	ut.AssertEqual(t, "", r.Ref())
+	ut.AssertEqual(t, Commit(gitInitial), r.Eval(string(Head)))
+	ut.AssertEqual(t, "", r.Ref(Head))
 
 	done, err := r.Stash()
 	ut.AssertEqual(t, errors.New("failed to get list of untracked files"), err)
@@ -221,7 +216,7 @@ func TestGetRepoGitSlowFailures(t *testing.T) {
 		t.Fatalf("Unexpected error: %s", errStr)
 	}
 
-	errStr = r.Checkout(string(GitInitialCommit)).Error()
+	errStr = r.Checkout(string(Initial)).Error()
 	if errStr != "checkout failed:\nfatal: Not a git repository: '.git'" && errStr != "checkout failed:\nfatal: Not a git repository (or any of the parent directories): .git" {
 		t.Fatalf("Unexpected error: %s", errStr)
 	}
@@ -259,7 +254,7 @@ func deterministicCommit(t *testing.T, tmpDir string) {
 }
 
 func assertHEAD(t *testing.T, r ReadOnlyRepo, expected Commit) Commit {
-	if head := r.HEAD(); head != expected {
+	if head := r.Eval(string(Head)); head != expected {
 		t.Logf("%s", strings.Join(os.Environ(), "\n"))
 		t.Logf("%s", run(t, r.Root(), nil, "log", "-p", "--format=fuller"))
 		ut.AssertEqual(t, expected, head)
