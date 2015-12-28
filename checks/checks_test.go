@@ -18,6 +18,12 @@ import (
 	"github.com/maruel/pre-commit-go/scm"
 )
 
+func init() {
+	for _, i := range []string{"GIT_WORK_TREE", "GIT_DIR", "GIT_PREFIX"} {
+		os.Unsetenv(i)
+	}
+}
+
 func TestCheckPrerequisite(t *testing.T) {
 	// Runs all checks, they should all pass.
 	t.Parallel()
@@ -230,13 +236,13 @@ func setup(t *testing.T, td string, files map[string]string) scm.Change {
 		ut.AssertEqual(t, nil, os.MkdirAll(filepath.Dir(p), 0700))
 		ut.AssertEqual(t, nil, ioutil.WriteFile(p, []byte(c), 0600))
 	}
-	_, code, err := internal.Capture(fooDir, nil, "git", "init")
-	ut.AssertEqual(t, 0, code)
+	out, code, err := internal.Capture(fooDir, nil, "git", "init")
+	ut.AssertEqualf(t, 0, code, out)
 	ut.AssertEqual(t, nil, err)
 	// It's important to add the files to the index, otherwise they will be
 	// ignored.
-	_, code, err = internal.Capture(fooDir, nil, "git", "add", ".")
-	ut.AssertEqual(t, 0, code)
+	out, code, err = internal.Capture(fooDir, nil, "git", "add", ".")
+	ut.AssertEqualf(t, 0, code, out)
 	ut.AssertEqual(t, nil, err)
 
 	repo, err := scm.GetRepo(fooDir, td)

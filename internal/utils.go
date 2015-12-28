@@ -44,7 +44,12 @@ func Capture(wd string, env []string, args ...string) (string, int, error) {
 	procEnv["LANGUAGE"] = "en_US.UTF-8"
 	for _, item := range env {
 		items := strings.SplitN(item, "=", 2)
-		procEnv[items[0]] = items[1]
+		if items[1] == "" {
+			// Remove it instead.
+			delete(procEnv, items[0])
+		} else {
+			procEnv[items[0]] = items[1]
+		}
 	}
 	c.Env = make([]string, 0, len(procEnv))
 	for k, v := range procEnv {
