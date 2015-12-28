@@ -20,7 +20,7 @@ import (
 
 func init() {
 	for _, i := range []string{"GIT_WORK_TREE", "GIT_DIR", "GIT_PREFIX"} {
-		os.Unsetenv(i)
+		_ = os.Unsetenv(i)
 	}
 }
 
