@@ -10,6 +10,8 @@ import (
 	"fmt"
 
 	"github.com/maruel/pre-commit-go/Godeps/_workspace/src/gopkg.in/yaml.v2"
+	"github.com/maruel/pre-commit-go/internal"
+	"github.com/maruel/pre-commit-go/scm"
 )
 
 // Mode is one of the check mode. When running checks, the mode determine what
@@ -57,12 +59,24 @@ type Config struct {
 	// []string{".*", "_*"}.  This is a glob that is applied to each path
 	// component of each file.
 	IgnorePatterns []string `yaml:"ignore_patterns"`
+
+	// MaxConcurrent, if not zero, is the maximum number of concurrent processes
+	// to run. If zero, there is no maximum.
+	MaxConcurrent int `yaml:"-"`
 }
 
 // EnabledChecks returns all the checks enabled.
 func (c *Config) EnabledChecks(modes []Mode) ([]Check, *Options) {
 	out := []Check{}
 	options := &Options{}
+	if c.MaxConcurrent > 0 {
+		// Allocate and populate a run token semaphore.
+		options.runTokens = make(chan struct{}, c.MaxConcurrent)
+		for i := 0; i < c.MaxConcurrent; i++ {
+			options.runTokens <- struct{}{}
+		}
+	}
+
 	for _, mode := range modes {
 		for _, checks := range c.Modes[mode].Checks {
 			out = append(out, checks...)
@@ -85,6 +99,40 @@ type Options struct {
 	// MaxDuration is the maximum allowed duration to run all the checks in
 	// seconds. If it takes more time than that, it is marked as failed.
 	MaxDuration int `yaml:"max_duration"`
+
+	// runTokens is a channel containing "run tokens". Each task wishing to self-
+	// meter should lease a run token prior to execution and return it afterwards.
+	//
+	// If nil, run token operations are no-ops.
+	runTokens chan struct{}
+}
+
+// LeaseRunToken returns a leased run token.
+//
+// A token must be returned after use via ReturnRunToken. This should be done
+// via defer, as failure to return a run token will result in throttling or
+// deadlock.
+func (o *Options) LeaseRunToken() {
+	if o.runTokens == nil {
+		return
+	}
+	<-o.runTokens
+}
+
+// ReturnRunToken returns a leased run token.
+func (o *Options) ReturnRunToken() {
+	if o.runTokens == nil {
+		return
+	}
+	o.runTokens <- struct{}{}
+}
+
+// Capture sets GOPATH and executes a subprocess.
+func (o *Options) Capture(r scm.ReadOnlyRepo, args ...string) (string, int, error) {
+	o.LeaseRunToken()
+	defer o.ReturnRunToken()
+
+	return internal.Capture(r.Root(), []string{"GOPATH=" + r.GOPATH()}, args...)
 }
 
 // merge merges two options and returns a result.
