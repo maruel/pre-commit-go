@@ -1,4 +1,4 @@
-// Copyright 2015 Marc-Antoine Ruel. All rights reserved.
+// Copyright 2016 Marc-Antoine Ruel. All rights reserved.
 // Use of this source code is governed under the Apache License, Version 2.0
 // that can be found in the LICENSE file.
 
@@ -17,12 +17,6 @@ import (
 	"github.com/maruel/pre-commit-go/internal"
 	"github.com/maruel/pre-commit-go/scm"
 )
-
-func init() {
-	for _, i := range []string{"GIT_WORK_TREE", "GIT_DIR", "GIT_PREFIX"} {
-		_ = os.Unsetenv(i)
-	}
-}
 
 func TestCheckPrerequisite(t *testing.T) {
 	// Runs all checks, they should all pass.
