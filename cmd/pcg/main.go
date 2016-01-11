@@ -650,28 +650,35 @@ func (a *application) cmdWriteConfig(repo scm.ReadOnlyRepo, configPath string) e
 
 // mainImpl implements pcg.
 func mainImpl() error {
-	if len(os.Args) == 1 {
+	a := application{}
+
+	exec, args := os.Args[0], os.Args[1:]
+	var commands, flags []string
+	for i, arg := range args {
+		if strings.HasPrefix(arg, "-") {
+			flags = args[i:]
+			break
+		}
+		commands = append(commands, arg)
+	}
+
+	if len(commands) == 0 {
 		if checks.IsContinuousIntegration() {
-			os.Args = append(os.Args, "run-hook", "continuous-integration")
+			commands = []string{"run-hook", "continuous-integration"}
 		} else {
-			os.Args = append(os.Args, "installrun")
+			commands = []string{"installrun"}
 		}
 	}
 
-	cmd := os.Args[1]
-	copy(os.Args[1:], os.Args[2:])
-	os.Args = os.Args[:len(os.Args)-1]
-
-	a := application{}
-
-	verboseFlag := flag.Bool("v", checks.IsContinuousIntegration() || os.Getenv("VERBOSE") != "", "enables verbose logging output")
-	allFlag := flag.Bool("a", false, "runs checks as if all files had been modified")
-	againstFlag := flag.String("r", "", "runs checks on files modified since this revision, as evaluated by your scm repo")
-	noUpdateFlag := flag.Bool("n", false, "disallow using go get even if a prerequisite is missing; bail out instead")
-	configPathFlag := flag.String("c", "pre-commit-go.yml", "file name of the config to load")
-	modeFlag := flag.String("m", "", "comma separated list of modes to process; default depends on the command")
-	flag.IntVar(&a.maxConcurrent, "C", 0, "maximum number of concurrent processes")
-	flag.Parse()
+	fs := flag.NewFlagSet(exec, flag.ExitOnError)
+	verboseFlag := fs.Bool("v", checks.IsContinuousIntegration() || os.Getenv("VERBOSE") != "", "enables verbose logging output")
+	allFlag := fs.Bool("a", false, "runs checks as if all files had been modified")
+	againstFlag := fs.String("r", "", "runs checks on files modified since this revision, as evaluated by your scm repo")
+	noUpdateFlag := fs.Bool("n", false, "disallow using go get even if a prerequisite is missing; bail out instead")
+	configPathFlag := fs.String("c", "pre-commit-go.yml", "file name of the config to load")
+	modeFlag := fs.String("m", "", "comma separated list of modes to process; default depends on the command")
+	fs.IntVar(&a.maxConcurrent, "C", 0, "maximum number of concurrent processes")
+	fs.Parse(flags)
 
 	if *allFlag {
 		if *againstFlag != "" {
@@ -701,12 +708,13 @@ func mainImpl() error {
 
 	var configPath string
 	configPath, a.config = loadConfig(repo, *configPathFlag)
+	log.Printf("config: %s", configPath)
 	if a.maxConcurrent > 0 {
+		log.Printf("using %d maximum concurrent goroutines", a.maxConcurrent)
 		a.config.MaxConcurrent = a.maxConcurrent
 	}
-	log.Printf("config: %s", configPath)
 
-	switch cmd {
+	switch cmd := commands[0]; cmd {
 	case "help", "-help", "-h":
 		cmd = "help"
 		if *allFlag != false {
@@ -725,8 +733,8 @@ func mainImpl() error {
 			return fmt.Errorf("-m can't be used with %s", cmd)
 		}
 		b := &bytes.Buffer{}
-		flag.CommandLine.SetOutput(b)
-		flag.CommandLine.PrintDefaults()
+		fs.SetOutput(b)
+		fs.PrintDefaults()
 		return a.cmdHelp(repo, b.String())
 
 	case "info":
@@ -807,10 +815,11 @@ func mainImpl() error {
 		if *againstFlag != "" {
 			return fmt.Errorf("-r can't be used with %s", cmd)
 		}
-		if flag.NArg() != 1 {
+
+		if len(commands) < 2 {
 			return errors.New("run-hook is only meant to be used by hooks")
 		}
-		return a.cmdRunHook(repo, flag.Arg(0), *noUpdateFlag)
+		return a.cmdRunHook(repo, commands[1], *noUpdateFlag)
 
 	case "version":
 		if modes != nil {
@@ -842,7 +851,7 @@ func mainImpl() error {
 		return a.cmdWriteConfig(repo, *configPathFlag)
 
 	default:
-		return errors.New("unknown command, try 'help'")
+		return fmt.Errorf("unknown command %q, try 'help'", cmd)
 	}
 }
 
