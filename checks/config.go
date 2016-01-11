@@ -72,9 +72,6 @@ func (c *Config) EnabledChecks(modes []Mode) ([]Check, *Options) {
 	if c.MaxConcurrent > 0 {
 		// Allocate and populate a run token semaphore.
 		options.runTokens = make(chan struct{}, c.MaxConcurrent)
-		for i := 0; i < c.MaxConcurrent; i++ {
-			options.runTokens <- struct{}{}
-		}
 	}
 
 	for _, mode := range modes {
@@ -100,8 +97,7 @@ type Options struct {
 	// seconds. If it takes more time than that, it is marked as failed.
 	MaxDuration int `yaml:"max_duration"`
 
-	// runTokens is a channel containing "run tokens". Each task wishing to self-
-	// meter should lease a run token prior to execution and return it afterwards.
+	// runTokens is a fixed-capacity semaphore channel.
 	//
 	// If nil, run token operations are no-ops.
 	runTokens chan struct{}
@@ -116,7 +112,7 @@ func (o *Options) LeaseRunToken() {
 	if o.runTokens == nil {
 		return
 	}
-	<-o.runTokens
+	o.runTokens <- struct{}{}
 }
 
 // ReturnRunToken returns a leased run token.
@@ -124,7 +120,7 @@ func (o *Options) ReturnRunToken() {
 	if o.runTokens == nil {
 		return
 	}
-	o.runTokens <- struct{}{}
+	<-o.runTokens
 }
 
 // Capture sets GOPATH and executes a subprocess.
