@@ -1,4 +1,4 @@
-// Copyright 2015 Marc-Antoine Ruel. All rights reserved.
+// Copyright 2016 Marc-Antoine Ruel. All rights reserved.
 // Use of this source code is governed under the Apache License, Version 2.0
 // that can be found in the LICENSE file.
 
@@ -132,7 +132,7 @@ func (c *Coverage) RunProfile(change scm.Change, options *Options) (profile Cove
 	if c.isGoverallsEnabled() {
 		// Please send a pull request if the following doesn't work for you on your
 		// favorite CI system.
-		out, _, err2 := options.Capture(change.Repo(), "goveralls", "-coverprofile", filepath.Join(tmpDir, "profile.cov"))
+		out, _, _, err2 := options.Capture(change.Repo(), "goveralls", "-coverprofile", filepath.Join(tmpDir, "profile.cov"))
 		// Don't fail the build.
 		if err2 != nil {
 			fmt.Printf("%s", out)
@@ -177,9 +177,7 @@ func (c *Coverage) RunGlobal(change scm.Change, options *Options, tmpDir string)
 				"-timeout", fmt.Sprintf("%ds", options.MaxDuration),
 				testPkg,
 			}
-			start := time.Now()
-			out, exitCode, err := options.Capture(change.Repo(), args...)
-			duration := time.Since(start)
+			out, exitCode, duration, err := options.Capture(change.Repo(), args...)
 			if duration > time.Second {
 				log.Printf("%s was slow: %s", args, round(duration, time.Millisecond))
 			}
@@ -249,9 +247,7 @@ func (c *Coverage) RunLocal(change scm.Change, options *Options, tmpDir string) 
 				"-timeout", fmt.Sprintf("%ds", options.MaxDuration),
 				testPkg,
 			}
-			start := time.Now()
-			out, exitCode, _ := options.Capture(change.Repo(), args...)
-			duration := time.Since(start)
+			out, exitCode, duration, _ := options.Capture(change.Repo(), args...)
 			if duration > time.Second {
 				log.Printf("%s was slow: %s", args, round(duration, time.Millisecond))
 			}

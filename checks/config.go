@@ -1,4 +1,4 @@
-// Copyright 2015 Marc-Antoine Ruel. All rights reserved.
+// Copyright 2016 Marc-Antoine Ruel. All rights reserved.
 // Use of this source code is governed under the Apache License, Version 2.0
 // that can be found in the LICENSE file.
 
@@ -8,6 +8,7 @@ package checks
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/maruel/pre-commit-go/Godeps/_workspace/src/gopkg.in/yaml.v2"
 	"github.com/maruel/pre-commit-go/internal"
@@ -124,11 +125,13 @@ func (o *Options) ReturnRunToken() {
 }
 
 // Capture sets GOPATH and executes a subprocess.
-func (o *Options) Capture(r scm.ReadOnlyRepo, args ...string) (string, int, error) {
+func (o *Options) Capture(r scm.ReadOnlyRepo, args ...string) (string, int, time.Duration, error) {
 	o.LeaseRunToken()
 	defer o.ReturnRunToken()
 
-	return internal.Capture(r.Root(), []string{"GOPATH=" + r.GOPATH()}, args...)
+	start := time.Now()
+	out, exitCode, err := internal.Capture(r.Root(), []string{"GOPATH=" + r.GOPATH()}, args...)
+	return out, exitCode, time.Since(start), err
 }
 
 // merge merges two options and returns a result.
