@@ -1,4 +1,4 @@
-// Copyright 2015 Marc-Antoine Ruel. All rights reserved.
+// Copyright 2016 Marc-Antoine Ruel. All rights reserved.
 // Use of this source code is governed under the Apache License, Version 2.0
 // that can be found in the LICENSE file.
 
@@ -105,7 +105,7 @@ func (b *Build) Run(change scm.Change, options *Options) error {
 	}
 
 	args := append([]string{"go", "build"}, b.ExtraArgs...)
-	out, _, err := options.Capture(change.Repo(), append(args, pkgs...)...)
+	out, _, _, err := options.Capture(change.Repo(), append(args, pkgs...)...)
 	if len(out) != 0 {
 		return fmt.Errorf("%s failed: %s", strings.Join(args, " "), out)
 	}
@@ -184,7 +184,7 @@ func (g *Gofmt) Run(change scm.Change, options *Options) error {
 	//
 	// TODO(maruel): Do it in process. It'll be much faster as the content of the
 	// modified files is already in memory.
-	out, _, err := options.Capture(change.Repo(), "gofmt", "-l", "-s", ".")
+	out, _, _, err := options.Capture(change.Repo(), "gofmt", "-l", "-s", ".")
 	// Split the files to ignore as needed.
 	files := []string{}
 	for _, line := range strings.Split(string(out), "\n") {
@@ -238,9 +238,7 @@ func (t *Test) Run(change scm.Change, options *Options) error {
 				},
 				t.ExtraArgs...)
 			args = append(args, testPkg)
-			start := time.Now()
-			out, exitCode, _ := options.Capture(change.Repo(), args...)
-			duration := time.Since(start)
+			out, exitCode, duration, _ := options.Capture(change.Repo(), args...)
 			if duration > time.Second {
 				log.Printf("%s was slow: %s", args, round(duration, time.Millisecond))
 			}
@@ -284,7 +282,7 @@ func (e *Errcheck) GetPrerequisites() []CheckPrerequisite {
 func (e *Errcheck) Run(change scm.Change, options *Options) error {
 	// errcheck accepts packages, not files.
 	args := []string{"errcheck", "-ignore", e.Ignores}
-	out, _, err := options.Capture(change.Repo(), append(args, change.Changed().Packages()...)...)
+	out, _, _, err := options.Capture(change.Repo(), append(args, change.Changed().Packages()...)...)
 	if len(out) != 0 {
 		// TODO(maruel): Process output so paths are relative from
 		// change.Repo().Root().
@@ -323,7 +321,7 @@ func (g *Goimports) GetPrerequisites() []CheckPrerequisite {
 func (g *Goimports) Run(change scm.Change, options *Options) error {
 	// goimports accepts files, not packages.
 	// goimports doesn't return non-zero even if some files need to be updated.
-	out, _, err := options.Capture(change.Repo(), append([]string{"goimports", "-l"}, change.Changed().GoFiles()...)...)
+	out, _, _, err := options.Capture(change.Repo(), append([]string{"goimports", "-l"}, change.Changed().GoFiles()...)...)
 	if len(out) != 0 {
 		return fmt.Errorf("these files are improperly formmatted, please run: goimports -w <files>\n%s", out)
 	}
@@ -370,7 +368,7 @@ func (g *Golint) Run(change scm.Change, options *Options) error {
 	for _, pkg := range pkgs {
 		go func(p string) {
 			r := []string{}
-			out, _, _ := options.Capture(change.Repo(), "golint", p)
+			out, _, _, _ := options.Capture(change.Repo(), "golint", p)
 			for _, line := range strings.Split(string(out), "\n") {
 				if len(line) == 0 {
 					continue
@@ -435,7 +433,7 @@ func (g *Govet) Run(change scm.Change, options *Options) error {
 	// - accepts multiple packages per call.
 	// - "." is recursive.
 	// Ignore the return code since we ignore many errors.
-	out, _, _ := options.Capture(change.Repo(), "go", "tool", "vet", "-all", ".")
+	out, _, _, _ := options.Capture(change.Repo(), "go", "tool", "vet", "-all", ".")
 	result := []string{}
 	files := map[string]bool{}
 	for _, f := range change.Changed().GoFiles() {
@@ -509,7 +507,7 @@ func (c *Custom) GetPrerequisites() []CheckPrerequisite {
 func (c *Custom) Run(change scm.Change, options *Options) error {
 	// TODO(maruel): Make what is passed to the command configurable, e.g. one of:
 	// (Changed, Indirect, All) x (GoFiles, Packages, TestPackages)
-	out, exitCode, err := options.Capture(change.Repo(), c.Command...)
+	out, exitCode, _, err := options.Capture(change.Repo(), c.Command...)
 	if exitCode != 0 && c.CheckExitCode {
 		return fmt.Errorf("\"%s\" failed with code %d:\n%s", strings.Join(c.Command, " "), exitCode, out)
 	}
