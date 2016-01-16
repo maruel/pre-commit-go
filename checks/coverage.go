@@ -405,6 +405,9 @@ func (c CoverageProfile) Subset(p string) CoverageProfile {
 
 // Passes returns a summary as if it passes the settings and true if it passes.
 func (c CoverageProfile) Passes(s *CoverageSettings) (string, bool) {
+	if c.TotalLines() == 0 {
+		return "no Go code", true
+	}
 	percent := c.CoveragePercent()
 	prefix := fmt.Sprintf("%3.1f%% (%d/%d)", percent, c.TotalCoveredLines(), c.TotalLines())
 	suffix := fmt.Sprintf("; Functions: %d untested / %d partially / %d completely", c.NonCoveredFuncs(), c.PartiallyCoveredFuncs(), c.CoveredFuncs())
