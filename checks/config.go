@@ -70,16 +70,17 @@ type Config struct {
 func (c *Config) EnabledChecks(modes []Mode) ([]Check, *Options) {
 	out := []Check{}
 	options := &Options{}
-	if c.MaxConcurrent > 0 {
-		// Allocate and populate a run token semaphore.
-		options.runTokens = make(chan struct{}, c.MaxConcurrent)
-	}
 
 	for _, mode := range modes {
 		for _, checks := range c.Modes[mode].Checks {
 			out = append(out, checks...)
 		}
 		options = options.merge(c.Modes[mode].Options)
+	}
+
+	if c.MaxConcurrent > 0 {
+		// Allocate and populate a run token semaphore.
+		options.runTokens = make(chan struct{}, c.MaxConcurrent)
 	}
 	return out, options
 }
