@@ -283,6 +283,7 @@ func (g *git) Between(recent, old Commit, ignorePatterns IgnorePatterns) (Change
 
 	// Gather list of changed files.
 	var files []string
+	filesEqualsAllFiles := false
 	if grecent == gitCurrent {
 		// Current is special cased, as it has to look at the checked out files.
 		go func() {
@@ -292,6 +293,7 @@ func (g *git) Between(recent, old Commit, ignorePatterns IgnorePatterns) (Change
 			// Fast path: diff against initial commit.
 			allFiles = <-allFilesCh
 			files = allFiles
+			filesEqualsAllFiles = true
 		} else {
 			// Gather list of unstaged file plus diff.
 			unstagedCh := make(chan []string)
@@ -335,11 +337,13 @@ func (g *git) Between(recent, old Commit, ignorePatterns IgnorePatterns) (Change
 
 	// Sort concurrently.
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		sort.Strings(files)
-	}()
+	if !filesEqualsAllFiles {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			sort.Strings(files)
+		}()
+	}
 	sort.Strings(allFiles)
 	wg.Wait()
 
