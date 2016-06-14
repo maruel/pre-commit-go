@@ -193,7 +193,7 @@ func (g *Gofmt) Run(change scm.Change, options *Options) error {
 		}
 	}
 	if len(files) != 0 {
-		return fmt.Errorf("these files are improperly formmatted, please run: gofmt -w -s .\n%s", strings.Join(files, "\n"))
+		return fmt.Errorf("these files are improperly formatted, please run: gofmt -w -s .\n%s", strings.Join(files, "\n"))
 	}
 	if err != nil {
 		return fmt.Errorf("gofmt -l -s . failed: %s", err)
@@ -323,7 +323,7 @@ func (g *Goimports) Run(change scm.Change, options *Options) error {
 	// goimports doesn't return non-zero even if some files need to be updated.
 	out, _, _, err := options.Capture(change.Repo(), append([]string{"goimports", "-l"}, change.Changed().GoFiles()...)...)
 	if len(out) != 0 {
-		return fmt.Errorf("these files are improperly formmatted, please run: goimports -w <files>\n%s", out)
+		return fmt.Errorf("these files are improperly formatted, please run: goimports -w <files>\n%s", out)
 	}
 	if err != nil {
 		return fmt.Errorf("goimports -w . failed: %s", err)
