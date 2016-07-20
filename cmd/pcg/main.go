@@ -671,7 +671,7 @@ func mainImpl() error {
 		b := &bytes.Buffer{}
 		fs.SetOutput(b)
 		fs.PrintDefaults()
-		a.cmdHelp(nil, b.String())
+		_ = a.cmdHelp(nil, b.String())
 	}
 	verboseFlag := fs.Bool("v", checks.IsContinuousIntegration() || os.Getenv("VERBOSE") != "", "enables verbose logging output")
 	allFlag := fs.Bool("a", false, "runs checks as if all files had been modified")
