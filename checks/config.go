@@ -285,6 +285,7 @@ func New(v string) *Config {
 			},
 		},
 		IgnorePatterns: []string{
+			"vendor",      // https://github.com/golang/go/wiki/PackageManagementTools
 			".*",          // SCM
 			"_*",          // Godeps
 			"*.pb.go",     // protobuf
