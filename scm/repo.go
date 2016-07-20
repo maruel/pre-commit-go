@@ -1,4 +1,4 @@
-// Copyright 2015 Marc-Antoine Ruel. All rights reserved.
+// Copyright 2016 Marc-Antoine Ruel. All rights reserved.
 // Use of this source code is governed under the Apache License, Version 2.0
 // that can be found in the LICENSE file.
 
@@ -107,6 +107,7 @@ func (i *IgnorePatterns) Match(p string) bool {
 	for _, ignorePattern := range *i {
 		for _, chunk := range chunks {
 			if matched, err := filepath.Match(ignorePattern, chunk); matched {
+				log.Printf("%s: ignored due to %q", p, ignorePattern)
 				return true
 			} else if err != nil {
 				log.Printf("bad pattern %q", ignorePattern)

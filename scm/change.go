@@ -1,4 +1,4 @@
-// Copyright 2015 Marc-Antoine Ruel. All rights reserved.
+// Copyright 2016 Marc-Antoine Ruel. All rights reserved.
 // Use of this source code is governed under the Apache License, Version 2.0
 // that can be found in the LICENSE file.
 
@@ -48,6 +48,8 @@ type Change interface {
 
 // Set is a subset of files/directories/packages relative to the change and the
 // overall repository.
+//
+// Each list is guaranteed to be sorted according to sort.StringsAreStored().
 type Set interface {
 	// GoFiles returns all the source files, including tests.
 	GoFiles() []string
@@ -153,7 +155,11 @@ func newChange(r ReadOnlyRepo, files, allFiles, ignorePatterns IgnorePatterns) *
 
 	// Still need to sort these since "." will not be at the right place.
 	var wg sync.WaitGroup
-	wg.Add(4)
+	wg.Add(6)
+	go func() {
+		defer wg.Done()
+		sort.Strings(c.direct.files)
+	}()
 	go func() {
 		defer wg.Done()
 		sort.Strings(c.direct.packages)
@@ -161,6 +167,10 @@ func newChange(r ReadOnlyRepo, files, allFiles, ignorePatterns IgnorePatterns) *
 	go func() {
 		defer wg.Done()
 		sort.Strings(c.direct.testPackages)
+	}()
+	go func() {
+		defer wg.Done()
+		sort.Strings(c.all.files)
 	}()
 	go func() {
 		defer wg.Done()
@@ -273,7 +283,12 @@ func newChange(r ReadOnlyRepo, files, allFiles, ignorePatterns IgnorePatterns) *
 				}
 			}
 		}
-		wg.Add(2)
+		wg.Add(3)
+		go func() {
+			defer wg.Done()
+			// TODO(maruel): This is not updated properly.
+			sort.Strings(c.indirect.files)
+		}()
 		go func() {
 			defer wg.Done()
 			sort.Strings(c.indirect.packages)
@@ -328,6 +343,9 @@ func (c *change) IsIgnored(p string) bool {
 	return c.ignorePatterns.Match(p)
 }
 
+// set implements Set.
+//
+// Items must be sorted.
 type set struct {
 	files        []string
 	packages     []string

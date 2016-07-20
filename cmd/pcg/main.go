@@ -393,7 +393,7 @@ func (s sortedChecks) Less(i, j int) bool { return s[i].GetName() < s[j].GetName
 
 // Commands.
 
-func (a *application) cmdHelp(repo scm.ReadOnlyRepo, usage string) error {
+func (a *application) cmdHelp(usage string) error {
 	s := &struct {
 		Usage        string
 		Max          int
@@ -574,7 +574,6 @@ func (a *application) cmdInstall(repo scm.ReadOnlyRepo, modes []checks.Mode, noU
 
 // cmdRun runs all the enabled checks.
 func (a *application) cmdRun(repo scm.ReadOnlyRepo, modes []checks.Mode, against string, prereqReady *sync.WaitGroup) error {
-	var err error
 	var old scm.Commit
 	if against != "" {
 		if old = repo.Eval(against); old == scm.Invalid {
@@ -671,7 +670,7 @@ func mainImpl() error {
 		b := &bytes.Buffer{}
 		fs.SetOutput(b)
 		fs.PrintDefaults()
-		_ = a.cmdHelp(nil, b.String())
+		_ = a.cmdHelp(b.String())
 	}
 	verboseFlag := fs.Bool("v", checks.IsContinuousIntegration() || os.Getenv("VERBOSE") != "", "enables verbose logging output")
 	allFlag := fs.Bool("a", false, "runs checks as if all files had been modified")
@@ -739,7 +738,7 @@ func mainImpl() error {
 		b := &bytes.Buffer{}
 		fs.SetOutput(b)
 		fs.PrintDefaults()
-		return a.cmdHelp(repo, b.String())
+		return a.cmdHelp(b.String())
 
 	case "info":
 		if *allFlag != false {
