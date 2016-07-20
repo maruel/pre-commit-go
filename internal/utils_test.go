@@ -1,4 +1,4 @@
-// Copyright 2015 Marc-Antoine Ruel. All rights reserved.
+// Copyright 2016 Marc-Antoine Ruel. All rights reserved.
 // Use of this source code is governed under the Apache License, Version 2.0
 // that can be found in the LICENSE file.
 
@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/maruel/pre-commit-go/Godeps/_workspace/src/github.com/maruel/ut"
+	"github.com/maruel/ut"
 )
 
 func TestCaptureNormal(t *testing.T) {

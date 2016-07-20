@@ -108,6 +108,7 @@ modes:
         - -race
     max_duration: 15
 ignore_patterns:
+- vendor
 - .*
 - _*
 - '*.pb.go'

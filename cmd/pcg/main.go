@@ -28,10 +28,10 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/maruel/pre-commit-go/Godeps/_workspace/src/gopkg.in/yaml.v2"
 	"github.com/maruel/pre-commit-go/checks"
 	"github.com/maruel/pre-commit-go/internal"
 	"github.com/maruel/pre-commit-go/scm"
+	"gopkg.in/yaml.v2"
 )
 
 // Globals
