@@ -1,4 +1,4 @@
-// Copyright 2015 Marc-Antoine Ruel. All rights reserved.
+// Copyright 2016 Marc-Antoine Ruel. All rights reserved.
 // Use of this source code is governed under the Apache License, Version 2.0
 // that can be found in the LICENSE file.
 
@@ -678,7 +678,9 @@ func mainImpl() error {
 	configPathFlag := fs.String("c", "pre-commit-go.yml", "file name of the config to load")
 	modeFlag := fs.String("m", "", "comma separated list of modes to process; default depends on the command")
 	fs.IntVar(&a.maxConcurrent, "C", 0, "maximum number of concurrent processes")
-	fs.Parse(flags)
+	if err := fs.Parse(flags); err != nil {
+		return err
+	}
 
 	if *allFlag {
 		if *againstFlag != "" {
