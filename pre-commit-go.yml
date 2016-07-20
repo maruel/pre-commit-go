@@ -9,9 +9,6 @@ min_version: 0.4.7
 modes:
   continuous-integration:
     checks:
-      build:
-      - build_all: false
-        extra_args: []
       coverage:
       - use_global_inference: false
         use_coveralls: true
@@ -70,9 +67,6 @@ modes:
     max_duration: 15
   pre-commit:
     checks:
-      build:
-      - build_all: false
-        extra_args: []
       copyright:
       - header: |-
           // Copyright 2016 Marc-Antoine Ruel. All rights reserved.

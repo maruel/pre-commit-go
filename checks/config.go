@@ -183,12 +183,6 @@ func New(v string) *Config {
 			PreCommit: {
 				Options: Options{MaxDuration: 5},
 				Checks: Checks{
-					"build": {
-						&Build{
-							BuildAll:  false,
-							ExtraArgs: []string{},
-						},
-					},
 					"gofmt": {
 						&Gofmt{},
 					},
@@ -229,12 +223,6 @@ func New(v string) *Config {
 			ContinuousIntegration: {
 				Options: Options{MaxDuration: 120},
 				Checks: Checks{
-					"build": {
-						&Build{
-							BuildAll:  false,
-							ExtraArgs: []string{},
-						},
-					},
 					"gofmt": {
 						&Gofmt{},
 					},

@@ -206,10 +206,6 @@ func loadConfig(repo scm.ReadOnlyRepo, path string) (string, *checks.Config) {
 }
 
 func callRun(check checks.Check, change scm.Change, options *checks.Options) (time.Duration, error) {
-	if l, ok := check.(sync.Locker); ok {
-		l.Lock()
-		defer l.Unlock()
-	}
 	start := time.Now()
 	err := check.Run(change, options)
 	return time.Now().Sub(start), err

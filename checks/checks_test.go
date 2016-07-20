@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"sync"
 	"testing"
 	"time"
 
@@ -65,10 +64,6 @@ func TestChecksSuccess(t *testing.T) {
 			cov.PerDirDefault.MinCoverage = 100
 			cov.PerDirDefault.MaxCoverage = 100
 		}
-		if l, ok := c.(sync.Locker); ok {
-			l.Lock()
-			l.Unlock()
-		}
 		if err := c.Run(change, &Options{MaxDuration: 1}); err != nil {
 			t.Errorf("%s failed: %s", c.GetName(), err)
 		}
@@ -92,6 +87,9 @@ func TestChecksFailure(t *testing.T) {
 	for _, name := range getKnownChecks() {
 		c := KnownChecks[name]()
 		switch name {
+		case "build":
+			// This check is obsolete.
+			continue
 		case "custom":
 			c = &Custom{
 				Description:   "foo",

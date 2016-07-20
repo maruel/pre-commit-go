@@ -115,36 +115,6 @@ Checks fall in 4 categories:
   - User specified custom checks.
 
 
-### build
-
-Builds everything inside the current directory similar to [go build
-./...](https://golang.org/pkg/go/build/) but only builds the packages without
-tests. This check is mostly useful for executables, e.g. `package main`.
-Packages containing tests are covered via check `test`.
-
-Use multiple `build` instances to build multiple times with different tags.
-It has the following options:
-
-  - `build_all` (bool): forces building every packages. By default, only
-    packages without tests are built; packages with tests are assumed to be
-    tested so they will be built. The goal here is to ensure that untested code
-    compiles at least.
-  - `extra_args` (list of string): can be used to build with different tags,
-    e.g. to `go build -tags foo,zoo`.
-
-Sample:
-
-```yaml
-build:
-- build_all: false
-  extra_args: []
-- build_all: true
-  extra_args:
-  - tags
-  - Debug
-```
-
-
 ### copyright
 
 `copyright` enforces that all files have a copyright header. If there are files
@@ -326,8 +296,11 @@ govet:
 
 ### test
 
-`test` runs all tests via [go test](https://golang.org/pkg/testing/). Use the
-specialized check `coverage` when -cover is desired. Use multiple `test`
+`test` runs all tests via [go test](https://golang.org/pkg/testing/) and [since
+Go 1.4](https://golang.org/doc/go1.4#gocmd) builds all packages that do not
+contain tests.
+
+Use the specialized check `coverage` when -cover is desired. Use multiple `test`
 instances to test multiple times with different flags, like with different tags,
 with or without the [race detector](https://blog.golang.org/race-detector), etc.
 It has the following options:

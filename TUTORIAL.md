@@ -52,24 +52,6 @@ current version:
     pcg writeconfig
 
 
-### Build on pre-commit only
-
-A trivial configuration that would build everything on commit only would look
-like:
-
-```yaml
-modes:
-  pre-commit:
-    check:
-    - build:
-      - build_all: false
-        extra_args: []
-```
-
-This is useful for small projects that do not contain tests. It ensures that at
-least the code compiles before commit.
-
-
 ### Test with -race
 
 To run tests with `-race` but only short test to reduce the amount of time taken

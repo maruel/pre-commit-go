@@ -14,13 +14,13 @@ import (
 
 func TestConfigNew(t *testing.T) {
 	config := New("0.1")
-	ut.AssertEqual(t, 3, len(config.Modes[PreCommit].Checks))
+	ut.AssertEqual(t, 2, len(config.Modes[PreCommit].Checks))
 	ut.AssertEqual(t, 3, len(config.Modes[PrePush].Checks))
-	ut.AssertEqual(t, 5, len(config.Modes[ContinuousIntegration].Checks))
+	ut.AssertEqual(t, 4, len(config.Modes[ContinuousIntegration].Checks))
 	ut.AssertEqual(t, 3, len(config.Modes[Lint].Checks))
 	checks, options := config.EnabledChecks([]Mode{PreCommit, PrePush, ContinuousIntegration, Lint})
 	ut.AssertEqual(t, Options{MaxDuration: 120}, *options)
-	ut.AssertEqual(t, 2+4+5+3, len(checks))
+	ut.AssertEqual(t, 2+3+4+3, len(checks))
 }
 
 func TestConfigYAML(t *testing.T) {

@@ -68,7 +68,7 @@ type Build struct {
 
 // GetDescription implements Check.
 func (b *Build) GetDescription() string {
-	return "builds all packages"
+	return "(obsolete)"
 }
 
 // GetName implements Check.
@@ -81,37 +81,11 @@ func (b *Build) GetPrerequisites() []CheckPrerequisite {
 	return nil
 }
 
-// Lock implements sync.Locker.
-func (b *Build) Lock() {
-	buildLock.Lock()
-}
-
-// Unlock implements sync.Locker.
-func (b *Build) Unlock() {
-	buildLock.Unlock()
-}
-
 // Run implements Check.
 func (b *Build) Run(change scm.Change, options *Options) error {
-	// go build accepts packages, not files.
-	// Cannot build concurrently since it leaves files in the tree.
-	// TODO(maruel): Build in a temporary directory to not leave junk in the tree
-	// with -o. On the other hand, ./... and -o foo are incompatible. But
-	// building would have to be done in an efficient way by looking at which
-	// package builds what, to not result in a O(n²) algorithm.
-	pkgs := change.Indirect().Packages()
-	if len(pkgs) == 0 {
-		return nil
-	}
-
-	args := append([]string{"go", "build"}, b.ExtraArgs...)
-	out, _, _, err := options.Capture(change.Repo(), append(args, pkgs...)...)
-	if len(out) != 0 {
-		return fmt.Errorf("%s failed: %s", strings.Join(args, " "), out)
-	}
-	if err != nil {
-		return fmt.Errorf("%s failed: %s", strings.Join(args, " "), err.Error())
-	}
+	// With Go 1.4, 'go test' on a package without test now builds
+	// the package. So running this check is not unnecessary.
+	// https://golang.org/doc/go1.4#gocmd
 	return nil
 }
 
@@ -225,7 +199,9 @@ func (t *Test) GetPrerequisites() []CheckPrerequisite {
 func (t *Test) Run(change scm.Change, options *Options) error {
 	// go test accepts packages, not files.
 	var wg sync.WaitGroup
-	testPkgs := change.Indirect().TestPackages()
+	// With go 1.4, 'go test' now correctly build all packages even if they have
+	// no test. https://golang.org/doc/go1.4#gocmd
+	testPkgs := change.Indirect().Packages()
 	errs := make(chan error, len(testPkgs))
 	for _, tp := range testPkgs {
 		wg.Add(1)
@@ -531,9 +507,6 @@ var KnownChecks = map[string]func() Check{
 }
 
 // Private stuff.
-
-// See build.Run() for information.
-var buildLock sync.Mutex
 
 // cwd provides a valid path to CheckPrerequisite.IsPresent().
 var cwd string
