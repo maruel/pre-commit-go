@@ -667,6 +667,12 @@ func mainImpl() error {
 	}
 
 	fs := flag.NewFlagSet(exec, flag.ExitOnError)
+	fs.Usage = func() {
+		b := &bytes.Buffer{}
+		fs.SetOutput(b)
+		fs.PrintDefaults()
+		a.cmdHelp(nil, b.String())
+	}
 	verboseFlag := fs.Bool("v", checks.IsContinuousIntegration() || os.Getenv("VERBOSE") != "", "enables verbose logging output")
 	allFlag := fs.Bool("a", false, "runs checks as if all files had been modified")
 	againstFlag := fs.String("r", "", "runs checks on files modified since this revision, as evaluated by your scm repo")
