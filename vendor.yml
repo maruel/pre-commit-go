@@ -1,13 +1,13 @@
 vendors:
 - path: github.com/kr/pretty
-  rev: 737b74a46c4bf788349f72cb256fed10aea4d0ac
+  rev: cfb55aafdaf3ec08f0db22699ab822c50091b1c4
 - path: github.com/kr/text
   rev: 7cafcd837844e784b526369c9bce262804aebc60
 - path: github.com/maruel/panicparse
-  rev: 316f756841862a9a63bef1b06d05648edde71394
+  rev: 25bcac0d793cf4109483505a0d66e066a3a90a80
 - path: github.com/maruel/ut
   rev: a9c9f15ccfa6f8b90182a53df32f4745586fbae3
 - path: github.com/pmezard/go-difflib
   rev: 792786c7400a136282c1664665ae0a8db921c6c2
 - path: gopkg.in/yaml.v2
-  rev: e4d366fc3c7938e2958e662b4258c7a89e1f0e3e
+  rev: a3f3340b5840cee44f372bddb5880fcbc419b46a
