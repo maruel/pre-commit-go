@@ -35,6 +35,7 @@ type Coverage struct {
 	Global             CoverageSettings             `yaml:"global"`
 	PerDirDefault      CoverageSettings             `yaml:"per_dir_default"`
 	PerDir             map[string]*CoverageSettings `yaml:"per_dir"`
+	IgnorePathPatterns []string                     `yaml:"ignore_path_patterns"`
 }
 
 // CoverageSettings specifies coverage settings.
@@ -132,7 +133,13 @@ func (c *Coverage) RunProfile(change scm.Change, options *Options) (profile Cove
 	if c.isGoverallsEnabled() {
 		// Please send a pull request if the following doesn't work for you on your
 		// favorite CI system.
-		out, _, _, err2 := options.Capture(change.Repo(), "goveralls", "-coverprofile", filepath.Join(tmpDir, "profile.cov"))
+		cmd := []string{
+			"goveralls", "-coverprofile", filepath.Join(tmpDir, "profile.cov"),
+		}
+		if len(c.IgnorePathPatterns) > 0 {
+			cmd = append(cmd, "-ignore", strings.Join(c.IgnorePathPatterns, ","))
+		}
+		out, _, _, err2 := options.Capture(change.Repo(), cmd...)
 		// Don't fail the build.
 		if err2 != nil {
 			fmt.Printf("%s", out)
