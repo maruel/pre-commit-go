@@ -210,7 +210,8 @@ func New(v string) *Config {
 								MinCoverage: 1,
 								MaxCoverage: 100,
 							},
-							PerDir: map[string]*CoverageSettings{},
+							PerDir:             map[string]*CoverageSettings{},
+							IgnorePathPatterns: []string{},
 						},
 					},
 					"test": {
@@ -240,7 +241,8 @@ func New(v string) *Config {
 								MinCoverage: 1,
 								MaxCoverage: 100,
 							},
-							PerDir: map[string]*CoverageSettings{},
+							PerDir:             map[string]*CoverageSettings{},
+							IgnorePathPatterns: []string{},
 						},
 					},
 					"test": {
