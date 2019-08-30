@@ -1,3 +1,14 @@
+# Warning
+
+This tool was designed in older times (2015), when:
+
+- go test ./... wasn't running tests in parallel
+- go test -i improved build performance (this is not true anymore)
+- go test wasn't using a local cache
+
+As such, it is recommended to stop using this tool.
+
+
 pre-commit-go
 =============
 
